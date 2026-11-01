@@ -1,0 +1,14 @@
+# Handoff -- dispatch D-1b, mission smoke. Written by build-smoke-mission.ps1, which performed the
+# dispatch's work itself; no CLI worker ran. No runner_anchors block.
+id: handoff-D-1b
+from_worker: w-smoke-1b
+dispatch_id: D-1b
+feature_id: F-001
+spec_version: 1
+completed_assertions: [A-1, A-2, A-3]
+unfinished: []
+commits: ["{{COMMIT}}"]
+commands_run: ["write src/greeting.txt", "write src/counter.ps1", "write tests/test-smoke.ps1", "powershell -NoProfile -ExecutionPolicy Bypass -File tests/test-smoke.ps1 -- printed PASS, exit 0", "git commit in the worktree"]
+issues_observed: ["The work is D-1's, unchanged; D-1 is superseded by this dispatch.", "A-5 is anchor-scoped and A-4 is outside this dispatch's assertion_targets by design."]
+procedure_adherence: confirmed
+terminated_reason: completed

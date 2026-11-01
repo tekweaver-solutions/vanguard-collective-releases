@@ -1,0 +1,118 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  Ceremony-class operation: append a ceremony record to the mission ledger, atomically, behind both
+  clean-tree gates.
+
+.DESCRIPTION
+  WHAT MAKES THIS A CEREMONY AND NOT A TEST HARNESS. It performs a real, append-only mission mutation
+  -- one ledger entry -- and commits it atomically through Invoke-AtomicCommit (rollback on any
+  failure). Both clean-tree gates guard that mutation, which is the job they exist to do.
+
+  BOTH GATES, BOTH THROUGH THE CODE THAT SHIPS THEM:
+    Assert-CleanGitTree      -- lives INSIDE mission-spec-accept.ps1 and is not exported, and that
+                                ceremony's operator-attestation flags are MANDATORY parameters, so a
+                                flagless invocation is refused at binding time and the gate never
+                                runs. Supplying them would attest to reviews nobody performed. So this
+                                wrapper resolves the CURRENT definition out of that file's own bytes
+                                by AST and calls it: there is no second copy to drift.
+    Assert-CleanWorkingTree  -- from mission-lib.ps1, called as every lifecycle command calls it,
+                                immediately before the mutation.
+  Assert-CleanGitTree CALLS Assert-CleanWorkingTree: the two gates share one predicate, which judges
+  every porcelain line against admitted_porcelain in this mission's own mission.yaml. The wrapper
+  refuses to report the first gate as passed unless the resolved definition calls that predicate.
+
+.PARAMETER CeremonyId
+  Ledger id for this ceremony record. Ledger ids are one per event and fail closed on a duplicate.
+
+.PARAMETER CheckOnly
+  Runs BOTH gates against the live tree and exits without touching anything, so an instrument can
+  re-exercise the gates on every run without appending a ledger entry each time.
+
+.PARAMETER Author
+  Who ran the ceremony, as the ledger entry records it. The orchestrator by default; the smoke-mission
+  builder names itself.
+#>
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)][string]$CeremonyId,
+    [string]$Note = 'smoke ceremony-class operation',
+    [string]$Author = 'lam:orchestrator',
+    [switch]$NoCommit,
+    [switch]$CheckOnly
+)
+
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'mission-lib.ps1')
+$root = Get-MissionRoot
+
+Write-Host "=== mission-ceremony-record: $CeremonyId ==="
+
+# --- GATE 1: Assert-CleanGitTree, resolved from mission-spec-accept.ps1's own bytes ---
+Write-Host "-- gate 1: Assert-CleanGitTree (resolved from mission-spec-accept.ps1)"
+$specAccept = Join-Path $PSScriptRoot 'mission-spec-accept.ps1'
+if (-not (Test-Path -LiteralPath $specAccept)) { Stop-WithError "mission-spec-accept.ps1 not found beside this wrapper" }
+# PARSED FROM THE FILE, so the script block the gate runs as keeps that file: the gate locates the
+# shared predicate through its own $PSScriptRoot, which a script block made from text does not have.
+$saAst = [System.Management.Automation.Language.Parser]::ParseFile($specAccept, [ref]$null, [ref]$null)
+$fnAst = @($saAst.FindAll({
+    param($n)
+    $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Assert-CleanGitTree'
+}, $true))
+if ($fnAst.Count -ne 1) {
+    Stop-WithError "expected exactly one Assert-CleanGitTree definition in mission-spec-accept.ps1, found $($fnAst.Count). Refusing to guess which gate is the real one."
+}
+# The resolved gate must CALL the shared predicate; a gate that carried a list of its own would judge
+# this tree by a rule the mission never declared.
+$calls = @($fnAst[0].Body.FindAll({
+    param($n)
+    $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Assert-CleanWorkingTree'
+}, $true))
+if ($calls.Count -lt 1) {
+    Stop-WithError "the resolved Assert-CleanGitTree does not call Assert-CleanWorkingTree, the shared predicate over this mission's admitted_porcelain. Refusing to report it as the shared gate."
+}
+$gate1 = $fnAst[0].Body.GetScriptBlock()
+Write-Info "resolved the live definition ($($fnAst[0].Extent.Text.Length) characters); it calls the shared predicate."
+# It judges the CURRENT location, so it must run at the mission root.
+Push-Location $root
+try { & $gate1 } finally { Pop-Location }
+Write-Pass "Assert-CleanGitTree passed against the live tree."
+
+# --- GATE 2: Assert-CleanWorkingTree, called as every lifecycle command calls it ---
+Write-Host "-- gate 2: Assert-CleanWorkingTree"
+Assert-CleanWorkingTree -Root $root
+
+if ($CheckOnly) {
+    Write-Pass "BOTH GATES PASSED. -CheckOnly set: nothing appended, nothing committed."
+    exit 0
+}
+
+# --- THE MUTATION: an append-only ceremony record, then an atomic commit ---
+Write-Host "-- mutation: ledger append + atomic commit"
+$entry = [ordered]@{
+    id          = $CeremonyId
+    created_at  = (Get-UtcStamp)
+    created_by  = 'mission-ceremony-record.ps1'
+    ts          = (Get-UtcStamp)
+    author      = $Author
+    type        = 'ceremony'
+    scope       = 'mission'
+    scope_ref   = '.mission/ledger/entries.jsonl'
+    content     = $Note
+    tags        = @('ceremony', 'lam', 'smoke')
+}
+Add-LedgerEntry -Root $root -Entry $entry
+
+if ($NoCommit) {
+    Write-Pass "ceremony record appended; -NoCommit set, no commit made."
+    exit 0
+}
+
+$body = "ceremony: $CeremonyId`n`n" +
+        "A ceremony-class operation. Both clean-tree gates were exercised as preconditions of`n" +
+        "this mutation: Assert-CleanGitTree resolved from mission-spec-accept.ps1, and`n" +
+        "Assert-CleanWorkingTree from mission-lib.ps1.`n"
+$msgFile = New-CommitMessageFile -Root $root -Body $body
+Invoke-AtomicCommit -Root $root -Paths @('.mission/ledger/entries.jsonl') -MessageFile $msgFile
+Write-Pass "ceremony complete: $CeremonyId"
+exit 0

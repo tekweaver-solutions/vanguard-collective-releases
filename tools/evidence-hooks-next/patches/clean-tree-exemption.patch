@@ -1,0 +1,354 @@
+From: evidence-hooks-next (the WP-1 H-3 instrument; cure D9, since superseded for the work-tree gate)
+Subject: [PATCH] clean-tree gates: A-126 judges the porcelain against the mission's DECLARED admitted set; the D9 name-pattern exemption remains in the spec-accept gate
+
+REGENERATED MECHANICALLY. The diff body below is the output of
+
+    git diff <pre-exemption commit> HEAD -- tools/mission-lib.ps1 tools/mission-spec-accept.ps1
+
+stored as git prints it, LF line endings and no CR byte. It is not hand-maintained, and
+nothing in it is hand-edited: hand-maintenance is what once produced a defect (both @@
+new-side counts understated by 2, a patch that READ correct and did not APPLY).
+
+WHAT THIS PATCH IS FOR. Design v2.3 SS4.6 records the defect the first version of this file cured,
+measured on the live harness:
+
+  "Clean-tree preconditions become unsatisfiable by construction while hooks are live.
+   Assert-CleanGitTree exempts `?? .claude/` and `?? .mission-runtime/` by name; the A-126 gate
+   Assert-CleanWorkingTree exempts nothing without -AllowPaths. `.mission/evidence/` is exempt in
+   neither, and it REGENERATES -- a new session-<id>/ per session, created by the act of running
+   one -- so relocate-and-restore is defeated in kind: the path's name is not known in advance and
+   reappears mid-run. Framework ceremonies using -NoCommit plus explicit-path commits are
+   unaffected; mission lifecycle ceremonies (spec-accept, promote-contract, reopen, close) are
+   BLOCKED UNCONDITIONALLY."
+
+SS17.3 carries that as a standing operational constraint. This patch retires it. What has changed
+since the first fix is HOW the two gates retire it, and the two answers are now genuinely different.
+That divergence is the first thing a reader of this file has to be told, because the file looks
+lopsided until it is:
+
+THE TWO HALVES NO LONGER SHARE A MECHANISM.
+
+  tools/mission-lib.ps1, Assert-CleanWorkingTree -- CURED. The admitted set is no longer a code
+  constant. The gate dot-sources
+  tools/lam/lam-verify-admission.ps1 -- the SAME library the advance-admission gate reads the
+  declaration with, rather than a second dialect of it -- and judges every porcelain line against
+  `admitted_porcelain` in the mission's own .mission/mission.yaml, via
+  Get-LamDeclaredAdmittedPorcelain and Get-LamPorcelainState. The match is over the WHOLE porcelain
+  line, STATUS CODE INCLUDED, so a declared prefix appearing at a status other than `?? ` is still
+  judged. The degradations all REFUSE: a failing `git status`, an unreadable or malformed
+  declaration, and -- for a mission that declares nothing -- an admitted set that admits nothing.
+  The two collapsed-form code exemptions `'^\.mission/evidence/'` and `'^\.mission/gates/'` are
+  GONE from this gate: they matched the path only, after the XY status code had been stripped, so
+  they tolerated a MODIFIED or DELETED tracked evidence file exactly as they tolerated an untracked
+  store, they tolerated the whole evidence plane rather than the declared `verify-` prefix, and
+  being CODE no mission could narrow them. The D9 `session-` name-pattern exemption is dropped with
+  them, deliberately: its premise -- that no CALLER can name a session id in advance -- is a fact
+  about -AllowPaths, and a DECLARED prefix `"?? .mission/evidence/session-"` satisfies that premise
+  without reinstating an unnarrowable code constant. The price is stated in the source: if a
+  `session-<id>` directory reappears, every lifecycle ceremony refuses until the operator adds that
+  one entry to admitted_porcelain -- and the refusal names both the offending lines and the file
+  the set is declared in, so the block is self-curing rather than mysterious.
+
+  tools/mission-spec-accept.ps1, Assert-CleanGitTree -- NOT CURED. It still carries the D9 and
+  first-fix forms: the session-level anchor `'^\?\? \.mission/evidence/session-'` kept for intent,
+  and the two collapsed-form prefixes `'^\?\? \.mission/evidence/'` and `'^\?\? \.mission/gates/'`
+  that are what actually fire, because git collapses a wholly-untracked directory to its shallowest
+  path and the session anchor therefore matches NOTHING on a fresh install. This half is a SIBLING
+  OF THE DEFECT the cure removed from the other gate, and it now DIVERGES from it. It was named
+  rather than fixed: tools/mission-spec-accept.ps1 was outside the declared file set of the change
+  that cured Assert-CleanWorkingTree, and it is outside this one's too. The divergence is recorded
+  as an open residual, not as something claimed. It is carried here, visibly,
+  rather than quietly made to look symmetric -- WP-1 H-3 asserts each half's own mechanism
+  separately for exactly that reason.
+
+WHY THE SESSION-LEVEL PATTERN ALONE WAS NEVER ENOUGH, and
+why the spec-accept half still carries three patterns rather than one. Anchoring at
+`.mission/evidence/session-` was correct in intent and silently inert in fact, for two independent
+reasons, both DRIVEN on the live smoke harness rather than reasoned:
+
+  1. GIT COLLAPSES A WHOLLY-UNTRACKED DIRECTORY to its shallowest path. With nothing under
+     `.mission/evidence/` tracked, `git status --porcelain` emits ONE line -- `?? .mission/evidence/`
+     -- and never the per-session lines this pattern was written for. So the exemption matched
+     nothing and every ceremony was blocked exactly as SS17.3 describes. The pattern encoded an
+     UNSTATED DEPENDENCY on H-3's committed-evidence policy having already run once; a fresh install
+     is precisely the case where it has not.
+  2. Even once the plane HAS tracked content, `verify-<id>/` self-capture directories sit beside the
+     session ones and do not match `session-` either.
+
+E24, the rule this cost us: EVERY PORCELAIN PATTERN IS VALIDATED AGAINST A LIVE PORCELAIN LINE AT
+AUTHORING TIME. A pattern matching nothing at authoring is a build error, not a silent no-op. The
+work-tree cure is that rule applied one level up: the patterns now come from the mission that owns the
+residue, so they are validated where the residue actually is.
+
+COMPENSATING CONTROL, corrected. The sentence that stood here said both directories are
+agent-unwritable, "evidence guard; T-3". That named the wrong tier for one of them, and the
+source now says it right. `.mission/evidence` IS on the guard's protected-path tier, denied for
+every role, reads included. `.mission/gates` IS NOT on that tier: it is reached by a text-match
+predicate on the file-tool and shell routes, by the act-match tripwire on
+tools/lam/mission-gate.ps1 in executable position, and by an `Edit(.mission/gates/**)` deny in two
+of the three role templates -- all four of them TRIPWIRES, not boundaries. The
+mission-lib half no longer needs that control at all, because it no longer tolerates either
+directory by code. The spec-accept half still does, and still rests on it.
+
+WHAT THIS IS NOT. It is not a claim that committed evidence is safe to commit. The committed-
+evidence policy is separate and narrower (LAM-ACCEPT H-3: manifest + digests only, committed by
+ceremony, and only when capture_gaps is empty). This patch changes a tree-clean precondition; it
+grants nothing about what is committed.
+
+DIRECTIONALITY, which WP-1 H-3 and H-3b measure rather than assume. The pre-image side of this diff
+is <project> as shipped WITHOUT the exemption (tools/ as shipped before it); the post-image side is the
+cured tools/ this diff was regenerated against, identified by the post-image blob ids on its two
+`index` lines. SUPERSEDED: WP-1 used to measure this patch
+against real copies of the LIVE tools/, where it reverse-applied and failed forward, so every
+lifecycle edit to either file turned WP-1 red by construction. It now measures the patch against
+the pre-image it was cut from, pinned below and stored beside this file. Against that pre-image the
+patch must apply FORWARD and must NOT reverse-apply -- one fixed direction, since the subject tree
+is no longer ambiguous -- and the tree the forward apply derives must carry exactly the post-image
+ids on the `index` lines. An EMPTY patch fails that rule either way: this git refuses empty input
+at parse time, and when told to accept it (the allow-empty option) an empty patch applies in BOTH
+directions, which the reverse leg refuses.
+
+PRE-IMAGE PINS. One block per file of the diff below. `fixture` is the file WP-1 H-3 copies into its
+scratch tree under the path the block names; `blob` is git's object id for that fixture's content;
+`lf-bytes` and `lf-sha256` are measured over its LF bytes (every CRLF pair collapsed to LF), which is
+also the content the blob id is computed over. WP-1 H-3 reads these figures from this face and
+re-measures them on every run, and a fixture, a pin or an `index` line that disagrees is red. The
+LIVE tools/ gates are judged separately, by behaviour, in WP-1 H-16. One disclosed edit: the spec-accept
+fixture differs from the pre-exemption tools/ in one message string (its line 178, the host project's name
+made generic, outside every hunk), so its pin and both ids on its `index` line were re-derived with git.
+A second disclosed edit: a person's first name in three of its lines (30, 374 and 392, two
+comments and one message string, outside every hunk) reads `client`, as in tools/; its pin and both ids
+were re-derived again, the patch applying forward to it and refused in reverse. A third disclosed edit: the mission-lib fixture's line 93 (a comment, outside every hunk) names the corpus oracle's bump commit rather than its id, as in tools/; its pin and both ids on its `index` line were re-derived with git. A fourth disclosed edit: the mission-lib fixture's witnessed-substrate check (outside every hunk) requires the declared terminal activity and has no built-in default, and its comments name no record of the host project, as in tools/; its pin and both ids on its `index` line were re-derived with git, the patch applying forward to it and refused in reverse. A fifth disclosed edit: the mission-lib fixture's two witnessed-substrate comments (outside every hunk) describe the upstream guard and the event structure without naming the host project's client or engine, and the spec-accept fixture's -RunbookValidated message (outside every hunk) names no host container, as in tools/; both pins and all four ids on their `index` lines were re-derived with git, the patch applying forward to them and refused in reverse.
+
+  PIN tools/mission-lib.ps1
+    fixture    tools/evidence-hooks-next/patches/clean-tree-exemption-pre-image/mission-lib.ps1.preimage
+    blob       115a3a3fff1d91d6e0b1fc9d0fffad5d02a36ada
+    lf-bytes   44546
+    lf-sha256  677879684bf4b99e93a4a02df4e00b3f826ba9669bc590c2dfa36ac1c64e99b2
+
+  PIN tools/mission-spec-accept.ps1
+    fixture    tools/evidence-hooks-next/patches/clean-tree-exemption-pre-image/mission-spec-accept.ps1.preimage
+    blob       f25e7ee59616194f2230d2a66548b664a8336e4d
+    lf-bytes   27910
+    lf-sha256  92ab497be9971cd0767252c2472ac186f9333f82e5144684dd16f4ccb24c8585
+
+SCOPE IN THIS BUILD: applied ONLY in the smoke repo (LAM-ACCEPT WP-1 H-3), where WP-6 S-5 drives a
+`close` ceremony with the hooks live. It is NOT applied to <project> by this build; the operator
+applies it as part of the Part 6 swap (LAM-INSTALL, WP-7 V-3).
+
+diff --git a/tools/mission-lib.ps1 b/tools/mission-lib.ps1
+index 115a3a3f..689a6c0a 100644
+--- a/tools/mission-lib.ps1
++++ b/tools/mission-lib.ps1
+@@ -94,21 +94,174 @@ function Assert-CleanWorkingTree {
+     # bump commit). Any OTHER uncommitted path is still STRAY drift -> refuse. A-126 stays honest: with
+     # no $AllowPaths (reopen / promote-contract / ledger-append) the gate is strict; with $AllowPaths it
+     # exempts ONLY the named inputs and still refuses genuine stray state.
++    #
++    # =============================================================================================
++    # REGISTER ROW 172 (ledger register row 171): THE ADMITTED SET IS THE MISSION'S DECLARATION,
++    # NOT A CODE CONSTANT.
++    # =============================================================================================
++    # WHAT WAS HERE AND WHAT IT COST. Two code lines exempted `^\.mission/evidence/` and
++    # `^\.mission/gates/` outright. They matched the PATH ONLY, after the porcelain XY code had been
++    # stripped, so they exempted a path AT ANY GIT STATUS -- a MODIFIED or DELETED tracked evidence
++    # file passed exactly as an untracked store did -- and they exempted the WHOLE evidence plane
++    # rather than the declared `verify-` prefix. Being CODE, no mission could narrow them.
++    # DRIVEN at the base of this row against a scratch mission root reproducing the real ARC-L2-2
++    # shape: with 5 admitted lines the offending list was EMPTY, and a planted
++    # `?? .mission/evidence/scratch-oops/`, a planted ` M .mission/evidence/verify-0001/report.json`
++    # and a planted ` D` of the same file ALL passed the gate. The repository of record measured
++    # 166 porcelain lines at this HEAD -- 112 `?? .mission/evidence/verify-<id>/`, 54
++    # `?? .mission/gates/...`, ZERO outside those two prefixes -- so the number A-126 had left to
++    # judge was ZERO.
++    #
++    # WHAT GOVERNS NOW: `admitted_porcelain` in the mission's own `.mission/mission.yaml`, read and
++    # matched by THE SAME LIBRARY the advance-admission gate reads it with --
++    # tools/lam/lam-verify-admission.ps1, Get-LamDeclaredAdmittedPorcelain (:526) and
++    # Get-LamPorcelainState (:818). That file is DOT-SOURCED rather than restated: two readers of
++    # one declaration that disagree is this repository's oldest defect class, and amendment 5 exists
++    # because a second dialect of THIS VERY KEY read a block-form declaration as absent.
++    # The declared entries carry the STATUS CODE (`"?? .mission/evidence/verify-"`), and the match
++    # is the library's own anchored prefix over the WHOLE porcelain line `XY path` -- so a declared
++    # prefix at a NON-`?? ` status is JUDGED. That is the status-blindness above, closed.
++    #
++    # FAIL-CLOSED IN EVERY DEGRADATION, because A-126 is a fail-closed gate:
++    #   git status FAILS               -> REFUSE. A failing status produces no output, which the
++    #     pre-row-172 code read as "clean" -- fail-open on the one condition whose whole job is to
++    #     notice uncommitted drift. Get-LamPorcelainState checks the return code; this uses it.
++    #   declaration UNREADABLE/MALFORMED -> REFUSE, on the library's own rule, unchanged:
++    #     "a declared set is honoured exactly or not at all".
++    #   NO declaration at all          -> ADMIT NOTHING. Every porcelain line is judged and only
++    #     $AllowPaths exempts. There is no code default to inherit here and there must not be one:
++    #     a code default is exactly what this row removes.
++    #
++    # THE D9 `session-` EXEMPTION IS DROPPED, DELIBERATELY, AND THE PRICE IS STATED.
++    # D9 (LAM-ACCEPT WP-1 H-3) exempted `^\.mission/evidence/session-` BY NAME PATTERN because the
++    # regenerating evidence session directory's id does not exist until the session starts, so no
++    # CALLER can name it in advance. That premise is about $AllowPaths, and the DECLARATION satisfies
++    # it just as well: `"?? .mission/evidence/session-"` is a PREFIX, writable in advance without
++    # knowing any session id, per-mission and operator-visible. Keeping it in CODE would have
++    # reinstated a hole of exactly the shape this row closes -- path-only, status-blind, unnarrowable
++    # by any mission -- differing only in being one prefix narrower.
++    # MEASURED BEFORE DROPPING: the repository of record carries ZERO `session-` porcelain lines at
++    # this HEAD.
++    # WHAT BREAKS IF ONE REAPPEARS: a Stop finalize publishes `.mission/evidence/<dispatch_id>/`, and
++    # the dispatch id falls back to `session-<id>` when no CURRENT_DISPATCH pointer exists
++    # (tools/framework/hooks/lib/evidence-common.ps1:60), so the directory IS reachable. Every
++    # lifecycle ceremony then REFUSES until the operator adds that one entry to admitted_porcelain.
++    # The refusal below names the offending lines AND names the file the set is declared in, so the
++    # block is self-curing rather than mysterious. That is the trade, stated rather than hidden.
++    #
++    # =============================================================================================
++    # REGISTER ROW 173 (ledger register row 172): THE COMPENSATING-CONTROL CITATION, CORRECTED.
++    # =============================================================================================
++    # THE SENTENCE THAT STOOD HERE read: "Both directories are agent-unwritable (evidence guard;
++    # T-3), which is the compensating control for tolerating them whole." It NAMED THE WRONG TIER,
++    # and it was load-bearing: if the claim is false the exemption above was never justified, which
++    # is why rows 172 and 173 are one job. The exemption is gone, so what follows is no longer a
++    # justification for tolerating anything -- it is the record of what actually guards the two
++    # planes, with a file:line for every route, each read in source at this HEAD.
++    #
++    # WHICH GUARD IS LIVE. `.claude/settings.json` registers PreToolUse at
++    # tools/evidence-hooks-next/hooks/evidence-guard-pretooluse.ps1 (the A1 registration is retired
++    # beside it as settings.json.a1-retired). That entry point dot-sources
++    # tools/evidence-hooks-next/hooks/lib/evidence-common.ps1 (:60), which dot-sources the SEALED A1
++    # library tools/framework/hooks/lib/evidence-common.ps1 (:73) and redefines over it. Routes below
++    # name whichever of the two files they live in; they are not interchangeable.
++    #
++    # `.mission/evidence` -- THE PROTECTED-PATH TIER. This half of the old sentence was TRUE.
++    #   tools/framework/hooks/lib/evidence-common.ps1:1057-1064 lists `.mission/evidence` and
++    #   `.mission-runtime/evidence` in $EvidenceProtectedPaths; the file-tool branch denies on that
++    #   list at :1650-1652 and the shell branch at :1758, for every role, reads included.
++    #
++    # `.mission/gates` -- NOT ON THAT TIER, and that is the whole of row 173. The list at :1057-1064
++    #   does not contain it. `.mission` sits on the PARENT tier (:1065-1070), which denies only when
++    #   a shell METACHARACTER is present ($ShellMetaPattern :1122, gate :1702-1706) or when the
++    #   segment's verb is DESTRUCTIVE or RELOCATING (:1731-1735) -- guarded against `rm -rf .mission`,
++    #   not against writing inside it (:1052-1056). A plain copy into a gates path carries neither and
++    #   falls through to `allow` (:1765); the guard's own docblock records exactly that command as
++    #   having "once returned ALLOW" (:1485). THREE GUARD ROUTES AND ONE PERMISSION ROUTE DO reach it:
++    #     (i)   TEXT MATCH, FILE TOOLS -- Test-EvidenceGatePath,
++    #           tools/evidence-hooks-next/hooks/lib/evidence-common.ps1:3272-3281, called at :4076 for
++    #           every tool that is neither read-only nor a shell. Every role, no exemption.
++    #     (ii)  TEXT MATCH, SHELL -- the same predicate, called at :4280. Every role.
++    #     (iii) ACT MATCH, SHELL -- REGISTER ROW 135'S TRIPWIRE, and the load-bearing one.
++    #           Test-EvidenceGateToolMutation (:3464), called at :4276, denies any invocation of
++    #           tools/lam/mission-gate.ps1 in EXECUTABLE POSITION with any verb but `list`. It exists
++    #           because the ratified mint convention -- `mission-gate.ps1 approve -Kind push
++    #           -MissionRoot .` -- NAMES THE GATES DIRECTORY NOWHERE: the tool computes it from
++    #           -MissionRoot inside the child process, so (i) and (ii), which match TERRITORY, both
++    #           allowed a real self-minted open push gate (driven, exit 0, read back as open by the
++    #           tool's own `list`). T-3 as enforced after row 135: docs/framework/LAM-ACCEPT.md:1277-1340.
++    #     (iv)  PERMISSION LAYER -- `Edit(.mission/gates/**)` at tools/lam/settings/worker.json:13 and
++    #           tools/lam/settings/orchestrator.json:13. TWO CORRECTIONS to the register's own wording,
++    #           both re-derived here: the rule is spelled `Edit(...)`, NOT `Write(...)` -- worker.json's
++    #           own residual records that CLI 2.1.241 rejects `Write(path)` as "not matched by file
++    #           permission checks" -- and tools/lam/settings/validator.json carries NO gates entry in
++    #           its deny list at all (:16-25), so this route covers two role templates, not three.
++    #
++    # WHAT THESE ROUTES ARE NOT. AM-418 governs all four: TRIPWIRES, not boundaries. (iii) in
++    # particular is a tripwire ON THE RATIFIED SPELLING -- a shell that computes an invocation whose
++    # text never names the tool defeats it, and no reading of command TEXT recovers that.
++    # REGISTER ROW 165 is the durable fix and is being built in parallel with this row: it asserts
++    # that tools/lam/mission-gate.ps1 REFUSE NON-HUMAN INVOCATION FROM INSIDE ITSELF -- the tool as
++    # it stands has no TTY check, no UserInteractive check, no environment check and no confirmation
++    # prompt, and writes $env:USERNAME onto the artifact without ever comparing it. Cited as the
++    # REGISTER ROW and what it asserts, not as a file:line, because row 165's code did not exist when
++    # this was written.
++    # THE RE-DERIVATION PASS THIS BLOCK ASKED FOR HAS BEEN RUN (batch 3 session 2, after merging
++    # main). Row 165 landed, and merging batch 1 session 2 then shifted the next-gen library by ~159
++    # lines, staling every number above at once. Each was re-anchored by reading the named line at
++    # this tip; the LAM-ACCEPT ranges moved too (:718-731 -> :777-790 there, :1050-1089 -> :1277-1340
++    # here). A citation is a measurement, so it stales exactly the way a hash does -- if a later
++    # merge moves that library again, these numbers need the same pass and nothing warns you.
+     param([string]$Root, [string[]]$AllowPaths = @())
+-    $status = & git -C $Root status --porcelain
+-    if (-not $status) { Write-Pass "Working tree clean."; return }
++
++    # THE ONE READER OF THE DECLARATION, dot-sourced INSIDE the function on purpose: it adds no
++    # global function names to the many tools that dot-source this file, and a missing or broken
++    # library cannot fail their LOAD -- it fails this GATE, closed, where the failure belongs.
++    # $PSScriptRoot is tools/ (the file that DEFINES the function), which Get-MissionRoot above
++    # already relies on.
++    $admLib = Join-Path $PSScriptRoot 'lam\lam-verify-admission.ps1'
++    if (-not (Test-Path -LiteralPath $admLib)) {
++        Stop-WithError "A-126 REFUSES: the admitted-porcelain reader is absent at $admLib, so the mission's declared set cannot be read. A gate that cannot read its own rule does not pass the tree."
++    }
++    . $admLib
++
++    $porc = Get-LamPorcelainState -MissionRoot $Root
++    if (-not $porc.ok) {
++        Stop-WithError "A-126 REFUSES: $($porc.reason)."
++    }
++    $lines = @($porc.lines)
++    if ($lines.Count -eq 0) { Write-Pass "Working tree clean."; return }
++
++    $decl = Get-LamDeclaredAdmittedPorcelain -MissionRoot $Root
++    if ($decl.error) { Stop-WithError "A-126 REFUSES: $($decl.error)" }
++    $admitted = @($decl.regexes)
++
+     $allow = @($AllowPaths | ForEach-Object { ($_ -replace '\\','/').Trim().Trim('"') })
+     $offending = @()
+-    foreach ($line in ($status -split "`r?`n" | Where-Object { $_ -match '\S' })) {
++    $tolerated = 0
++    foreach ($raw in $lines) {
++        $line = ($raw -replace "`r$", '')
++        # THE DECLARED SET, matched over the WHOLE porcelain line, status code included, by the
++        # regexes the shared library built ('^' + [regex]::Escape(entry)).
++        if (@($admitted | Where-Object { $line -match $_ }).Count -gt 0) { $tolerated++; continue }
++        # $AllowPaths still names PATHS, not porcelain lines. Unchanged: it exempts ONLY its named
++        # inputs and still refuses genuine stray state.
+         $p = ($line.Substring([Math]::Min(3,$line.Length))).Trim()   # porcelain "XY <path>"
+         if ($p -match ' -> ') { $p = ($p -split ' -> ')[-1] }        # rename: take the destination
+         $p = ($p.Trim('"') -replace '\\','/').Trim()
+-        if ($allow -notcontains $p) { $offending += $p }
++        if ($allow -contains $p) { continue }
++        $offending += $line
+     }
+     if ($offending.Count -gt 0) {
+-        Stop-WithError ("Working tree must be clean before a lifecycle command (ADR-021 atomic commit). Unsanctioned uncommitted path(s): " + ($offending -join ', '))
++        $whose = if ($decl.declared) { "declared by the mission at $($decl.source)" }
++                 else { 'NONE -- this mission declares no admitted_porcelain, so nothing is admitted' }
++        Stop-WithError ("Working tree must be clean before a lifecycle command (ADR-021 atomic commit). " +
++            "$($offending.Count) porcelain line(s) outside the admitted set ($whose) and outside -AllowPaths: " +
++            ($offending -join ' ; ') + ". Commit them, or -- if they are genuinely admitted residue -- add the " +
++            "matching '?? <prefix>' entry to admitted_porcelain in the mission's own mission.yaml, which is the ONE place that set is declared.")
+     }
+-    Write-Pass ("Working tree clean except sanctioned input(s): " + ($allow -join ', '))
++    $suffix = if ($allow.Count -gt 0) { "; sanctioned input(s): " + ($allow -join ', ') } else { '' }
++    Write-Pass ("Working tree clean: $tolerated porcelain line(s) admitted by the mission's declared set$suffix.")
+ }
+ 
+ # --- A-130 / E4: mission-state precondition (the ^state: gate -- design-start:53 / spec-accept:270) ---
+diff --git a/tools/mission-spec-accept.ps1 b/tools/mission-spec-accept.ps1
+index f25e7ee5..23ef872f 100644
+--- a/tools/mission-spec-accept.ps1
++++ b/tools/mission-spec-accept.ps1
+@@ -188,10 +188,25 @@ function Assert-CleanGitTree {
+         Stop-WithError "git status failed. Is git installed and is this a git repo?"
+     }
+     # Allow untracked files in .claude/ and .mission-runtime/ per the bootstrap doc.
++    #
++    # D9 (LAM-ACCEPT WP-1 H-3): .mission/evidence/session-*/ is exempt too -- it is created by
++    # the act of running a session with hooks live and REGENERATES per session, so
++    # relocate-and-restore is defeated in kind (design v2.3 SS4.6). Without this, mission
++    # lifecycle ceremonies are blocked unconditionally while the plane is installed (SS17.3).
+     $relevant = $status | Where-Object {
+         $_ -and
+         ($_ -notmatch '^\?\? \.claude/') -and
+-        ($_ -notmatch '^\?\? \.mission-runtime/')
++        ($_ -notmatch '^\?\? \.mission-runtime/') -and
++        # AMENDMENT 7 (HALT-14). The session-level pattern below states the INTENT and is kept for
++        # that reason; the two prefix patterns are what actually fire. git collapses a wholly-
++        # untracked directory to its shallowest path, so with nothing tracked under the plane this
++        # emits '?? .mission/evidence/' and the session- pattern matches NOTHING -- which is how
++        # every ceremony stayed blocked while the exemption looked correct. verify-<id>/ dirs do not
++        # match session- either. Both directories are agent-unwritable (guard; T-3), which is the
++        # compensating control for the wider prefixes.
++        ($_ -notmatch '^\?\? \.mission/evidence/session-') -and
++        ($_ -notmatch '^\?\? \.mission/evidence/') -and
++        ($_ -notmatch '^\?\? \.mission/gates/')
+     }
+     if ($relevant) {
+         Write-Host "  git status shows uncommitted changes outside .claude/ and .mission-runtime/:" -ForegroundColor Yellow

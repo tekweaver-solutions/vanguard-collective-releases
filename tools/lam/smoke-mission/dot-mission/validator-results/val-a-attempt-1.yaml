@@ -1,0 +1,20 @@
+# Validator result -- written by build-smoke-mission.ps1 from its own checks; no validator agent ran.
+# The builder refuses to write this file unless every check below came out as recorded here.
+id: valresult-a-1
+validator_id: val-a
+validator_type: qa
+assertion_ids: [A-1, A-2, A-3]
+verdict: pass
+attempt_number: 1
+commit_sha: "{{COMMIT}}"
+evidence:
+  - type: test_output
+    content: "line 1 of src/greeting.txt: hello from the smoke worker"
+    description: "A-1: src/greeting.txt exists and its first line matches byte for byte."
+  - type: test_output
+    content: "powershell -NoProfile -ExecutionPolicy Bypass -File src/counter.ps1 -- stdout 3, exit 0"
+    description: "A-2: src/counter.ps1 prints exactly 3 with no arguments."
+  - type: test_output
+    content: "powershell -NoProfile -ExecutionPolicy Bypass -File tests/test-smoke.ps1 -- stdout PASS, exit 0"
+    description: "A-3: tests/test-smoke.ps1 exits 0."
+failure_summary: null

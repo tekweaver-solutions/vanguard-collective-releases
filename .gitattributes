@@ -1,0 +1,13 @@
+* -text
+.mission/** -text
+docs/framework/** -text
+# Vanguard Collective's line-ending rule, installed into a project as a TEMPLATE: written only by a fresh install
+# into a folder that holds no file a git repository tracks, kept by an upgrade where the project already has a
+# .gitattributes, and never written by an upgrade, nor into a folder holding files its git repository tracks
+# (or where git cannot say): install.ps1 prints that it is not written, and why -- a framework install does not
+# change a project's line-ending policy for the project's own files. -text tells git to store and check out
+# every file exactly as it is, whatever core.autocrlf says, so the framework's files stay at their bytes and
+# git add prints no line-ending warning. The first line covers the project's own files too: a project that
+# wants conversion for them may narrow it to the framework's paths, keeping the two family lines, which
+# tools/mission-verify.ps1 reads; an edited copy reads CHANGED under install.ps1 -Verify, as any TEMPLATE's
+# does. LAM-INSTALL.md section 10 says what it does and does not change.

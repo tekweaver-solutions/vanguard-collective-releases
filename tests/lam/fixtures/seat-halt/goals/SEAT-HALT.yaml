@@ -1,0 +1,15 @@
+# SEAT-HALT -- a fixture goal (tests/lam/fixtures/seat-halt). It scans a tooling seat's runtime plane,
+# .mission-runtime/seats, which no goal scans unless it declares a halt_absent dir there, so that a seat-plane
+# HALT answered by its own RESOLVED record can be shown to read closed (tools/lam/mission-goal-check.ps1,
+# Get-HaltSeatResolution). tools/tests/cli/test_seat_halt_resolved.py materialises it into a scratch mission
+# root under the test's own temporary folder: runtime/ becomes .mission-runtime/, and this file
+# .mission/goals/SEAT-HALT.yaml. Nothing here sits under a plane the evaluator scans in this repository.
+
+id: SEAT-HALT
+description: "A tooling seat's runtime plane holds no unanswered HALT."
+
+detectors:
+  - type: halt_absent
+    dir: .mission-runtime/seats
+  - type: file_exists
+    path: .mission/goals/SEAT-HALT.yaml

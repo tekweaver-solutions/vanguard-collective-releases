@@ -1,0 +1,563 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  mission-close-milestone (A-118 / C4) -- flip milestone M-N status pending->done via the spec-bump
+  primitive, applying the multi-milestone-feature nuance (a feature flips done ONLY when its LAST
+  owning milestone closes). GATED by the A-127/A-128 enforce-refusals: it REFUSES unless every roster
+  assertion has a current, non-superseded ValidatorResult verdict==pass.
+
+.DESCRIPTION
+  Composes the M-10-validated mission-lib.ps1 (Invoke-SpecBump A-117, Invoke-AtomicCommit A-123/A-124,
+  Assert-CleanWorkingTree A-126, Assert-MissionState A-130) -- it does NOT re-implement the lockstep.
+  The enforce GATE (Test-RosterClosable, below) is the M-11 deliverable A-127/A-128: it is a MECHANICAL
+  READER of recorded validation state. REGISTER ROW 129 (FW cure) gave it a SECOND store: it reads
+  .mission/validator-results/manifest.json (CURRENT = highest attempt_number) AND the LAM binding on
+  .mission-runtime/lam/spawn-ledger.jsonl (CURRENT = highest round; the result file at tests/lam/ named
+  by that line, RE-HASHED equal to the bound result_sha256, verdict taken from the validator's own
+  document). Either store alone can satisfy an assertion; where BOTH speak they must agree or the close
+  refuses. In every case the verdict must be a CURRENT, non-superseded 'pass'.
+  It NEVER re-runs, re-derives, or quality-judges validation (the A-094-class discipline:
+  the CLI gate must NOT become a stand-in for the role-separated validator). Scaffold-not-author: the
+  operator authors the closure amendment + ledger prose; the tool does the mechanical flip + bump + gate.
+#>
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)][string]$Milestone,          # e.g. M-11
+    [Parameter(Mandatory)][string]$AmendmentId,        # operator-authored closure amendment (sanctioned input)
+    [Parameter(Mandatory)][string]$LedgerContentFile,  # operator-authored ledger content
+    [string]$LedgerId,
+    [string]$GreenGateSuite = 'product',               # F-034/M-14: which suite the green-gate targets (product|framework)
+    [switch]$OverrideGreenGate,                         # F-034/M-14: bypass a RED green-gate (appends an audit record)
+    [string]$GreenGateReason,                           # F-034/M-14: required with -OverrideGreenGate
+    [string]$WitnessedSubstrate,                        # require a witnessed live-discharge substrate (e.g. nightly-live) -- the honest-close gate
+    [switch]$NoCommit,
+    [switch]$RosterGateOnly                             # ROW 129: run the A-127/A-128 roster gate and STOP. ZERO mutation -- no
+                                                        # green-gate, no git, no spec-bump, no ledger. A pre-flight of the gate
+                                                        # alone, and the seam the CONTRACT-ROW-129 guards drive.
+)
+
+. (Join-Path $PSScriptRoot 'mission-lib.ps1')
+$root = Get-MissionRoot
+$missionFile = Join-Path $root ".mission\mission.yaml"
+
+# --- A-127/A-128 ENFORCE GATE: a MECHANICAL reader of recorded ValidatorResults. NOT a validator. ---
+#
+# REGISTER ROW 129 -- THE FW CURE: THIS GATE NOW READS THE SPAWN-LEDGER BINDING DIRECTLY.
+#
+# WHAT ROW 129 REGISTERED, verbatim: "THE CLOSE-MILESTONE CLI READS A STORE THE LAM VALIDATORS NEVER
+# WRITE: A-127 requires .mission/validator-results/manifest.json entries (verdict pass, current attempt)
+# for every roster assertion; the LAM validators' results live at tests/lam/ bound on the spawn ledger,
+# and the manifest ended at A-568. BRIDGED, NOT CURED ... The cure -- the CLI reading the spawn-ledger
+# binding -- is FW-1." THIS IS THAT CURE. The gate reads TWO stores now:
+#
+#   (1) THE SECTION-6 STORE -- .mission/validator-results/manifest.json plus the per-assertion JSONs
+#       beside it. UNCHANGED: the CURRENT entry is the highest attempt_number, it must read verdict
+#       exactly 'pass', and A-184's Test-ManifestVerdictConsistency still runs over every roster
+#       assertion the store carries. This is the MIGRATION PATH and it keeps working, unmodified, for
+#       records already transcribed by tools/lam/transcribe-validator-results.ps1.
+#
+#   (2) THE LAM BINDING -- .mission-runtime/lam/spawn-ledger.jsonl. A LAM VALIDATOR NEVER WRITES STORE
+#       (1): each writes ONE result file at tests/lam/validator-<A-NNN>.result.yaml (gitignored), bound
+#       only by result_sha256 on its own 'complete' line. For each roster assertion this gate now finds
+#       the 'complete' line whose 'validates' names it, takes the HIGHEST 'round' as the current
+#       attempt, resolves the result file that line names, RE-HASHES that file and requires equality
+#       with the bound result_sha256, and reads the VERDICT FROM THE VALIDATOR'S OWN DOCUMENT (its
+#       single top-level 'verdict:' line) -- never from the ledger's prose.
+#
+# WHY THE HIGHEST ROUND IS "CURRENT" (the A-128 property, preserved). The manifest path refuses an
+# attempt-1 PASS that an attempt-2 non-pass supersedes; the ledger path has the same property by
+# construction, because ONLY the current round is consulted -- a round-2 FAIL over a round-1 PASS
+# REFUSES. A tie at the highest round REFUSES and lists the candidate seqs; this gate never picks the
+# first of a class. The binding reinforces the ordering: the result file is OVERWRITTEN each round, so
+# only the current round's bound figure can re-hash equal -- a close attempted on a superseded round
+# fails the equality as well as the ordering. (Measured on ARC-L2-2: A-579 rounds 1/2/3 at seq
+# 165/167/169 and A-581 rounds 1/2/3 at seq 166/170/171 all name the SAME result path.)
+#
+# THE FOUR LAM REFUSAL CAUSES, each named in the refusal sentence it produces:
+#   (i)   NO BINDING          -- no 'complete' line binds validates: <A-NNN>.
+#   (ii)  RESULT FILE ABSENT  -- the file that line names is not on disk.
+#   (iii) SHA256 MISMATCH     -- the re-hash differs from the bound result_sha256 (both figures printed).
+#         document without exactly one top-level 'verdict:' line; or the ledger's own verdict prose
+#         disagreeing with the document it binds. Every one of these fails CLOSED.
+#
+# PRECEDENCE WHEN BOTH STORES SPEAK -- THE FAIL-CLOSED RULE. Neither store wins. If BOTH carry a record
+# for an assertion they must AGREE: the same verdict, the same current attempt/round, and -- where the
+# manifest entry carries result_sha256 -- the same bound figure. ANY disagreement REFUSES. Preferring
+# either store silently would let a STALE record decide a close, which is precisely the dual-home
+# staleness vector A-184 exists to close. If only ONE store carries a record, that store decides on its
+# own rules. If NEITHER does, the roster is unvalidated and the close refuses exactly as it always has.
+#
+# THE ONE REFUSAL THIS CURE DELIBERATELY RELAXES, disclosed: "REFUSED (A-127): no validator-results
+# manifest" no longer fires when the spawn ledger fully satisfies the roster. That relaxation IS the
+# row -- the transcription stops being a precondition of closing a LAM-validated roster. It still fires
+# when NEITHER store satisfies an assertion. Every other refusal in this gate fires on exactly the
+# input it fired on before.
+#
+# THE BRIDGE STAYS. tools/lam/transcribe-validator-results.ps1 remains the migration path for records
+# already transcribed and for anyone who wants section-6 records; it is simply no longer REQUIRED.
+#
+# STILL TRUE, AND STILL THE POINT: this gate NEVER re-runs, re-derives or quality-judges validation
+# (the A-094-class discipline). It reads recorded state -- now from the store the validators actually
+# write, as well as from the one they never did.
+
+function Read-LamSpawnLedger {
+    # Parse .mission-runtime/lam/spawn-ledger.jsonl. ABSENT is NOT an error -- a repo with no LAM plane
+    # simply contributes nothing to the gate. A line that is not JSON makes the WHOLE store unreadable:
+    # a store we cannot read end to end cannot be trusted to reveal a superseding round (fail-closed).
+    param([string]$Root)
+    $path = Join-Path $Root '.mission-runtime\lam\spawn-ledger.jsonl'
+    $recs = New-Object System.Collections.ArrayList
+    $bad  = New-Object System.Collections.ArrayList
+    $present = Test-Path -LiteralPath $path
+    if ($present) {
+        $lineNo = 0
+        foreach ($line in [System.IO.File]::ReadAllLines($path)) {
+            $lineNo++
+            if (-not $line.Trim()) { continue }
+            $obj = $null
+            try { $obj = $line | ConvertFrom-Json }
+            catch { [void]$bad.Add("line ${lineNo}: $($_.Exception.Message)"); continue }
+            if ($null -ne $obj) { [void]$recs.Add($obj) }
+        }
+    }
+    $out = [pscustomobject]@{
+        Path = $path; Present = $present
+        Records = @($recs.ToArray()); Bad = @($bad.ToArray())
+    }
+    return $out
+}
+
+function Get-LamResultVerdict {
+    # THE VALIDATOR'S OWN VERDICT, read from its result DOCUMENT -- never from the ledger's prose.
+    # PowerShell 5.1 ships no YAML parser (that is why the transcription bridge delegates to Python), so
+    # this is a deliberately narrow, line-anchored read of the SINGLE top-level 'verdict:' key at column
+    # zero. Zero such lines, or more than one, is a REFUSAL -- not a guess. The vocabulary map is the
+    # SAME one tools/lam/transcribe_validator_results.py applies (PASS -> pass; REFUTED/FAIL -> fail);
+    # anything else keeps its own lowercased spelling and is therefore NOT closeable, which is the
+    # correct treatment of structural-pass / docker-pending / inconclusive.
+    param([string]$Path)
+    $docLines = [System.IO.File]::ReadAllLines($Path)
+    $hits = @($docLines | Where-Object { $_ -match '^verdict:\s*(\S.*?)\s*$' })
+    if ($hits.Count -ne 1) {
+        $res = [pscustomobject]@{
+            Ok = $false; Raw = $null; Verdict = $null
+            Reason = "the result document carries $($hits.Count) top-level 'verdict:' line(s) -- exactly one is required, and this gate will not guess"
+        }
+        return $res
+    }
+    $null = ($hits[0] -match '^verdict:\s*(\S.*?)\s*$')
+    $raw = $Matches[1].Trim().Trim('"').Trim("'").Trim()
+    $upper = $raw.ToUpper()
+    $verdict = switch ($upper) {
+        'PASS'    { 'pass' }
+        'REFUTED' { 'fail' }
+        'FAIL'    { 'fail' }
+        default   { $raw.ToLower() }
+    }
+    $res = [pscustomobject]@{ Ok = $true; Raw = $raw; Verdict = $verdict; Reason = $null }
+    return $res
+}
+
+function Get-LamRosterAttempt {
+    # HALT-ARC-PB-1-13 (AM-480 SS G.0, candidate C4): the ATTEMPT one 'complete' line stands for, as an
+    # integer. ARC-PB-1's spawn ledger carries `round` as a LABEL ('R-PB-1', 'R-PB-1-RECORD') and the
+    # integer in `round_number` -- on the SPAWN line only (spawn-ledger lines 363-372) -- and the gate's
+    # [int] cast of `round` died on it. The order, and nothing else:
+    #   1. `round`, when this gate's own [int] cast accepts it -- UNCHANGED for every ledger whose `round`
+    #      was readable before (a null `round` is refused by the caller before this is reached). A NUMBER
+    #      the cast cannot hold (out of range) IS an integer round, so it is REFUSED and round_number is
+    #      never consulted for it;
+    #   2. else `round_number`, read from the complete line and from its ONE paired 'spawn' line (same
+    #      seq). Every one of them that is present must be a JSON INTEGER the gate can hold, and where both
+    #      lines carry one they must be EQUAL -- a non-integer is refused, never skipped to the other line;
+    #   3. else .Ok = $false and a ONE-LINE reason naming the seq and every value seen -- never a cast
+    #      exception. A string '1' is not a JSON integer and is refused (deny-side).
+    param($Cand, $Ledger, [string]$AssertionId)
+    $out = [pscustomobject]@{ Ok = $false; Attempt = $null; Reason = $null }
+    $n = $null
+    try { $n = [int]$Cand.round } catch { $n = $null }
+    if ($null -ne $n) { $out.Ok = $true; $out.Attempt = $n; return $out }
+    $head = "the 'complete' line binding validates: $AssertionId (seq $($Cand.seq)) carries round $(Format-LamLedgerValue $Cand.round)"
+    if (($Cand.round -is [long]) -or ($Cand.round -is [decimal]) -or ($Cand.round -is [double])) {
+        $out.Reason = "$head, a number this gate's [int] cannot hold (out of range) -- an integer round is never read from round_number, and this gate will not assume an attempt"
+        return $out
+    }
+    $spawns = @($Ledger.Records | Where-Object { ([string]$_.event -eq 'spawn') -and ([string]$_.seq -eq [string]$Cand.seq) })
+    $sources = New-Object System.Collections.ArrayList
+    [void]$sources.Add(@('complete', $Cand))
+    if ($spawns.Count -eq 1) { [void]$sources.Add(@('spawn', $spawns[0])) }
+    $seen = New-Object System.Collections.ArrayList
+    $vals = New-Object System.Collections.ArrayList
+    $why = $null
+    foreach ($src in $sources) {
+        $v = $src[1].round_number
+        [void]$seen.Add("$($src[0]) round_number $(Format-LamLedgerValue $v)")
+        if ($null -eq $v) { continue }
+        $iv = $null
+        if (($v -is [int]) -or ($v -is [long])) { try { $iv = [int]$v } catch { $iv = $null } }
+        if ($null -eq $iv) { if (-not $why) { $why = "a round_number that is not a JSON integer this gate can hold" }; continue }
+        [void]$vals.Add($iv)
+    }
+    if ($spawns.Count -ne 1) { [void]$seen.Add("spawn lines at this seq: $($spawns.Count), so none is paired") }
+    if (-not $why) {
+        if ($vals.Count -eq 0) { $why = 'no round_number on either line' }
+        elseif (@($vals | Sort-Object -Unique).Count -gt 1) { $why = 'the two round_numbers disagree' }
+        else { $out.Ok = $true; $out.Attempt = [int]$vals[0]; return $out }
+    }
+    $out.Reason = "$head, which is not an integer, and no single integer round_number on it and its paired spawn line -- $why ($($seen -join '; ')) -- the attempt cannot be ordered, and this gate will not assume one"
+    return $out
+}
+
+function Format-LamLedgerValue {
+    # A spawn-ledger value as the refusal names it, on ONE line: absent, 'quoted' text, or the JSON token.
+    param($Value)
+    if ($null -eq $Value) { return 'absent' }
+    if ($Value -is [string]) { return "'" + ($Value -replace '[\r\n]+', ' ') + "'" }
+    return (($Value | ConvertTo-Json -Compress -Depth 3) -replace '[\r\n]+', ' ')
+}
+
+function Resolve-LamRosterRecord {
+    # The LAM binding for ONE roster assertion, resolved from the spawn ledger alone.
+    # .Found says whether the ledger binds the assertion at all; .Ok says whether that binding is sound.
+    # .Cause names which of the four refusal causes fired.
+    param([string]$Root, [string]$AssertionId, $Ledger)
+    $res = [pscustomobject]@{
+        Found = $false; Ok = $false; Cause = $null; Reason = $null
+        Seq = $null; Round = $null; DispatchId = $null; ResultRel = $null
+        Bound = $null; Actual = $null; Verdict = $null; RawVerdict = $null
+    }
+    if (-not $Ledger.Present) { return $res }
+    $cands = @($Ledger.Records | Where-Object {
+        ([string]$_.event -eq 'complete') -and ([string]$_.validates -eq $AssertionId) })
+    if ($cands.Count -eq 0) { return $res }        # cause (i) -- reported by the caller
+    $res.Found = $true
+
+    foreach ($cand in $cands) {
+        if ($null -eq $cand.round) {
+            $res.Cause = 'UNREADABLE BINDING'
+            $res.Reason = "a 'complete' line binding validates: $AssertionId (seq $($cand.seq)) carries no 'round' -- the current attempt cannot be ordered, and this gate will not assume one"
+            return $res
+        }
+    }
+    $pairs = New-Object System.Collections.ArrayList
+    foreach ($cand in $cands) {
+        $att = Get-LamRosterAttempt -Cand $cand -Ledger $Ledger -AssertionId $AssertionId
+        if (-not $att.Ok) {
+            $res.Cause = 'UNREADABLE BINDING'
+            $res.Reason = $att.Reason
+            return $res
+        }
+        [void]$pairs.Add([pscustomobject]@{ Cand = $cand; Attempt = $att.Attempt })
+    }
+    $top = ($pairs | ForEach-Object { $_.Attempt } | Measure-Object -Maximum).Maximum
+    $winners = @($pairs | Where-Object { $_.Attempt -eq $top })
+    if ($winners.Count -ne 1) {
+        $seqList = (($winners | ForEach-Object { [string]$_.Cand.seq }) -join ', ')
+        $res.Cause = 'UNREADABLE BINDING'
+        $res.Reason = "the highest round ($top) for $AssertionId is claimed by $($winners.Count) 'complete' lines (seq $seqList) -- this gate will not pick the first of a class"
+        return $res
+    }
+    $cur = $winners[0].Cand
+    $res.Seq = $cur.seq
+    $res.Round = $winners[0].Attempt
+    $res.DispatchId = [string]$cur.dispatch_id
+
+    $bound = [string]$cur.result_sha256
+    if (-not $bound) {
+        $res.Cause = 'UNREADABLE BINDING'
+        $res.Reason = "the current 'complete' line for $AssertionId (seq $($res.Seq), round $($res.Round)) carries no result_sha256 -- an UNBOUND result is not evidence"
+        return $res
+    }
+    $rel = if ($cur.result_path) { [string]$cur.result_path } else { "tests/lam/validator-$AssertionId.result.yaml" }
+    $rel = ($rel -replace '\\', '/').Trim()
+    if ($rel -match '^([A-Za-z]:|/)' -or $rel -match '(^|/)\.\.(/|$)') {
+        $res.Cause = 'UNREADABLE BINDING'
+        $res.Reason = "the current 'complete' line for $AssertionId (seq $($res.Seq)) names a result path that escapes the repository root: '$rel'"
+        return $res
+    }
+    $res.ResultRel = $rel
+    $full = Join-Path $Root ($rel -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $full)) {
+        $res.Cause = 'RESULT FILE ABSENT'
+        $res.Reason = "the result file bound to $AssertionId is ABSENT at $rel (spawn ledger 'complete' line seq $($res.Seq), round $($res.Round), dispatch $($res.DispatchId)) -- a binding whose file is gone proves nothing"
+        return $res
+    }
+    $actual = ((Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash).ToLower()
+    $res.Bound = $bound.ToLower()
+    $res.Actual = $actual
+    if ($actual -ne $res.Bound) {
+        $res.Cause = 'SHA256 MISMATCH'
+        $res.Reason = "the result file $rel DOES NOT RE-HASH to the figure bound on its own 'complete' line (seq $($res.Seq), round $($res.Round)) -- bound result_sha256 $($res.Bound), re-hashed actual $actual"
+        return $res
+    }
+    $vr = Get-LamResultVerdict -Path $full
+    if (-not $vr.Ok) {
+        $res.Cause = 'UNREADABLE BINDING'
+        $res.Reason = "the result document $rel for $AssertionId cannot be read for a verdict -- $($vr.Reason)"
+        return $res
+    }
+    if ($null -ne $cur.verdict -and ([string]$cur.verdict) -ne '') {
+        if (([string]$cur.verdict).ToUpper() -ne $vr.Raw.ToUpper()) {
+            $res.Cause = 'UNREADABLE BINDING'
+            $res.Reason = "the spawn ledger's own verdict prose for $AssertionId (seq $($res.Seq)) reads '$([string]$cur.verdict)' while the document it binds ($rel) reads '$($vr.Raw)' -- the binding contradicts itself"
+            return $res
+        }
+    }
+    $res.Verdict = $vr.Verdict
+    $res.RawVerdict = $vr.Raw
+    $res.Ok = $true
+    return $res
+}
+
+function Test-RosterClosable {
+    param([string]$Root, [string[]]$Roster)
+    $manifestPath = Join-Path $Root ".mission\validator-results\manifest.json"
+    $manifestPresent = Test-Path -LiteralPath $manifestPath
+    $entries = @()
+    if ($manifestPresent) {
+        $entries = @((Get-Content $manifestPath -Raw | ConvertFrom-Json).entries)
+    }
+    $ledger = Read-LamSpawnLedger -Root $Root
+    if ($ledger.Present -and $ledger.Bad.Count -gt 0) {
+        Stop-WithError "REFUSED (A-127, LAM binding -- UNREADABLE BINDING): the spawn ledger at .mission-runtime/lam/spawn-ledger.jsonl has $($ledger.Bad.Count) line(s) that are not JSON [$($ledger.Bad[0])]. A store this gate cannot read end to end cannot be trusted to reveal a superseding round -- fail closed."
+    }
+    if (-not $manifestPresent -and -not $ledger.Present) {
+        Stop-WithError "REFUSED (A-127): no validator-results manifest -- cannot confirm the roster is validated. close-milestone READS recorded verdicts; it does NOT run validation. (Row 129: neither .mission/validator-results/manifest.json NOR .mission-runtime/lam/spawn-ledger.jsonl exists.)"
+    }
+
+    $fromManifest = 0; $fromLedger = 0; $fromBoth = 0
+    foreach ($aid in $Roster) {
+        # --- store (1): the section-6 manifest. CURRENT = highest attempt_number (unchanged). ---
+        $hits = @($entries | Where-Object { $_.assertion_id -eq $aid })
+        $current = $null
+        if ($hits.Count -gt 0) { $current = $hits | Sort-Object { [int]($_.attempt_number) } | Select-Object -Last 1 }
+        # --- store (2): the LAM binding on the spawn ledger. CURRENT = highest round. ---
+        $lam = Resolve-LamRosterRecord -Root $Root -AssertionId $aid -Ledger $ledger
+
+        if ($null -eq $current -and -not $lam.Found) {
+            Stop-WithError "REFUSED (A-127): roster assertion $aid has NO recorded ValidatorResult -- an unvalidated roster is NOT closeable. (The gate reads recorded state; it does not validate.) NEITHER store binds it: no manifest entry under .mission/validator-results/, and no 'complete' line on .mission-runtime/lam/spawn-ledger.jsonl carries validates: $aid [LAM cause (i) NO BINDING]."
+        }
+        if ($lam.Found -and -not $lam.Ok) {
+            Stop-WithError "REFUSED (A-127/A-128, LAM binding -- $($lam.Cause)): $($lam.Reason). The gate fails CLOSED on a binding it cannot stand behind; it does NOT fall back to the other store."
+        }
+
+        $mVerdict = if ($current) { [string]$current.verdict } else { $null }
+        $lVerdict = if ($lam.Ok) { [string]$lam.Verdict } else { $null }
+
+        if ($current -and $lam.Ok) {
+            $fromBoth++
+            $mAttempt = [int]$current.attempt_number
+            if ($mVerdict -ne $lVerdict) {
+                Stop-WithError "REFUSED (A-127/A-128, TWO-STORE DIVERGENCE): $aid reads verdict '$mVerdict' in the manifest (attempt $mAttempt) and verdict '$lVerdict' on the spawn-ledger binding (round $($lam.Round), seq $($lam.Seq), $($lam.ResultRel)). Neither store wins: a disagreement means ONE OF THEM IS STALE, and a stale record must never decide a close (fail-closed; the dual-home staleness vector A-184 exists to close). Reconcile the stores -- tools/lam/transcribe-validator-results.ps1 in its default CHECK-ONLY mode prints the equalities -- then re-run."
+            }
+            if ($mAttempt -ne $lam.Round) {
+                Stop-WithError "REFUSED (A-127/A-128, TWO-STORE DIVERGENCE): $aid is CURRENT at attempt $mAttempt in the manifest and at round $($lam.Round) on the spawn-ledger binding (seq $($lam.Seq)). The two stores disagree about WHICH ATTEMPT IS CURRENT, so they cannot both be describing the close-able result -- fail closed."
+            }
+            $mSha = if ($current.PSObject.Properties.Name -contains 'result_sha256') { [string]$current.result_sha256 } else { '' }
+            if ($mSha -and $mSha.ToLower() -ne $lam.Bound) {
+                Stop-WithError "REFUSED (A-127/A-128, TWO-STORE DIVERGENCE): $aid is bound to result_sha256 $($mSha.ToLower()) by its manifest entry and to $($lam.Bound) by its spawn-ledger 'complete' line (seq $($lam.Seq)). The two stores name DIFFERENT result bytes -- fail closed."
+            }
+        }
+        elseif ($current) { $fromManifest++ }
+        else { $fromLedger++ }
+
+        $verdict = if ($current) { $mVerdict } else { $lVerdict }
+        $source = ''
+        if ($current -and $lam.Ok) {
+            $source = "manifest attempt $([int]$current.attempt_number) AND spawn-ledger round $($lam.Round) (seq $($lam.Seq)), in agreement"
+        } elseif ($current) {
+            $source = "manifest attempt $([int]$current.attempt_number)"
+        } else {
+            $source = "spawn-ledger round $($lam.Round), seq $($lam.Seq), dispatch $($lam.DispatchId), $($lam.ResultRel) re-hashed equal to the bound $($lam.Bound)"
+        }
+        if ($verdict -ne 'pass') {
+            Stop-WithError "REFUSED (A-127/A-128): roster assertion $aid current ValidatorResult verdict is '$verdict' -- only a current, non-superseded verdict=='pass' is closeable. structural-pass / docker-pending / inconclusive / fail are NOT (the class of a verdict recorded before validation ran live). MECHANICAL READ: the gate reads the recorded verdict; it does NOT re-run or quality-judge validation. [source: $source]"
+        }
+    }
+    # A-184 (F-040/M-20): manifest-verdict-integrity -- each consumed (max-attempt) entry's verdict must AGREE
+    # with its authoritative JSON. Runs WITHIN the roster gate, so it PRECEDES the F-036 green-gate floor (which
+    # is invoked after Test-RosterClosable returns). Divergence/missing-JSON -> REFUSE fail-closed (shared predicate).
+    # ROW 129: guarded on the manifest's PRESENCE only. Where the store exists this is the SAME call with the SAME
+    # roster scope it has always had (the predicate itself skips assertions the store does not carry); where the
+    # store does not exist at all there is no entry for it to check, and refusing on its absence would re-impose
+    # exactly the transcription precondition this row removes.
+    if ($manifestPresent) {
+        Test-ManifestVerdictConsistency -Root $Root -AssertionIds $Roster
+    } else {
+        Write-Info "manifest verdict-integrity (A-184/A-185): SKIPPED -- .mission/validator-results/ carries no manifest; every roster assertion was read from the spawn-ledger binding, where the re-hash equality is the integrity check."
+    }
+    Write-Pass "roster closable: all $($Roster.Count) assertions have a current non-superseded verdict==pass (READ, NOT re-validated) -- $fromManifest from the manifest alone, $fromLedger from the spawn-ledger binding alone, $fromBoth from BOTH stores in agreement."
+}
+
+# resolve the operator-authored closure amendment (sanctioned input, like spec-bump)
+$amFiles = @(Get-ChildItem -Path (Join-Path $root ".mission\amendments") -Filter "$AmendmentId-*.yaml" -ErrorAction SilentlyContinue)
+if ($amFiles.Count -ne 1) { Stop-WithError "expected exactly one amendment file '$AmendmentId-*.yaml', found $($amFiles.Count)." }
+$amRel = ".mission/amendments/$($amFiles[0].Name)"
+
+if (-not (Test-Path $LedgerContentFile)) { Stop-WithError "ledger content file not found: $LedgerContentFile" }
+if (-not $NoCommit) { Assert-CleanWorkingTree -Root $root -AllowPaths @($amRel) }   # A-126
+Assert-MissionState -MissionFile $missionFile -Expected 'Reworking'                  # A-130
+
+# --- parse the current spec: the M-N block, its roster, its features, its status ---
+$specName = Get-CurrentSpecName -Root $root
+$specPath = Join-Path $root ".mission\spec\$specName.yaml"
+$spec = [System.IO.File]::ReadAllText($specPath)
+$mEsc = [regex]::Escape($Milestone)
+$mblock = [regex]::Match($spec, "(?ms)^  - id: $mEsc\r?\n.*?(?=^  - id: |^[A-Za-z])")
+if (-not $mblock.Success) { Stop-WithError "milestone $Milestone not found in $specName.yaml" }
+if ($mblock.Value -notmatch '(?m)^    status:\s*pending\s*$') { Stop-WithError "milestone $Milestone is not 'pending' (already closed?) -- nothing to do." }
+$roster = @(); $rm = [regex]::Match($mblock.Value, 'contract_assertion_ids:\s*\[([^\]]*)\]')
+if ($rm.Success) { $roster = @($rm.Groups[1].Value -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+if ($roster.Count -eq 0) { Stop-WithError "milestone $Milestone has no contract_assertion_ids roster" }
+
+# --- A-127/A-128: REFUSE before any mutation unless the roster is fully, currently green ---
+Test-RosterClosable -Root $root -Roster $roster
+
+# --- ROW 129: -RosterGateOnly stops HERE, before the first read of any mutable state. Nothing above
+#     this line writes a byte (the amendment/ledger-file checks, A-126, A-130 and the spec parse are all
+#     reads), so a -RosterGateOnly run is zero-mutation by construction, not by promise. ---
+if ($RosterGateOnly) {
+    Write-Host "mission close-milestone: -RosterGateOnly -- the A-127/A-128 roster gate PERMITS $Milestone ($($roster.Count) assertion(s)). No mutation was attempted." -ForegroundColor Cyan
+    exit 0
+}
+
+# --- HONEST-CLOSE GATE: require a WITNESSED live-discharge substrate where one is demanded.
+#     The requirement comes from BOTH (a) the -WitnessedSubstrate param (a close that names a substrate
+#     forces the requirement before any validator attempt records one, so it cannot close on a narration)
+#     AND (b) auto-detect: any roster assertion whose CURRENT (max-attempt) manifest entry carries a
+#     'witnessed_substrate' field (so once a validator attempt records witnessed_substrate=<name>,
+#     the close auto-requires it). Each named substrate must pass Test-WitnessedSubstrate (the committed
+#     substrate-PRESENCE check -- the substrate-shape discriminator, presence direction) -- absent/stub -> REFUSE. ---
+$substrates = New-Object System.Collections.Generic.HashSet[string]
+if ($WitnessedSubstrate) { [void]$substrates.Add($WitnessedSubstrate) }
+#     ROW 129: the auto-detect arm is a MANIFEST feature and stays one -- the LAM result documents are not
+#     section-6 records and carry no witnessed_substrate key, and the transcription bridge deliberately never
+#     writes one. So the read is now guarded on the manifest's PRESENCE: with the store absent there are no
+#     entries to detect from and the set is empty either way (this is not a weakening -- an absent manifest
+#     yielded no substrates before either), and -WitnessedSubstrate remains the way to demand one on a roster
+#     read from the spawn-ledger binding. ---
+$vrManifestPath = Join-Path $root ".mission\validator-results\manifest.json"
+$vrEntries = @()
+if (Test-Path -LiteralPath $vrManifestPath) {
+    $vrEntries = @((Get-Content $vrManifestPath -Raw | ConvertFrom-Json).entries)
+}
+foreach ($aid in $roster) {
+    $cur = @($vrEntries | Where-Object { $_.assertion_id -eq $aid }) | Sort-Object { [int]($_.attempt_number) } | Select-Object -Last 1
+    if ($cur -and ($cur.PSObject.Properties.Name -contains 'witnessed_substrate') -and $cur.witnessed_substrate) {
+        [void]$substrates.Add([string]$cur.witnessed_substrate)
+    }
+}
+foreach ($sub in $substrates) { Test-WitnessedSubstrate -Root $root -SubstrateName $sub }
+
+# --- F-034/M-14 GREEN-GATE (ADR-042, A-144..A-146): a NEW precondition ALONGSIDE A-127/A-128/A-126/A-130.
+#     The default unnamed run of the target suite must be baseline-green (no unexpected fail, no
+#     collection regression below the stored floor, no collection error) before a milestone can close.
+#     -OverrideGreenGate -GreenGateReason bypasses with a ledger audit record (A-149). ---
+$ggResult = Assert-DefaultRunGreen -Root $root -SuiteId $GreenGateSuite -OverrideGreenGate:$OverrideGreenGate -Reason $GreenGateReason
+
+# --- multi-milestone-feature nuance: a feature flips done ONLY if M-N is its LAST open milestone ---
+$mFeatures = @(); $fm = [regex]::Match($mblock.Value, 'features:\s*\[([^\]]*)\]')
+if ($fm.Success) { $mFeatures = @($fm.Groups[1].Value -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+$featuresToFlip = @()
+foreach ($f in $mFeatures) {
+    $otherOpen = $false
+    # R-p (REOPEN #23): milestone ids may be letter-SUFFIXED (grandfathered M-61a/M-61b from the AM-204 split;
+    # numeric-only is the convention going forward). The prior `(M-\d+)\r?\n` was BLIND to suffixed ids -- the
+    # \d+ matched "61" then \r?\n failed on the "b", so M-61b was INVISIBLE to this other-open-milestone scan
+    # and F-078 flipped done at M-61a's close while M-61b was still pending. `(M-\d+[a-z]?)` sees them.
+    foreach ($mm in [regex]::Matches($spec, '(?ms)^  - id: (M-\d+[a-z]?)\r?\n.*?(?=^  - id: |^[A-Za-z])')) {
+        if ($mm.Groups[1].Value -eq $Milestone) { continue }
+        $hasF = $mm.Value -match ("features:\s*\[[^\]]*\b" + [regex]::Escape($f) + "\b")
+        $pend = $mm.Value -match '(?m)^    status:\s*pending\s*$'
+        if ($hasF -and $pend) { $otherOpen = $true; break }
+    }
+    if (-not $otherOpen) { $featuresToFlip += $f }   # M-N is its last open milestone -> the feature completes
+}
+Write-Info ("close ${Milestone}: feature(s) flipping done (last-milestone): " + (($featuresToFlip -join ', ')))
+Write-Info ("feature(s) staying pending (other milestones open): " + ((($mFeatures | Where-Object { $featuresToFlip -notcontains $_ }) -join ', ')))
+
+# --- body change: flip M-N status pending->done, and each feature whose last milestone this is ---
+$milestoneEsc = $mEsc; $flipFeatures = $featuresToFlip
+$bodyTransform = {
+    param($text)
+    # flip the milestone's OWN status line (anchored within the M-N block: id line -> first status:)
+    $text = [regex]::Replace($text, "(?ms)(^  - id: $milestoneEsc\r?\n.*?^    status:\s*)pending(\s*$)", '${1}done${2}')
+    foreach ($f in $flipFeatures) {
+        $fe = [regex]::Escape($f)
+        $text = [regex]::Replace($text, "(?ms)(^  - id: $fe\r?\n.*?^    status:\s*)pending(\s*$)", '${1}done${2}')
+    }
+    return $text
+}.GetNewClosure()
+
+# --- D3 (AM-427 F1): pre-operation anchors, captured BEFORE the first mutation (Invoke-SpecBump
+#     writes the new vNNN). $preSha: HEAD cannot move between here and the A-169 gate (nothing
+#     commits in between), but the rollback's anchor belongs ahead of the operation it guards.
+#     $preUntracked: the snapshot whose delta at an A-169 refusal is exactly this operation's own
+#     creations -- the pre-placed amendment is IN the snapshot and SURVIVES a refusal (AM-427 SS D
+#     site 2). Captured unconditionally (read-only; -NoCommit simply never uses them). ---
+$preSha = (& git -C $root rev-parse HEAD).Trim()
+$preUntracked = Get-MissionUntrackedPaths -Root $root
+
+# --- compose the M-10-validated primitive: spec-bump applies the status flip as the body change ---
+$result = Invoke-SpecBump -Root $root -AmendmentId $AmendmentId -BodyTransform $bodyTransform   # A-117/A-121/A-122
+
+# ledger entry (operator content; scaffolded envelope)
+if (-not $LedgerId) { $LedgerId = "ledger-decision-$($AmendmentId.ToLower())-close-$($Milestone.ToLower())-$($result.OldName)-to-$($result.NewName)" }
+$content = [System.IO.File]::ReadAllText($LedgerContentFile)
+$entry = [ordered]@{
+    id = $LedgerId; created_at = (Get-UtcStamp); created_by = 'claude-code:orchestrator-guide'
+    ts = (Get-UtcStamp); author = 'claude-code:orchestrator-guide'; type = 'decision'; scope = 'framework'
+    scope_ref = $amRel; content = $content; source_trace_id = $null; supersedes = $null
+    tags = @('milestone-closure', "$($Milestone.ToLower())-done", 'spec-bump', 'framework')
+}
+Add-LedgerEntry -Root $root -Entry $entry
+
+if (-not $NoCommit) {
+    # A-169 zero-mutation anchors ($preSha + $preUntracked) are captured ABOVE Invoke-SpecBump (D3/AM-427 F1).
+    $floor = [int]$ggResult.Run.Runnable
+    # F-034/M-14 write-back: on a GREEN close, ratchet the green-gate floor to the just-passed runnable
+    # count + record last_green_close. Rides the SAME atomic commit (one logical unit). Only reached on a
+    # permitted gate (a refusal exits before here); never advances on a failed close.
+    Write-GreenGateFloor -Root $root -SuiteId $GreenGateSuite -Collected $floor -Transition 'close-milestone' -Ref "$Milestone via $AmendmentId"
+    # A-162/A-163 (GAP 1): append the baseline-record audit twin IN THE SAME close. stored_floor == the
+    # manifest floor BY CONSTRUCTION -- both are $floor (one source value -> two sinks), no later reconcile
+    # (this closes the RE-CLOSURE #7 hand-append gap). The SINGLE shared writer Add-GreenGateBaselineRecord
+    # -- the SAME path the backfill uses, carrying the suite_id field (A-164); NOT a divergent inline writer.
+    [void](Add-GreenGateBaselineRecord -Root $root -SuiteId $GreenGateSuite -StoredFloor $floor -Transition 'close-milestone' -Ref "$Milestone via $AmendmentId" -ExtraTags @("$($Milestone.ToLower())-close"))
+    # A-169 (GAP 1 INDEPENDENT fail-closed gate): the close MUST have produced a baseline-record matching the
+    # manifest floor for this suite. Verify AT the close -- NOT a downstream A-147 inference. On a missing or
+    # floor-divergent append, REFUSE: roll back to $preSha (the spec-bump vNNN + current.txt + mission.yaml +
+    # the floor write + the milestone-closure entry are all still uncommitted) -> ZERO mutation. Reuses the
+    # suite_id selector so this is the SAME matcher A-147 uses.
+    $sel = Resolve-SuiteBaselineRecord -Root $root -SuiteId $GreenGateSuite
+    if (-not $sel.Ok -or $sel.Floor -ne $floor) {
+        # D3 (AM-427 F1): snapshot-delta rollback via the ONE shared implementation. The delta is
+        # exactly what this close created since the pre-op snapshot (the spec-bump vNNN); the
+        # pre-placed amendment and every bystander are IN the snapshot and SURVIVE. The prior
+        # inline `git clean -fd -- .mission` here deleted every untracked non-ignored path under
+        # .mission on a refusal (the R2 pattern's second site).
+        $delta = @(Get-MissionUntrackedPaths -Root $root | Where-Object { $preUntracked -notcontains $_ })
+        Invoke-GuardedRollback -Root $root -PreSha $preSha -RemovePaths $delta
+        Stop-WithError "REFUSED (A-169): close-milestone produced no baseline-record matching the manifest floor ($floor) for suite '$GreenGateSuite' [selector: $($sel.Reason)]. The append-or-refuse gate -- ZERO mutation, rolled back to $preSha. This refusal is AT the close, NOT a downstream A-147 read."
+    }
+    # F-037/M-17 (A-170/A-171, AM-106): advance current_milestone to the just-closed milestone -- the
+    # -Milestone PARAM, NOT inferred from the cursor (no current+1; a self-close lands on its own id).
+    # Per the AM-106 supersession, current_milestone == MOST-RECENT-CLOSED (the "null-when-not-in-progress"
+    # convention is superseded; in-progress is carried by milestone status). A-172: this writes mission.yaml
+    # (already in the atomic path list) AFTER the A-169 guard and BEFORE Invoke-AtomicCommit -- so an A-169
+    # refusal's `reset --hard $preSha` rolls the cursor back too; the cursor advances IFF the close commits,
+    # never past a milestone that did not seal. Line-anchored single-line replace (mirrors Invoke-SpecBump's
+    # current_spec_version replace) -- no collision with current_spec_version or any in-comment mention.
+    $mtext = [System.IO.File]::ReadAllText($missionFile)
+    # F-072 (M-56): comment-tolerant advance -- replaces the old `^current_milestone:\s*\S+\s*$` Replace
+    # whose `\s*$` end-anchor SILENTLY no-op'd a trailing-comment current_milestone line (REOPEN #19 T1).
+    $mtext = Set-MissionFieldValue -Text $mtext -Key 'current_milestone' -Value $Milestone
+    [System.IO.File]::WriteAllText($missionFile, $mtext)
+    $body = "close($Milestone): status done ($AmendmentId, $($result.OldName)->$($result.NewName))`r`n`r`nFlip $Milestone pending->done via spec-bump; gated on a green roster (A-127/A-128) + the F-034 green-gate ($GreenGateSuite, ADR-042). Baseline-record auto-appended (A-162/A-163) + A-169 append-or-refuse verified. current_milestone advanced to $Milestone (F-037/AM-106, most-recent-closed).`r`n"
+    $msg = New-CommitMessageFile -Root $root -Body $body
+    # ONE logical unit (A-124): amendment + new vNNN + current.txt + mission.yaml + ledger (milestone-closure
+    # entry + the A-162 baseline-record) + the green-gate manifest (floor write-back).
+    $paths = @($amRel, ".mission/spec/$($result.NewName).yaml", '.mission/spec/current.txt', '.mission/mission.yaml', '.mission/ledger/entries.jsonl', ".mission/green-gate/$GreenGateSuite.json")
+    Invoke-AtomicCommit -Root $root -Paths $paths -MessageFile $msg | Out-Null
+}
+Write-Host "mission close-milestone: done ($Milestone -> done; $($result.OldName)->$($result.NewName))" -ForegroundColor Cyan

@@ -1,0 +1,563 @@
+#!/usr/bin/env python3
+"""THE VALIDATOR-RESULT TRANSCRIPTION TOOL (the toolchain half).
+
+WHAT THIS IS. The LAM validators write ONE result file each, at tests/lam/validator-<A-NNN>.result.yaml,
+bound only by `result_sha256` on their own `complete` line in .mission-runtime/lam/spawn-ledger.jsonl.
+tools/mission-close-milestone.ps1's A-127/A-128 gate (Test-RosterClosable) is a MECHANICAL READER of a
+DIFFERENT store: .mission/validator-results/manifest.json. The register records exactly that gap -- "THE
+CLOSE-MILESTONE CLI READS A STORE THE LAM VALIDATORS NEVER WRITE" -- and records its disposition:
+BRIDGED, NOT CURED. This tool is the BRIDGE, promoted out of the runtime plane into the repository so
+that an arc no longer has to re-author it. THE CURE -- the CLI reading the spawn-ledger binding directly
+-- is FW-1 work and is NOT in this file.
+
+WHAT IT REPLACES, AND WHY THAT IS THE DEFECT. Two one-arc ceremonies stood in the runtime plane:
+  .mission-runtime/lam/helpers/transcribe-validator-results.py
+  .mission-runtime/lam/helpers/transcribe-validator-results-l22.py
+The second exists because the first could not be re-pointed. Its own docstring names the five places the
+copies diverged -- the hardcoded PLAN, the session id, the attest string, the commit message, and a first
+act that ABORTS when the manifest already carries the arc's first assertion. That last one is not a
+cosmetic divergence: it means the CHECK-ONLY mode of a ceremony cannot be re-run over the arc it just
+transcribed, which is precisely what a check-only mode is for. Driven at its arc's close tip, the second
+helper with no flag exits 1 with "STOP: the manifest already carries A-576" and verifies nothing.
+
+SO, IN THIS TOOL:
+  * NOTHING ABOUT ANY ARC IS BAKED IN. The caller names the assertion ids; there is no PLAN.
+  * MANIFEST PRESENCE IS A FACT IN CHECK-ONLY MODE, NOT AN ABORT. Check-only re-verifies every equality
+    over an already-transcribed arc and exits 0, reporting for each assertion whether the store already
+    carries it and whether the recorded figure still equals the source. In WRITE mode, refusing to
+    overwrite an existing entry remains correct and remains in force.
+
+HOW THE SPAWN SEQUENCE IS RESOLVED (and why this way). The caller may name explicit `A-576:149` pairs,
+but by DEFAULT it names bare assertion ids and THE TOOL RESOLVES THE SEQUENCE FROM THE LEDGER: the
+`complete` lines whose round-pair binds `validates: <id>`, and among them the HIGHEST `round` -- the
+current, non-superseded attempt, which is the one the A-127/A-128 gate consumes. Resolution is
+preferred over an operator-typed table because a typed seq table IS the predecessors' hardcoding defect, one
+transcription error away from binding a roster assertion to another validator's file. Explicit pairs
+stay available for the case resolution cannot settle: an ambiguous tie at the highest round is a STOP
+that LISTS THE CANDIDATES and asks for the pair, never a silent first-of-a-class pick. A complete line
+that binds NO result (`result_sha256` null or absent) claims no round in that resolution: it is set
+aside and named, the tie is counted over the lines that bind a result, and a highest round held only
+by such lines is a STOP (THE COMPLETE LINE'S READING, stated at
+resolve_seq and applied by the roster gate as well).
+
+WHERE IDENTITY COMES FROM. NOT from the result file. An arc's results DO NOT SHARE A SCHEMA -- one arc's
+seven carry between them four different identity key sets, and one (A-581) carries no identity key at
+all -- so identity (`validates`, `dispatch_id`, `round`, `tip_judged`) is read from the SPAWN LEDGER,
+preferring the `complete` line and falling back to its paired `spawn` line for any field the complete
+line does not carry. Every overlap between the two lines is cross-checked, and every identity field the
+RESULT FILE does carry is cross-checked against the ledger. ANY disagreement is a STOP that prints both
+readings. Each record discloses, field by field, which record the value came from and whether it was
+cross-checked.
+
+WHAT IS ASSERTED BEFORE ANYTHING IS WRITTEN. Each source file's sha256 against the `result_sha256` bound
+on its own complete line. A single inequality is a STOP THAT PRINTS BOTH FIGURES.
+
+WHAT IS COPIED. Every content string is the validator's own text, PyYAML-parsed and re-emitted unchanged.
+Nothing is authored on a validator's behalf. THE EVIDENCE IS THE WHOLE DOCUMENT, KEY BY KEY, not a fixed
+selection -- across differing schemas a fixed key list would silently DROP whatever it did not anticipate.
+
+DELIBERATELY ABSENT: no `witnessed_substrate` field is ever written. close-milestone AUTO-REQUIRES a
+witnessed live-discharge substrate for any roster assertion whose current manifest entry carries that
+field; writing it for an arc that produced no such substrate would manufacture a refusal out
+of nothing.
+
+NOT IN THIS TOOL, DELIBERATELY: the commit. The predecessor ceremonies committed and appended a
+commit-ledger line from inside the script. Committing the mission plane is the operator's act under the
+session's own commit law; this tool writes files and stops, and prints the pathspec set for the operator.
+
+Invoked by tools/lam/transcribe-validator-results.ps1 (PowerShell 5.1 has no YAML parser).
+"""
+import argparse
+import datetime
+import hashlib
+import io
+import json
+import os
+import sys
+
+import yaml
+
+# The identity fields of a section-6 ValidatorResult, the ledger keys each may be read from (the
+# `complete` line first, then its paired `spawn` line), and the RESULT-FILE keys each is cross-checked
+# against wherever the result file happens to carry one.
+IDENTITY = (
+    ("assertion_id", ("validates",), ("assertion", "validates")),
+    ("dispatch_id", ("dispatch_id",), ("dispatch_id",)),
+    ("attempt_number", ("round",), ("round",)),
+    ("commit_sha", ("tip_judged", "head_used", "validated_at_head"), ("head_used", "tip_judged")),
+)
+TEST_OUTPUT_KEYS = ("checks", "results", "criteria", "probes")
+
+
+def stop(msg):
+    sys.stderr.write("STOP: " + msg + "\n")
+    sys.stderr.flush()
+    raise SystemExit(1)
+
+
+def as_text(v):
+    """A YAML value re-emitted as text without paraphrase: strings as they are, structures as YAML block text."""
+    if isinstance(v, str):
+        return v
+    return yaml.safe_dump(v, sort_keys=False, allow_unicode=True, width=10000).rstrip("\n")
+
+
+def read_ledger(path):
+    if not os.path.exists(path):
+        stop(f"no spawn ledger at {path}")
+    out = []
+    with io.open(path, "r", encoding="utf-8") as f:
+        for n, line in enumerate(f, 1):
+            if not line.strip():
+                continue
+            try:
+                out.append(json.loads(line))
+            except ValueError as exc:
+                stop(f"the spawn ledger line {n} is not JSON: {exc}")
+    return out
+
+
+def one_line(records, seq, event, aid):
+    hits = [r for r in records if r.get("event") == event and r.get("seq") == seq]
+    if len(hits) != 1:
+        stop(f"{aid}: seq {seq} does not have exactly one `{event}` line on the spawn ledger "
+             f"({len(hits)} found)")
+    return hits[0]
+
+
+def ledger_field(complete, spawn, keys, aid, seq, field):
+    """The field's value, preferring the `complete` line; every line that carries it must agree."""
+    readings = []
+    for label, rec in (("complete", complete), ("spawn", spawn)):
+        if rec is None:
+            continue
+        for k in keys:
+            if rec.get(k) is not None:
+                readings.append((f"{label} line seq {seq} [{k}]", rec[k]))
+    if not readings:
+        return None, None
+    first = readings[0]
+    for label, val in readings[1:]:
+        if str(val) != str(first[1]):
+            stop(f"{aid}: the spawn ledger disagrees with itself on {field}\n"
+                 f"  {first[0]}: {first[1]!r}\n"
+                 f"  {label}: {val!r}")
+    return first[1], first[0]
+
+
+def attempt_int(rnd, complete, spawns, aid, seq):
+    """The attempt integer for one ledger binding.
+
+    One arc's spawn ledger carries `round` as a LABEL ('R-PB-1', 'R-PB-1-RECORD') and the integer in
+    `round_number` -- on the SPAWN line only -- and this tool's int() of `round` died on it. The order, and
+    nothing else: `round` when int() accepts it (UNCHANGED for every ledger that read before; a number int()
+    cannot read is refused, never read from round_number); else `round_number`, read from the complete line
+    and from its ONE paired spawn line -- every one present must be a JSON integer, and where both lines carry
+    one they must be EQUAL (a non-integer is refused, never skipped to the other line; a string '1' is not an
+    integer -- deny-side); else a ONE-LINE STOP naming the seq and every value seen, never a traceback.
+    Returns (attempt, where) -- where is None when `round` itself was the integer.
+    """
+    try:
+        return int(rnd), None
+    except (TypeError, ValueError, OverflowError):
+        pass
+    if isinstance(rnd, float):
+        stop(f"{aid}: seq {seq} carries round {rnd!r}, a number int() cannot read -- an integer round is never "
+             f"read from round_number, and the attempt will not be assumed")
+    spawn = spawns[0] if len(spawns) == 1 else None
+    seen, vals, why = [], [], None
+    for label, rec in (("complete", complete), ("spawn", spawn)):
+        if rec is None:
+            seen.append(f"spawn lines at this seq: {len(spawns)}, so none is paired")
+            continue
+        rn = rec.get("round_number")
+        seen.append(f"{label} round_number {'absent' if rn is None else repr(rn)}")
+        if rn is None:
+            continue
+        if isinstance(rn, int) and not isinstance(rn, bool):
+            vals.append((label, rn))
+        elif why is None:
+            why = "a round_number that is not a JSON integer"
+    if why is None:
+        if not vals:
+            why = "no round_number on either line"
+        elif len({v for _, v in vals}) > 1:
+            why = "the two round_numbers disagree"
+        else:
+            return vals[0][1], " and ".join(f"{lab} line" for lab, _ in vals) + f" seq {seq} [round_number]"
+    stop(f"{aid}: seq {seq} carries round {rnd!r}, which is not an integer, and no single integer round_number "
+         f"on its complete and its paired spawn line -- {why} ({'; '.join(seen)}) -- the attempt cannot be "
+         f"ordered and will not be assumed")
+
+
+def resolve_seq(records, aid):
+    """The seq of the CURRENT attempt: the highest `round` among the complete lines bound to this id.
+
+    THE COMPLETE LINE'S READING (widened to both readers;
+    the roster gate applies the same reading in Resolve-LamRosterRecord, tools/mission-close-milestone.ps1). A
+    complete line that binds no result -- `result_sha256` null, or the key absent -- does not CLAIM a round: it is
+    SET ASIDE and handed back for the caller to name, and the exactly-one rule is applied over the lines that bind a
+    result. Fail-closed kept: the highest round is taken over ALL candidates, and where only lines that bind no
+    result hold it the assertion has no current result -- a STOP naming the round and those seqs. Where any line is
+    set aside, every candidate must stand at an INTEGER round -- a JSON integer, or a label read from an integer
+    round_number -- and one whose round int() would truncate or reinterpret (2.5, -0.5, '2', true), bound or not, is
+    a STOP: so, among the candidates and at the rounds they state, an earlier round is not resolved over a later one
+    that left no result. An empty-string `result_sha256` is neither null nor absent and stays a candidate.
+    UNCHANGED, and outside that ruling: `validates` borrowed from the paired spawn line, a round-less line ranked at
+    attempt 0, and the explicit id:seq path, which never calls this function.
+
+    Returns (seq, the candidates that bind a result, the candidates set aside), each a sorted list of (attempt, seq).
+    """
+    cands = []
+    for r in records:
+        if r.get("event") != "complete":
+            continue
+        seq = r.get("seq")
+        validates = r.get("validates")
+        if validates is None:
+            spawns = [s for s in records if s.get("event") == "spawn" and s.get("seq") == seq]
+            if len(spawns) == 1:
+                validates = spawns[0].get("validates")
+        if validates != aid:
+            continue
+        rnd = r.get("round")
+        spawns = [s for s in records if s.get("event") == "spawn" and s.get("seq") == seq]
+        if rnd is None:
+            if len(spawns) == 1:
+                rnd = spawns[0].get("round")
+        binds = r.get("result_sha256") is not None
+        attempt, loose = 0, None
+        if rnd is not None:
+            attempt, where = attempt_int(rnd, r, spawns, aid, seq)
+            # `where` is None exactly when int() itself read `round`; a label read from round_number is an integer.
+            if where is None and not (isinstance(rnd, int) and not isinstance(rnd, bool)):
+                loose = rnd
+        cands.append((attempt, seq, binds, loose))
+    if not cands:
+        stop(f"{aid}: no `complete` line on the spawn ledger binds `validates: {aid}` -- name the "
+             f"spawn sequence explicitly as {aid}:<seq> if the binding is recorded some other way")
+    # WHERE A LINE IS SET ASIDE, EVERY CANDIDATE STANDS AT AN INTEGER ROUND. int() TRUNCATES a float (2.5 reads 2,
+    # -0.5 reads 0) and reads a numeral in a string and a boolean, so a candidate carrying one is ranked at a round it
+    # does not state; beside a line that binds no result that decides the resolution -- a null-result line at "round
+    # 2.5" set aside under a bound line at round 2, or a BOUND line at "round -0.5" resolved over a null-result line at
+    # round 0. So where any candidate binds no result, a candidate whose round int() read and which is not a JSON
+    # integer is a STOP, the line that binds no result named first. Where none does, every round is read as it was.
+    if any(not c[2] for c in cands):
+        for _, seq, binds, loose in cands:
+            if loose is not None and not binds:
+                stop(f"{aid}: the complete line seq {seq} binds no result and carries round {loose!r}, which is not "
+                     f"a JSON integer -- a line that binds no result is set aside only where its round is an "
+                     f"integer, and where it stands will not be assumed")
+        for _, seq, binds, loose in cands:
+            if loose is not None:
+                stop(f"{aid}: the complete line seq {seq} binds a result and carries round {loose!r}, which is not "
+                     f"a JSON integer -- beside a line that binds no result every candidate is ordered at an "
+                     f"integer round, and where it stands will not be assumed")
+    top = max(c[0] for c in cands)
+    # Only the seqs AT the highest round are sorted before the two STOPs, as before this reading was built: a
+    # candidate elsewhere whose seq cannot be ordered must not turn a STOP into a traceback.
+    winners = sorted(seq for rnd, seq, binds, _ in cands if rnd == top and binds)
+    if not winners:
+        stop(f"{aid}: the highest round ({top}) is held only by complete line(s) that bind no result -- "
+             f"seqs {sorted(seq for rnd, seq, binds, _ in cands if rnd == top and not binds)}. A complete line that "
+             f"binds no result claims no round, so the assertion has no current result; this tool will not fall "
+             f"back to an earlier round.")
+    if len(winners) != 1:
+        stop(f"{aid}: the highest round ({top}) is claimed by more than one complete line -- "
+             f"seqs {winners}. Name the one you mean explicitly as {aid}:<seq>; this tool will not "
+             f"pick the first of a class.")
+    return (winners[0], sorted((rnd, seq) for rnd, seq, binds, _ in cands if binds),
+            sorted((rnd, seq) for rnd, seq, binds, _ in cands if not binds))
+
+
+def parse_target(tok):
+    tok = tok.strip()
+    if not tok:
+        return None
+    if ":" in tok:
+        aid, _, raw = tok.partition(":")
+        aid, raw = aid.strip(), raw.strip()
+        if not raw.isdigit():
+            stop(f"{tok!r} is not an assertion id or an id:seq pair")
+        return (aid, int(raw))
+    return (tok, None)
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="transcribe_validator_results.py",
+        description="Transcribe bound LAM validator results into .mission/validator-results/ for the "
+                    "close-milestone CLI's A-127/A-128 gate (the BRIDGE, not the cure).")
+    p.add_argument("assertions", nargs="+",
+                   help="assertion ids (A-576 ...) or explicit id:seq pairs (A-576:149). Comma-separated "
+                        "lists are accepted too.")
+    p.add_argument("--root", required=True, help="the repository root the mission planes hang off")
+    p.add_argument("--arc", required=True,
+                   help="the arc label these results belong to; it names the records and "
+                        "appears in the transcribed validator_id prose")
+    p.add_argument("--write", action="store_true",
+                   help="write the records and the manifest entries. Without it the tool CHECKS AND "
+                        "PRINTS ONLY and writes nothing, including over an already-transcribed arc.")
+    p.add_argument("--source-template", default="tests/lam/validator-{assertion}.result.yaml",
+                   help="repo-relative template of the source result file; {assertion} is substituted")
+    p.add_argument("--spawn-ledger", default=os.path.join(".mission-runtime", "lam", "spawn-ledger.jsonl"))
+    p.add_argument("--results-dir", default=os.path.join(".mission", "validator-results"))
+    p.add_argument("--law", default="",
+                   help="the ruling this transcription runs under, recorded verbatim on each record")
+    p.add_argument("--session", default="",
+                   help="the operator/orchestrator session id, recorded on each record")
+    p.add_argument("--require-pass", action="store_true",
+                   help="STOP on any result whose verdict is not PASS (default: transcribe the verdict "
+                        "the validator wrote, pass or fail -- the A-127/A-128 gate is what judges it)")
+    return p
+
+
+def main(argv):
+    args = build_parser().parse_args(argv)
+    root = os.path.abspath(args.root)
+    if not os.path.isdir(root):
+        stop(f"no such root: {root}")
+    vr = os.path.join(root, args.results_dir)
+    manifest_path = os.path.join(vr, "manifest.json")
+    spawn_path = os.path.join(root, args.spawn_ledger)
+
+    targets = []
+    for tok in args.assertions:
+        for piece in tok.split(","):
+            t = parse_target(piece)
+            if t:
+                targets.append(t)
+    if not targets:
+        stop("no assertion ids given")
+    seen = set()
+    for aid, _ in targets:
+        if aid in seen:
+            stop(f"{aid} is named more than once")
+        seen.add(aid)
+
+    records = read_ledger(spawn_path)
+    if not os.path.exists(manifest_path):
+        stop(f"no validator-results manifest at {manifest_path} -- this tool transcribes INTO the store "
+             f"the close-milestone CLI reads; it does not create the store")
+    raw_manifest = open(manifest_path, "rb").read()
+    crlf = b"\r\n" in raw_manifest
+    try:
+        manifest = json.loads(raw_manifest.decode("utf-8"))
+    except ValueError as exc:
+        stop(f"the manifest is not JSON: {exc}")
+    n_before = len(manifest.get("entries", []))
+    by_id = {}
+    for e in manifest.get("entries", []):
+        by_id.setdefault(e.get("assertion_id"), []).append(e)
+
+    slug = args.arc.strip().lower().replace(" ", "-")
+    print(f"== {args.arc}: {len(targets)} assertion(s); root {root}")
+    print(f"== mode: {'WRITE' if args.write else 'CHECK-ONLY (nothing will be written)'}")
+    print(f"== THE EQUALITIES -- every source sha256 against the figure bound on its own complete line ==")
+
+    outputs, entries, already = [], [], []
+    for aid, given_seq in targets:
+        if given_seq is None:
+            seq, cands, aside = resolve_seq(records, aid)
+            how = (f"resolved from the spawn ledger: the highest round among "
+                   + ", ".join(f"seq {s} (round {r})" for r, s in cands))
+            if aside:
+                # THE COMPLETE LINE'S READING: the lines set aside are NAMED. With none, `how` is what it was.
+                how = (f"resolved from the spawn ledger: the highest round among the complete lines that bind a "
+                       f"result, " + ", ".join(f"seq {s} (round {r})" for r, s in cands)
+                       + f"; SET ASIDE, claiming no round: {len(aside)} complete line(s) that bind no result -- "
+                       + ", ".join(f"seq {s} (round {r})" for r, s in aside))
+        else:
+            seq, how = given_seq, "named explicitly by the caller as an id:seq pair"
+        complete = one_line(records, seq, "complete", aid)
+        spawns = [r for r in records if r.get("event") == "spawn" and r.get("seq") == seq]
+        if len(spawns) > 1:
+            stop(f"{aid}: seq {seq} has {len(spawns)} `spawn` lines")
+        spawn = spawns[0] if spawns else None
+
+        ident, ident_from = {}, {}
+        for field, ledger_keys, _ in IDENTITY:
+            val, where = ledger_field(complete, spawn, ledger_keys, aid, seq, field)
+            ident[field], ident_from[field] = val, where
+        if ident["assertion_id"] is None:
+            stop(f"{aid}: seq {seq} carries no `validates` on either its complete or its spawn line -- "
+                 f"the file-to-assertion binding cannot be derived and will not be assumed")
+        if str(ident["assertion_id"]) != aid:
+            stop(f"{aid}: the spawn ledger's `validates` for seq {seq} reads "
+                 f"{ident['assertion_id']!r}, not the requested assertion id {aid!r}\n"
+                 f"  read from the {ident_from['assertion_id']}")
+        if ident["attempt_number"] is None:
+            stop(f"{aid}: seq {seq} carries no `round` on either its complete or its spawn line")
+        if ident["commit_sha"] is None:
+            stop(f"{aid}: seq {seq} carries no tip_judged/head_used on either line")
+        attempt, attempt_from = attempt_int(ident["attempt_number"], complete, spawns, aid, seq)
+        if attempt_from is not None:
+            # the IDENTITY field is the attempt, so the result file's own `round` is cross-checked against
+            # the integer read here, not against the label
+            ident_from["attempt_number"] = (f"{attempt_from}, because `round` on the ledger is the label "
+                                            f"{ident['attempt_number']!r}, not an integer")
+            ident["attempt_number"] = attempt
+
+        src = os.path.join(root, args.source_template.format(assertion=aid))
+        if not os.path.exists(src):
+            stop(f"{aid}: no source result file at {src}")
+        blob = open(src, "rb").read()
+        digest = hashlib.sha256(blob).hexdigest()
+        bound = complete.get("result_sha256")
+        if bound is None:
+            stop(f"{aid}: the complete line seq {seq} carries no result_sha256 -- the source is unbound "
+                 f"and an unbound source is not transcribable")
+        if str(bound) != digest:
+            stop(f"{aid}: THE SOURCE IS NOT THE BOUND FIGURE -- refusing.\n"
+                 f"  source file:                     {src}\n"
+                 f"  sha256 computed from the file:   {digest}\n"
+                 f"  result_sha256 bound on seq {seq}: {bound}")
+
+        try:
+            doc = yaml.safe_load(blob.decode("utf-8"))
+        except yaml.YAMLError as exc:
+            stop(f"{aid}: the source is not YAML: {exc}")
+        if not isinstance(doc, dict):
+            stop(f"{aid}: the source does not parse to a mapping")
+        raw_verdict = str(doc.get("verdict"))
+        verdict = {"PASS": "pass", "REFUTED": "fail", "FAIL": "fail"}.get(raw_verdict.upper())
+        if verdict is None:
+            stop(f"{aid}: the result's verdict reads {raw_verdict!r}, which is neither PASS nor "
+                 f"REFUTED/FAIL")
+        if args.require_pass and verdict != "pass":
+            stop(f"{aid}: the result's verdict reads {raw_verdict!r} and --require-pass was given")
+        led_verdict = complete.get("verdict")
+        if led_verdict is not None and str(led_verdict).upper() != raw_verdict.upper():
+            stop(f"{aid}: verdict disagrees\n"
+                 f"  spawn ledger complete line seq {seq}: {led_verdict!r}\n"
+                 f"  result file [verdict]: {raw_verdict!r}")
+
+        # cross-check every identity field the RESULT FILE carries; a disagreement is a STOP
+        prov, checked = {}, []
+        for field, _, doc_keys in IDENTITY:
+            found = [(k, doc[k]) for k in doc_keys if doc.get(k) is not None]
+            for k, v in found:
+                if str(v) != str(ident[field]):
+                    stop(f"{aid}: {field} disagrees\n"
+                         f"  spawn ledger ({ident_from[field]}): {ident[field]!r}\n"
+                         f"  result file [{k}]: {v!r}")
+            if found:
+                prov[field] = (f"{ident_from[field]}; CROSS-CHECKED EQUAL against the result's own "
+                               f"{found[0][0]!r}")
+                checked.append(field)
+            else:
+                prov[field] = (f"{ident_from[field]}; the result file carries no "
+                               f"{'/'.join(doc_keys)} key")
+
+        rel_src = os.path.relpath(src, root).replace("\\", "/")
+        cite = (f"{rel_src} (sha256 {digest}; spawn ledger complete line seq {seq}; "
+                f"dispatch {ident['dispatch_id']})")
+        evidence = [{"type": "manual_observation",
+                     "content": f"VERDICT LINE, VERBATIM: verdict: {raw_verdict}",
+                     "description": f"the validator's own verdict line, transcribed verbatim from {cite}"}]
+        for k in sorted(doc.keys()):
+            if k == "verdict":
+                continue
+            evidence.append({
+                "type": "test_output" if k in TEST_OUTPUT_KEYS else "manual_observation",
+                "content": f"{k}: " + as_text(doc[k]),
+                "description": f"the result's own `{k}` key, transcribed verbatim from {cite} -- "
+                               f"PyYAML-parsed and re-emitted unchanged, nothing authored"})
+
+        vid = (f"{args.arc} VALIDATOR ROSTER: fresh-identity read-only validator dispatch "
+               f"{ident['dispatch_id']} (round {attempt}), spawn ledger seq {seq}, judging the tip "
+               f"{ident['commit_sha']}. THIS RECORD IS A TRANSCRIPTION made by "
+               f"tools/lam/transcribe-validator-results.ps1: {rel_src} (sha256 "
+               f"{digest}, bound as result_sha256 on the spawn ledger's complete line seq {seq}) "
+               f"transcribed key by key; every content string is the validator's own text, "
+               f"PyYAML-parsed and re-emitted unchanged; nothing is authored on the validator's behalf. "
+               f"IDENTITY IS CITED FROM THE SPAWN LEDGER, not from the result file, because an arc's "
+               f"results do not share a schema -- see `transcription.identity_provenance`. The "
+               f"validator's verdict line, verbatim: 'verdict: {raw_verdict}'."
+               + (f" Law: {args.law}." if args.law else "")
+               + (f" Session: {args.session}." if args.session else ""))
+        rec_id = f"{slug}-validator-{aid.lower()}" + (f"-attempt-{attempt}" if attempt > 1 else "")
+        rec = {"id": rec_id, "validator_id": vid, "validator_type": "narrow", "assertion_id": aid,
+               "verdict": verdict, "attempt_number": attempt, "commit_sha": ident["commit_sha"],
+               "supersedes": None, "evidence": evidence,
+               "transcription": {
+                   "source": rel_src, "source_sha256": digest, "source_bytes": len(blob),
+                   "spawn_seq": seq, "seq_resolution": how, "dispatch_id": ident["dispatch_id"],
+                   "law": args.law or "the transcription bridge; no ruling cited",
+                   "tool": "tools/lam/transcribe-validator-results.ps1",
+                   "identity_provenance": prov,
+                   "schema_note": f"this result carries {len(doc)} top-level keys; every one of them is "
+                                  f"transcribed as its own evidence item, so no key is dropped by a "
+                                  f"fixed selection",
+                   "transcribed_at": datetime.datetime.now(datetime.timezone.utc)
+                                     .strftime("%Y-%m-%dT%H:%M:%SZ")}}
+        fname = f"{aid}.validator-result.json"
+        present = by_id.get(aid, [])
+        file_exists = os.path.exists(os.path.join(vr, fname))
+        state = ("ALREADY IN THE STORE" if present or file_exists else "absent from the store")
+        recorded = ""
+        if present:
+            cur = sorted(present, key=lambda e: int(e.get("attempt_number") or 0))[-1]
+            same = str(cur.get("result_sha256")) == digest
+            recorded = (f"; the manifest's current entry records result_sha256 "
+                        f"{cur.get('result_sha256')} -- "
+                        f"{'EQUAL to the source read now' if same else 'NOT EQUAL to the source read now'}"
+                        f", verdict {cur.get('verdict')!r}, attempt {cur.get('attempt_number')}")
+        print(f"  {aid}  seq {seq:<5} attempt {attempt}  {digest}")
+        print(f"       == the result_sha256 bound on the complete line ({bound == digest}); "
+              f"verdict {raw_verdict} -> {verdict}; keys {len(doc)}; evidence {len(evidence)}; "
+              f"identity cross-checked on {len(checked)} of {len(IDENTITY)} field(s)")
+        print(f"       seq {how}")
+        print(f"       manifest: {state}{recorded}")
+        if present or file_exists:
+            already.append(aid)
+        outputs.append((fname, rec))
+        entries.append({"assertion_id": aid, "verdict": verdict, "commit_sha": ident["commit_sha"],
+                        "file": fname, "id": rec_id, "validator_id": vid,
+                        "evidence_count": len(evidence), "attempt_number": attempt,
+                        "result_sha256": digest, "spawn_seq": seq})
+
+    print(f"\n  ALL {len(entries)} EQUALITIES HELD.")
+    if already:
+        print(f"  ALREADY TRANSCRIBED (a fact, not a refusal, in check-only mode): "
+              f"{', '.join(already)}")
+    if not args.write:
+        print(f"check-only: {len(outputs)} record(s) would be written; manifest would go "
+              f"{n_before} -> {n_before + len(entries)}; NOTHING WRITTEN.")
+        return 0
+
+    # --- WRITE MODE. Refusing to overwrite an existing entry is correct here and stays. ---
+    if already:
+        stop("WRITE mode refuses to overwrite: the store already carries "
+             f"{', '.join(already)}. Re-run without --write to re-verify the equalities instead.")
+    paths = []
+    for fname, rec in outputs:
+        open(os.path.join(vr, fname), "wb").write(
+            json.dumps(rec, ensure_ascii=True, indent=4).encode("utf-8"))
+        paths.append(f"{args.results_dir}/{fname}".replace("\\", "/"))
+    manifest.setdefault("entries", []).extend(entries)
+    text = json.dumps(manifest, ensure_ascii=True, indent=2)
+    if crlf:
+        text = text.replace("\n", "\r\n")
+    open(manifest_path, "wb").write(text.encode("utf-8"))
+    paths.append(f"{args.results_dir}/manifest.json".replace("\\", "/"))
+    back = json.loads(open(manifest_path, "rb").read().decode("utf-8"))
+    if len(back["entries"]) != n_before + len(entries):
+        stop(f"manifest read-back: {len(back['entries'])} entries, expected {n_before + len(entries)}")
+    for (fname, _), e in zip(outputs, entries):
+        j = json.loads(open(os.path.join(vr, fname), "rb").read().decode("utf-8"))
+        if j["verdict"] != e["verdict"] or j["assertion_id"] != e["assertion_id"]:
+            stop(f"{fname}: read-back disagrees with its manifest entry")
+    print(f"\n== WRITTEN: {len(outputs)} record(s) + the manifest "
+          f"({len(back['entries'])} entries; CRLF={crlf}) ==")
+    for fname, _ in outputs:
+        bb = open(os.path.join(vr, fname), "rb").read()
+        print(f"    {fname:<40} {len(bb):>8} B  sha256 {hashlib.sha256(bb).hexdigest()}")
+    print("\n== THE PATHSPEC SET FOR THE OPERATOR'S COMMIT (this tool does not commit) ==")
+    for p in paths:
+        print(f"    {p}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

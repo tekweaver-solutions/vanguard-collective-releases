@@ -1,0 +1,22 @@
+# Supersession marker. Prior-artifact selection skips D-1 for an EXPLICIT, named reason, ratified by
+# a gate that binds this file by sha256 (.mission/gates/supersession-D-1.yaml). A dispatch is never
+# skipped because verify refused it: a gate that ignored the artifacts it refused would skip exactly
+# what it exists to catch.
+
+dispatch_id: D-1
+superseded_by: D-1b
+ruled_by: build-smoke-mission.ps1
+marked_at: {{DATE}}
+
+reason: >
+  The builder dispatched the build three times, as D-1, D-1b and D-1c, so that this mission carries
+  the supersession path the acceptance instruments read: a marker, the ratification that binds it,
+  and prior-artifact selection skipping the dispatch it names. D-1's work was sound; it is superseded
+  so that the path exists, not because anything was wrong with it.
+
+disposition: >
+  D-1's record STAYS: its dispatch, handoff, anchors and evidence session remain on disk, unedited.
+
+consequence: >
+  Prior-artifact selection skips D-1, and every later dispatch gates against the newest record that
+  is not superseded.

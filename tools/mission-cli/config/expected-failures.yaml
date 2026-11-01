@@ -1,0 +1,3 @@
+# DERIVED MIRROR of .mission/green-gate/product.json `expected_failure_test_ids` (the GOVERNING home).
+# Re-derived at every close; the product instrument FAILS on any byte difference.
+expected_failures:

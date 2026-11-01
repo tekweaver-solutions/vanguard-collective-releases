@@ -1,0 +1,679 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  SAMPLE-SUITE instrument v1 -- a sample arc's canonical suite (a synthetic fixture of the framework).
+
+.DESCRIPTION
+  THE EXIT CODE IS THE CONTRACT: 0 = every member run passed, non-zero = the number that failed.
+  That value is what the goal's `instrument_exit0` detector reads and what the runner records as
+  `suite.exit_code`, so nothing else may decide it.
+
+  TWO MEMBERS, AND THEY MEASURE DIFFERENT THINGS.
+    M1  THE MIRROR RE-DERIVATION. `.mission/green-gate/product.json` is the GOVERNING home of the
+        expected-failure set; `tools/mission-cli/config/expected-failures.yaml` is its DERIVED
+        MIRROR. M1 re-derives the mirror's bytes from the manifest and compares BYTE FOR BYTE. A
+        mirror that has drifted from its governing home is a manifest that says two things, and the
+        runner's expected-failure reader and verify's `count > 0` side both read the mirror -- so drift
+        here is drift in what every gate downstream believes.
+    M2  THE PRODUCT GREEN GATE, BY ITS OWN INVOCATION. It runs the suite the way the framework's own
+        gate runs it and applies the same three conjuncts, so a green M2 means what a green close
+        meant.
+
+  ROOT RESOLUTION IS FROM THE SCRIPT, NEVER THE CURRENT DIRECTORY. The runner Push-Locations
+  into the dispatch's WORKTREE before invoking a suite, so a suite that resolved its root from the
+  working directory would measure the worktree or the mission root depending on who called it.
+  $PSScriptRoot\..\.. always names THE TREE THIS FILE IS IN, which is the tree the dispatch is
+  working in and the tree the anchors are about.
+
+  THE `FAILED <node-id>` LINES ARE PASSED THROUGH VERBATIM. The cured runner (its expected-failure
+  reader) derives `suite.expected_failures_matched` by matching `^FAILED\s+(\S+)` over this script's own
+  output against the mirror's declared set. Summarising them, re-formatting them, or printing only a
+  count would leave the runner with nothing to measure, and the member would record `true` for a run
+  that failed on tests nobody expected.
+
+  THE IN-SUITE WALL. M2's suite runs under a wall guard, -WallSeconds, 900 s by
+  default. The goal's Stop hook runs this instrument inside an 1800 s harness timeout, and a hook
+  the harness kills rewrites no verdict and persists no capture: one hung test used to burn the
+  whole 30 minutes and then let the session end UNVERIFIED, a would-be block silently become an
+  approve. 900 s is about 1.8x the worst observed full run (509 s) and sits inside that 1800 s, so
+  a hung suite now ends HERE, red and legible -- the pytest process tree killed, pytest_exit=124 on
+  the TALLY line, a named C4 refusal, a non-zero exit -- and because the instrument RETURNS, the
+  shared capture helper's persistence runs and the reason is on disk. The 1800 s
+  Stop-hook timeout remains the backstop.
+
+.PARAMETER Member
+  M1, M2, or all (default). Invoked with NO arguments -- the canonical form the runner uses -- it
+  runs everything. The switch exists so that falsifying M1 need not pay for M2 twice. It cannot make
+  a member pass that would otherwise fail: each verdict is computed from that member's own evidence,
+  and the exit code counts only the members that ran.
+
+.PARAMETER WallSeconds
+  M2's in-suite wall, in seconds: 900 by default, which is what the canonical no-argument
+  invocation gets. When it expires M2 kills the WHOLE pytest process tree, prints its TALLY line
+  with pytest_exit=124, elapsed_seconds and the counts of whatever output had arrived, passes any
+  FAILED lines through as always, and FAILS on conjunct C4. It can only add a refusal: no value
+  of it makes a member pass that would otherwise fail, and a suite that finishes inside it is
+  judged exactly as before.
+
+.PARAMETER KeepPytestOutput
+  A path to keep pytest's own output at, for a HAND run.
+  EMPTY -- the default, and the
+  no-argument form the shared helper, the runner and the evaluator use -- takes NO branch: stdout,
+  the exit code and the pytest line are what they were. GIVEN, the path is GUARDED before anything
+  runs: one that ends .stdout.txt or .tally.txt, or stands under instrument-runs -- where the reuse
+  candidates and the census read -- is refused, and nothing is run. Otherwise the pytest line gains
+  ` -o faulthandler_timeout=60` (pytest's built-in faulthandler: a test that runs past 60 s has
+  every thread's stack dumped to stderr, its file and function among the frames, and the run goes
+  on), and after the run the whole ordered buffer M2 parsed is written to the path, UTF-8 without a
+  mark, and ONE line after the WALL notes says so: `KEPT pytest's own output (diagnostic, not a
+  measurement): <path> <bytes> B sha256 <hex>` -- a line that begins with none of the words a
+  capture's readers classify by. It adds no TALLY field and moves no verdict; nothing is appended
+  into a capture. Keep the path under the ignored .mission-runtime\, or the next capture records
+  the tree not clean.
+
+.PARAMETER PerTestTimeoutSeconds
+  A per-test timeout for a HAND run, in seconds (the per-test guard:
+  the shared helper is not edited, so the flag reaches a hand run only). 0 -- the default, and the
+  no-argument form the shared helper, the runner and the evaluator use -- takes NO branch: stdout,
+  stderr, the exit code and the pytest line are what they were. GIVEN, it must be below -WallSeconds,
+  or the run is refused before anything runs (the wall would fire first and the timeout could name
+  nothing). Otherwise the pytest line gains ` -o faulthandler_timeout=<n>` after -KeepPytestOutput's
+  own (the last -o wins), so a test item -- its setup, call and teardown -- that runs past n has every
+  thread's stack dumped to stderr by pytest's own faulthandler. The dump's header, a STDERR line
+  `Timeout (h:mm:ss)!` at column 0, ends the run: the output is drained until stderr has been quiet
+  about 2 s (10 s at most), so the whole dump is in the buffer, and then the tree is killed exactly as
+  at the wall (THE WALL GUARD, below) -- never by faulthandler_exit_on_timeout, whose _exit skips every
+  fixture teardown and can orphan a process outside the kill. The name is read from the dump: walking
+  inward from pytest's pytest_pyfunc_call frame, the first frame whose file lies under the suite's own
+  folder and outside site-packages is named, `<file>::<function> (line <n>)` -- the test function, or,
+  where an async test's event loop is running a task the test spawned, that task's frame; the same walk
+  from call_fixture_func names a fixture, `fixture <file>::<function>` (pytest 9.0.3's own names,
+  _pytest/python.py and _pytest/fixtures.py). A wrapper outside the suite's folder (unittest.mock.patch's)
+  or under a site-packages folder (a plugin's -- in the product's layout under src\.venv, inside the
+  suite's folder) is walked past; one defined under the suite's folder outside site-packages is not;
+  where no frame qualifies (an async test suspended at an await is on no stack), the frames name no test
+  function.
+  ONE WALL note says the per-test timeout fired and the tree was killed, and names it,
+  before any KEPT line; M2 FAILS on a LEADING conjunct `C5 per-test-timeout [<name> ran past <n> s;
+  the tree killed]`; C4 is not claimed, as the wall did not expire; TALLY keeps its fields, with
+  pytest_exit=124; with -KeepPytestOutput the dump is in the kept file. A suite that ends on its own
+  inside the drain is judged as any other. LIMITS: the timer is per item, so the run ends at the hung
+  item's start plus n; nothing arms it for collection or for session start and finish; pytest cancels
+  it after a failed setup or call; a session fixture's setup is charged to the first item using it.
+#>
+[CmdletBinding()]
+param(
+    [ValidateSet('M1', 'M2', 'all')]
+    [string]$Member = 'all',
+    [ValidateRange(1, 86400)]
+    [int]$WallSeconds = 900,
+    [string]$KeepPytestOutput = '',
+    [ValidateRange(0, 86400)]
+    [int]$PerTestTimeoutSeconds = 0
+)
+
+$ErrorActionPreference = 'Stop'
+
+$root     = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$manifest = Join-Path $root '.mission\green-gate\product.json'
+$mirror   = Join-Path $root 'tools\mission-cli\config\expected-failures.yaml'
+
+$failures = 0
+function Write-Member {
+    param([string]$Id, [bool]$Ok, [string]$What)
+    $tag = if ($Ok) { 'PASS' } else { 'FAIL' }
+    if (-not $Ok) { $script:failures++ }
+    Write-Host "$tag $Id -- $What"
+}
+
+# -KeepPytestOutput, GUARDED BEFORE ANYTHING RUNS. Resolved here, against THIS session's
+# location -- M2 runs from src\, and .NET resolves a relative path against the process's own directory, which
+# is neither -- and refused where it names a file the reuse candidates or the census read: a name ending
+# .stdout.txt or .tally.txt, or a path through instrument-runs. Empty, nothing below is entered.
+$keepPath = ''
+if ($KeepPytestOutput) {
+    $keepWhy = ''
+    try { $keepPath = [System.IO.Path]::GetFullPath($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($KeepPytestOutput)) }
+    catch { $keepWhy = ($_.Exception.Message -replace '[\r\n]+', ' ') }
+    $keepUnderRuns = @($keepPath -split '[\\/]' | Where-Object { [string]::Equals($_, 'instrument-runs', [System.StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
+    if ($keepWhy) {
+        Write-Member -Id 'M2' -Ok $false -What "-KeepPytestOutput names $KeepPytestOutput, which is not a path this instrument can resolve ($keepWhy); nothing was run"
+    } elseif ($keepPath.EndsWith('.stdout.txt', [System.StringComparison]::OrdinalIgnoreCase) -or $keepPath.EndsWith('.tally.txt', [System.StringComparison]::OrdinalIgnoreCase) -or $keepUnderRuns) {
+        Write-Member -Id 'M2' -Ok $false -What "-KeepPytestOutput names $KeepPytestOutput, which the reuse candidates and the census read; nothing was run"
+    }
+    if ($failures -gt 0) {
+        Write-Host ""
+        Write-Host "------------------------------------------------------------------------------"
+        Write-Host "EXIT: $failures"
+        exit $failures
+    }
+}
+
+# -PerTestTimeoutSeconds, GUARDED BEFORE ANYTHING RUNS, in the form above. 0, nothing below is
+# entered. Given and not below the wall, the wall would expire first and the per-test timeout could name nothing.
+if (($PerTestTimeoutSeconds -gt 0) -and ($PerTestTimeoutSeconds -ge $WallSeconds)) {
+    Write-Member -Id 'M2' -Ok $false -What "-PerTestTimeoutSeconds $PerTestTimeoutSeconds is not below -WallSeconds $WallSeconds, so the wall would fire first and the per-test timeout could name nothing; nothing was run"
+    Write-Host ""
+    Write-Host "------------------------------------------------------------------------------"
+    Write-Host "EXIT: $failures"
+    exit $failures
+}
+
+Write-Host "=============================================================================="
+Write-Host " SAMPLE-SUITE INSTRUMENT v1 -- the mirror re-derivation and the product green gate"
+Write-Host "=============================================================================="
+Write-Host "root     : $root"
+Write-Host "manifest : $manifest"
+Write-Host "mirror   : $mirror"
+Write-Host "member   : $Member"
+Write-Host ""
+
+# ------------------------------------------------------------------------------------------------
+# the mirror's declared set, read the way the cured runner reads it
+# ------------------------------------------------------------------------------------------------
+# M2 judges its FAILED ids against THE MIRROR rather than against the manifest, deliberately. The
+# mirror is what the runner's expected-failure reader consults and what verify's derived side counts, so
+# M2 answers the question those two will be asked. M1 is what keeps the mirror honest about its
+# governing home. The two members together are the whole claim and either alone is half of it.
+#
+# $null means the file is ABSENT (it declares nothing); an empty array means it is present and
+# declares none. Collapsing those two into one value would erase the distinction M2 turns on.
+function Read-DeclaredExpectedFailures {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $ids = New-Object System.Collections.Generic.List[string]
+    $inBlock = $false
+    foreach ($line in [System.IO.File]::ReadAllLines($Path)) {
+        if ($line -match '^\s*#') { continue }
+        if ($line -match '^expected_failures:\s*(.*)$') {
+            # $Matches is GLOBAL and the next -match overwrites it, so take the capture out first.
+            $rest = $Matches[1].Trim()
+            $inBlock = $false
+            if ($rest -match '^\[(.*)\]$') {
+                $inner = $Matches[1].Trim()
+                if ($inner) {
+                    foreach ($part in ($inner -split ',')) {
+                        $t = $part.Trim().Trim('"').Trim("'")
+                        if ($t) { [void]$ids.Add($t) }
+                    }
+                }
+            } elseif (-not $rest) {
+                $inBlock = $true
+            }
+            continue
+        }
+        if ($inBlock) {
+            if ($line -match '^\s+-\s*(.*)$') {
+                $t = $Matches[1].Trim().Trim('"').Trim("'")
+                if ($t) { [void]$ids.Add($t) }
+                continue
+            }
+            if ($line.Trim() -eq '') { continue }
+            $inBlock = $false
+        }
+    }
+    return , $ids.ToArray()
+}
+
+function Read-ProductManifest {
+    if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { return $null }
+    return ([System.IO.File]::ReadAllText($manifest) | ConvertFrom-Json)
+}
+
+# ================================================================================================
+# M1 -- THE MIRROR RE-DERIVATION
+# ================================================================================================
+function Invoke-M1 {
+    $manPresent = Test-Path -LiteralPath $manifest -PathType Leaf
+    $mirPresent = Test-Path -LiteralPath $mirror -PathType Leaf
+    if (-not $manPresent -or -not $mirPresent) {
+        # ABSENT IS A FAILURE, NEVER A SKIP. A member that reports "nothing to compare" when its
+        # governing home is missing is a green light bought with a deleted file.
+        Write-Member -Id 'M1' -Ok $false -What "the mirror could not be re-derived: manifest present=$manPresent, mirror present=$mirPresent"
+        return
+    }
+
+    $doc = Read-ProductManifest
+    $ids = @($doc.expected_failure_test_ids)
+
+    # THE BYTES, BUILT EXACTLY AS THE MIRROR'S FORMAT SPECIFIES THEM: LF only, no BOM, one terminal LF,
+    # the ids IN THE MANIFEST'S ORDER. Single-quoted literals throughout -- the first line carries
+    # backticks, which a double-quoted PowerShell string would read as escapes and swallow.
+    $lines = New-Object System.Collections.Generic.List[string]
+    [void]$lines.Add('# DERIVED MIRROR of .mission/green-gate/product.json `expected_failure_test_ids` (the GOVERNING home).')
+    [void]$lines.Add('# Re-derived at every close; tests/lam/instrument-sample-suite.ps1 FAILS on any byte difference.')
+    [void]$lines.Add('expected_failures:')
+    foreach ($id in $ids) { [void]$lines.Add('  - ' + [string]$id) }
+    $expectedText  = ($lines -join "`n") + "`n"
+    $expectedBytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($expectedText)
+    $actualBytes   = [System.IO.File]::ReadAllBytes($mirror)
+
+    # BYTE FOR BYTE, over the RAW bytes -- not over lines, and not after any normalisation. Reading
+    # the two as text and comparing strings would silently equate an LF file with a CRLF one, which
+    # is the exact drift this member exists to catch (see the autocrlf note below).
+    $firstDiff = -1
+    $n = [Math]::Min($expectedBytes.Length, $actualBytes.Length)
+    for ($i = 0; $i -lt $n; $i++) {
+        if ($expectedBytes[$i] -ne $actualBytes[$i]) { $firstDiff = $i; break }
+    }
+    if ($firstDiff -lt 0 -and $expectedBytes.Length -ne $actualBytes.Length) { $firstDiff = $n }
+    $same = ($firstDiff -lt 0)
+
+    if ($same) {
+        Write-Member -Id 'M1' -Ok $true -What "the mirror is byte-identical to the bytes re-derived from the manifest's $($ids.Count) expected_failure_test_ids ($($expectedBytes.Length) bytes, LF-only, no BOM)"
+    } else {
+        Write-Member -Id 'M1' -Ok $false -What "the mirror DIFFERS from the bytes re-derived from the manifest: re-derived $($expectedBytes.Length) bytes, on disk $($actualBytes.Length) bytes, first difference at offset $firstDiff"
+        # NAMED, NOT MERELY COUNTED. A byte count tells a reader that something moved; the two bytes
+        # and the line they fall on tell them WHAT moved, which is the difference between a report
+        # that can be acted on and one that can only be re-run.
+        $ex = if ($firstDiff -lt $expectedBytes.Length) { '0x{0:X2}' -f $expectedBytes[$firstDiff] } else { '<past the end of the re-derived bytes>' }
+        $ac = if ($firstDiff -lt $actualBytes.Length)   { '0x{0:X2}' -f $actualBytes[$firstDiff] }   else { '<past the end of the file>' }
+        $upto = $expectedText.Substring(0, [Math]::Min($firstDiff, $expectedText.Length))
+        $lineNo = @($upto -split "`n").Count
+        Write-Host "     re-derived byte $ex   on-disk byte $ac   (re-derived line $lineNo)"
+        # THE CRLF NOTE IS PRINTED ONLY WHEN THE FILE ACTUALLY CARRIES A CR. A hint offered on every
+        # failure is a hint that is wrong most of the time, and a reader who has been told twice that
+        # a difference is probably line endings stops reading the offset that says it is not.
+        if ($actualBytes -contains 13) {
+            Write-Host '     THE ON-DISK FILE CONTAINS CR BYTES. This repository sets core.autocrlf=true and the mirror'
+            Write-Host '     carries no -text attribute in .gitattributes, so a FRESH CHECKOUT smudges its LF bytes to'
+            Write-Host '     CRLF and M1 refuses until the LF bytes are restored. That is this member working, not a'
+            Write-Host '     false alarm: the runner and verify both read this file, and a smudged mirror is a mirror'
+            Write-Host '     whose bytes are not the bytes the manifest derives.'
+        }
+    }
+}
+
+# ================================================================================================
+# M2 -- THE PRODUCT GREEN GATE, BY ITS OWN INVOCATION
+# ================================================================================================
+# THE WALL GUARD. A pipeline has no deadline: `& uv ... 2>&1 | Out-String`
+# returns when the suite does, and a hung test never does. So the suite is started as a
+# System.Diagnostics.Process with BOTH streams redirected and read line by line, asynchronously,
+# into ONE buffer in the order the lines arrive, while this thread watches the clock.
+#
+# WHAT THE ONE BUFFER PRESERVES AND WHAT IT DOES NOT, stated because M2's whole parse runs over it.
+# Each stream has exactly one reader, so every stdout line keeps its order among the stdout lines
+# and every stderr line among the stderr lines. The two streams are interleaved in ARRIVAL order at
+# LINE granularity, a tie inside one poll putting the stdout line first -- no less chronological
+# than 2>&1 was, since PowerShell also read the two pipes apart and merged them as they arrived.
+# Two differences remain. A stderr line arrives as its own text, not wrapped in the ErrorRecord
+# rendering `2>&1 | Out-String` gave it (the "uv.exe : ..." and "+ CategoryInfo ..." lines), and a
+# last line with no newline is kept as a line. Neither can move what M2 parses: pytest writes its
+# tally, its FAILED lines and its collection errors to STDOUT, whose order is untouched; the FAILED
+# and ^ERROR matchers are per-line and no line is split or joined; and a first-match count could be
+# shadowed only by an EARLIER line of the other stream that itself read "<n> passed" (or failed,
+# skipped, error, deselected) -- which uv's stderr does not print, and to which the old merge was
+# exposed in exactly the same way.
+#
+# ON EXPIRY THE WHOLE TREE GOES. `uv run python` is three processes here, measured: uv.exe, the
+# venv's python.exe launcher, and the interpreter the launcher starts. Killing uv alone would leave
+# the interpreter running the hung test. So the tree is snapshotted, `taskkill /T /F` kills it from
+# the root, and every snapshotted process is then checked by pid AND start time (Windows reuses
+# pids): one still alive is killed on its own, and one that will not die is NAMED on C4's face. The
+# drain after the kill is bounded too, because a descendant that inherited the pipe handles and
+# outlived the kill would otherwise hold the read open for ever.
+function Get-SuiteProcessTree {
+    # The root and every live descendant, each with its start time. A child counts only if it
+    # started no earlier than its parent: a ParentProcessId can name a dead parent whose pid a
+    # stranger now holds.
+    param([int]$RootId)
+    $all = @()
+    try { $all = @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop) } catch { $all = @() }
+    $tree = New-Object System.Collections.Generic.List[object]
+    foreach ($w in $all) { if ([int]$w.ProcessId -eq $RootId) { [void]$tree.Add($w); break } }
+    for ($at = 0; $at -lt $tree.Count; $at++) {
+        $parent = $tree[$at]
+        foreach ($w in $all) {
+            if ([int]$w.ParentProcessId -ne [int]$parent.ProcessId) { continue }
+            if ([int]$w.ProcessId -eq [int]$parent.ProcessId) { continue }
+            if ($w.CreationDate -lt $parent.CreationDate) { continue }
+            $known = $false
+            foreach ($t in $tree) { if ([int]$t.ProcessId -eq [int]$w.ProcessId) { $known = $true; break } }
+            if (-not $known) { [void]$tree.Add($w) }
+        }
+    }
+    return , $tree.ToArray()
+}
+
+function Get-LiveTreeMember {
+    # The live process a snapshot entry names, or $null once it has exited or its pid belongs to a
+    # process that started at a different moment. A start time that cannot be read counts as alive:
+    # the direction that reports a survivor rather than hides one.
+    param($Snap)
+    $gp = Get-Process -Id ([int]$Snap.ProcessId) -ErrorAction SilentlyContinue
+    if ($null -eq $gp) { return $null }
+    try {
+        if ($gp.HasExited) { return $null }
+        if ([Math]::Abs(($gp.StartTime - $Snap.CreationDate).TotalSeconds) -ge 1) { return $null }
+    } catch { }
+    return $gp
+}
+
+function Receive-SuiteLine {
+    # ONE POLL: wait up to $TimeoutMs for either pending read, then take each stream's completed
+    # line (stdout before stderr) into $Lines and re-arm that stream's read. A null line, or a read
+    # that did not run to completion, ends that stream. A stderr line taken is also left in
+    # $Streams.errLine, for the per-test guard, which alone reads it.
+    param([hashtable]$Streams, [System.Diagnostics.Process]$Proc, $Lines, [int]$TimeoutMs)
+    $pending = New-Object System.Collections.Generic.List[System.Threading.Tasks.Task]
+    if ($Streams.outOpen) { [void]$pending.Add($Streams.outTask) }
+    if ($Streams.errOpen) { [void]$pending.Add($Streams.errTask) }
+    if ($pending.Count -eq 0) { return }
+    [void][System.Threading.Tasks.Task]::WaitAny($pending.ToArray(), $TimeoutMs)
+    if ($Streams.outOpen -and $Streams.outTask.IsCompleted) {
+        if ($Streams.outTask.Status -ne 'RanToCompletion' -or $null -eq $Streams.outTask.Result) { $Streams.outOpen = $false }
+        else { [void]$Lines.Add($Streams.outTask.Result); $Streams.outTask = $Proc.StandardOutput.ReadLineAsync() }
+    }
+    if ($Streams.errOpen -and $Streams.errTask.IsCompleted) {
+        if ($Streams.errTask.Status -ne 'RanToCompletion' -or $null -eq $Streams.errTask.Result) { $Streams.errOpen = $false }
+        else { [void]$Lines.Add($Streams.errTask.Result); $Streams.errLine = $Streams.errTask.Result; $Streams.errTask = $Proc.StandardError.ReadLineAsync() }
+    }
+}
+
+function Get-PerTestName {
+    # THE HUNG TEST, READ FROM pytest's FAULTHANDLER DUMP. The dump lists each thread's frames
+    # innermost first, `  File "<path>", line <n> in <function>`, under a `Thread 0x...` header. From the first
+    # `_pytest\python.py ... in pytest_pyfunc_call` frame -- where pytest 9.0.3 calls the test (`testfunction(**testargs)`)
+    # -- the walk goes INWARD, toward the innermost frame, and stops at the thread's header: the FIRST frame whose file
+    # lies under the suite's own folder ($SuiteDir) and outside site-packages is named, '<file>::<function> (line
+    # <n>)' -- the test, or, where an async test's loop is running a task the test spawned, that task's frame (the
+    # frames cannot tell the two apart). Failing that, the same walk from `_pytest\fixtures.py ... in
+    # call_fixture_func` (`fixturefunc(**kwargs)`) names a fixture, 'fixture <file>::<function>'. Neither -> '' ("the
+    # frames name no test function"). A wrapper OUTSIDE the suite's folder is walked past, never named (found in review):
+    # unittest.mock.patch's frame is the standard library's; a decorator defined under the suite's folder is not.
+    # THE SITE-PACKAGES TEST IS KEPT, NOT SUBSUMED: the product's own venv is src\.venv, inside the suite's folder, so a
+    # plugin's frame -- pytest-asyncio's wrapper around an async test or fixture -- lies under it there. An async test's
+    # coroutine, suspended at an await, is on no thread's stack, so its walk finds nothing. A file and a function, not a
+    # node id: -q prints no id at an item's start.
+    param($Lines, [int]$From, [string]$SuiteDir)
+    $suite = ''
+    try { $suite = [System.IO.Path]::GetFullPath($SuiteDir).TrimEnd('\', '/') + '\' } catch { return '' }
+    if ($suite.Length -le 1) { return '' }
+    $frames = New-Object System.Collections.Generic.List[object]
+    for ($i = [Math]::Max(0, $From); $i -lt $Lines.Count; $i++) {
+        $text = [string]$Lines[$i]
+        if ($text -cmatch '^(Current thread|Thread) 0x') { [void]$frames.Add($null); continue }
+        $m = [regex]::Match($text, '^\s+File "(.+)", line (\d+) in (\S+)\s*$')
+        if ($m.Success) { [void]$frames.Add($m) }
+    }
+    foreach ($site in @(@('python.py', 'pytest_pyfunc_call', ''), @('fixtures.py', 'call_fixture_func', 'fixture '))) {
+        for ($k = 1; $k -lt $frames.Count; $k++) {
+            $f = $frames[$k]
+            if (($null -eq $f) -or ($f.Groups[3].Value -cne $site[1])) { continue }
+            if ($f.Groups[1].Value -notmatch ('[\\/]_pytest[\\/]' + [regex]::Escape($site[0]) + '$')) { continue }
+            for ($j = $k - 1; $j -ge 0; $j--) {
+                $p = $frames[$j]
+                if ($null -eq $p) { break }
+                $file = $p.Groups[1].Value -replace '/', '\'
+                if (-not $file.StartsWith($suite, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+                if ($file -match '\\site-packages\\') { continue }
+                $leaf = [System.IO.Path]::GetFileName($file)
+                if ($site[2]) { return ($site[2] + $leaf + '::' + $p.Groups[3].Value) }
+                return ($leaf + '::' + $p.Groups[3].Value + ' (line ' + $p.Groups[2].Value + ')')
+            }
+        }
+    }
+    return ''
+}
+
+function Invoke-WallGuardedSuite {
+    # Runs $FilePath with $Arguments in $WorkingDirectory under a wall of $WallSeconds and returns
+    # raw (the one ordered buffer, as text), code (the exit code, or 124 when the wall expired),
+    # expired, survivors (every tree member that outlived both kills) and notes (one line for each
+    # thing the guard did that a reader should see) -- and perTest and name: whether the per-test
+    # guard killed the tree ($PerTestSeconds above 0 arms it), and the test it
+    # read from pytest's dump ('' where the frames name none).
+    param([string]$FilePath, [string]$Arguments, [string]$WorkingDirectory, [int]$WallSeconds, [int]$PerTestSeconds = 0)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName               = $FilePath
+    $psi.Arguments              = $Arguments
+    $psi.WorkingDirectory       = $WorkingDirectory
+    $psi.UseShellExecute        = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $lines     = New-Object System.Collections.Generic.List[string]
+    $notes     = New-Object System.Collections.Generic.List[string]
+    $survivors = New-Object System.Collections.Generic.List[string]
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+    $proc  = [System.Diagnostics.Process]::Start($psi)
+    $streams = @{
+        outTask = $proc.StandardOutput.ReadLineAsync(); outOpen = $true
+        errTask = $proc.StandardError.ReadLineAsync();  errOpen = $true
+    }
+    $wallMs  = [long]$WallSeconds * 1000
+    $expired = $false
+    # THE PER-TEST GUARD, armed only when $PerTestSeconds is above 0. pytest's
+    # faulthandler writes its dump to STDERR under a header line at column 0, `Timeout (h:mm:ss)!`; a
+    # stderr line so read starts a drain that lasts until stderr has been quiet 2 s (10 s at most), so
+    # the whole dump is in the buffer while the root still lives, and then the run takes the wall's own
+    # expiry path below. A stdout line can never arm it: a FAILURES section echoing that text is stdout.
+    $perTest    = $false
+    $perTestAt  = 0
+    $dumpAt     = -1
+    $dumpClock  = $null
+    $quietClock = $null
+    $name       = ''
+    while ($streams.outOpen -or $streams.errOpen) {
+        if ($clock.ElapsedMilliseconds -ge $wallMs) { $expired = $true; break }
+        if ($PerTestSeconds -gt 0) { $streams.errLine = $null }
+        Receive-SuiteLine -Streams $streams -Proc $proc -Lines $lines -TimeoutMs 250
+        if ($PerTestSeconds -gt 0) {
+            if ($null -ne $streams.errLine) {
+                if (($null -eq $dumpClock) -and ($streams.errLine -cmatch '^Timeout \(\d+:\d\d:\d\d\)!$')) {
+                    $dumpClock = [System.Diagnostics.Stopwatch]::StartNew()
+                    $dumpAt = $lines.Count - 1
+                    $perTestAt = [int]($clock.ElapsedMilliseconds / 1000)
+                }
+                if ($null -ne $dumpClock) { $quietClock = [System.Diagnostics.Stopwatch]::StartNew() }
+            }
+            # A root that has already exited is not killed: that suite ended on its own and is judged as any other.
+            if (($null -ne $dumpClock) -and (($quietClock.ElapsedMilliseconds -ge 2000) -or ($dumpClock.ElapsedMilliseconds -ge 10000)) -and (-not $proc.HasExited)) { $perTest = $true; break }
+        }
+    }
+    # Both streams closed is not yet an exit, and the exit has to land inside the wall as well.
+    if ((-not $expired) -and (-not $perTest)) {
+        $leftMs = [Math]::Max([long]0, $wallMs - $clock.ElapsedMilliseconds)
+        if (-not $proc.WaitForExit([int][Math]::Min($leftMs, [long][int]::MaxValue))) { $expired = $true }
+    }
+    $code = 124
+    if ((-not $expired) -and (-not $perTest)) {
+        $proc.WaitForExit()
+        $code = $proc.ExitCode
+    } else {
+        if ($perTest) { $name = Get-PerTestName -Lines $lines -From $dumpAt -SuiteDir $WorkingDirectory }
+        $tree = Get-SuiteProcessTree -RootId $proc.Id
+        $treeText = (@($tree | ForEach-Object { [string]$_.ProcessId + ' ' + [string]$_.Name }) -join ', ')
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'   # PS 5.1: native stderr is fatal under 'Stop'
+        try { $null = (& taskkill.exe /T /F /PID $proc.Id 2>&1); $tkExit = $LASTEXITCODE }
+        finally { $ErrorActionPreference = $prevEap }
+        if ($perTest) {
+            $named = if ($name) { "naming $name" } else { 'and the frames name no test function' }
+            [void]$notes.Add("the $PerTestSeconds s per-test timeout fired: pytest's faulthandler dump arrived at $perTestAt s, $named; the tree was killed: taskkill /T /F /PID $($proc.Id) exited $tkExit over a tree of $(@($tree).Count) process(es) [$treeText]")
+        } else {
+            $wallNote = "the $WallSeconds s in-suite wall expired at $([int]($clock.ElapsedMilliseconds / 1000)) s: taskkill /T /F /PID $($proc.Id) exited $tkExit over a tree of $(@($tree).Count) process(es) [$treeText]"
+            # The wall reached inside the per-test drain: the dump is in hand, so the wall's note names what it names.
+            if ($dumpAt -ge 0) {
+                $name = Get-PerTestName -Lines $lines -From $dumpAt -SuiteDir $WorkingDirectory
+                $wallNote += "; the $PerTestSeconds s per-test timeout's dump had arrived at $perTestAt s, " + $(if ($name) { "naming $name" } else { 'and the frames name no test function' })
+            }
+            [void]$notes.Add($wallNote)
+        }
+        if (@($tree).Count -eq 0 -and -not $proc.WaitForExit(5000)) { [void]$survivors.Add("$($proc.Id) (the root; its tree could not be enumerated)") }
+        foreach ($snap in $tree) {
+            $live = Get-LiveTreeMember -Snap $snap
+            if ($null -eq $live) { continue }
+            if ($live.WaitForExit(5000)) { continue }
+            try { $live.Kill() } catch { }
+            if ($live.WaitForExit(5000)) {
+                [void]$notes.Add("pid $($snap.ProcessId) $($snap.Name) outlived taskkill and was killed on its own")
+                continue
+            }
+            [void]$survivors.Add("$($snap.ProcessId) $($snap.Name)")
+        }
+        $drain = [System.Diagnostics.Stopwatch]::StartNew()
+        while (($streams.outOpen -or $streams.errOpen) -and $drain.ElapsedMilliseconds -lt 10000) {
+            Receive-SuiteLine -Streams $streams -Proc $proc -Lines $lines -TimeoutMs 250
+        }
+        if ($streams.outOpen -or $streams.errOpen) { [void]$notes.Add('the output drain was abandoned after 10 s with a stream still open; the counts are of what had arrived') }
+    }
+    $proc.Dispose()
+    return [pscustomobject]@{
+        raw       = (($lines -join [Environment]::NewLine) + [Environment]::NewLine)
+        code      = $code
+        expired   = $expired
+        survivors = $survivors.ToArray()
+        notes     = $notes.ToArray()
+        perTest   = $perTest
+        name      = $name
+    }
+}
+
+function Invoke-M2 {
+    $doc = Read-ProductManifest
+    if ($null -eq $doc) {
+        Write-Member -Id 'M2' -Ok $false -What "the product green-gate manifest is absent at $manifest, so there is no floor to judge against"
+        return
+    }
+    $floor = [int]$doc.stored_floor
+    $declared = Read-DeclaredExpectedFailures -Path $mirror
+    if ($null -eq $declared) {
+        Write-Member -Id 'M2' -Ok $false -What "the mirror is absent at $mirror, so no failure could be judged expected"
+        return
+    }
+
+    $suiteDir = Join-Path $root 'src'
+    if (-not (Test-Path -LiteralPath $suiteDir -PathType Container)) {
+        Write-Member -Id 'M2' -Ok $false -What "the suite cwd does not exist: $suiteDir"
+        return
+    }
+
+    # THE INVOCATION IS tools/mission-lib.ps1:321'S, VERBATIM, INCLUDING THE MODULE FORM. `uv run
+    # pytest` goes through the pytest.exe shim, which Windows Application Control blocks here (os
+    # error 4551); `python -m pytest` is the same run without the shim and is what the framework's
+    # own gate uses. A suite running a DIFFERENT invocation would be measuring something other than
+    # what every green close this floor was ratcheted by measured.
+    #
+    # The first run in a fresh worktree builds the product .venv, because LAM-ACCEPT K-2 excludes
+    # venv paths from the worktree include. That is TIME, not a defect, and it is spent INSIDE the
+    # wall. The runner still has no suite timeout; THIS MEMBER HAS ONE, -WallSeconds, 900 s by
+    # default: about 1.8x the worst observed 509 s run, with room for the ~26 s venv build, and
+    # inside the Stop hook's 1800 s timeout, which remains the backstop. A slow first run is not a
+    # hang. A run that outlasts the wall is treated as one (THE WALL GUARD, above).
+    #
+    # `uv` is resolved the way `& uv` resolved it -- PowerShell's first Application match on PATH --
+    # and handed to the process by its full path, so the guard starts the same executable.
+    $uvCmd = @(Get-Command -Name 'uv' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($uvCmd.Count -eq 0) {
+        Write-Member -Id 'M2' -Ok $false -What "uv is not on PATH, so the product suite could not be started from $suiteDir"
+        return
+    }
+    # -KeepPytestOutput: where a path is kept, and only there, the pytest line gains
+    # pytest's faulthandler at 60 s -- stack dumps to STDERR, so stdout and -q, and the tally parse below,
+    # read what they read. Empty, the line is the invocation above to the byte.
+    $keepPytestOption = if ($script:keepPath) { ' -o faulthandler_timeout=60' } else { '' }
+    # -PerTestTimeoutSeconds: where given, and only there, pytest's faulthandler at n s, AFTER the
+    # option above, so that with both flags n wins (the last -o). 0, the line is the invocation above to the byte.
+    $perTestOption = if ($PerTestTimeoutSeconds -gt 0) { ' -o faulthandler_timeout=' + $PerTestTimeoutSeconds } else { '' }
+    $started = Get-Date
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'   # PS 5.1: native stderr is fatal under 'Stop'
+    Push-Location $suiteDir
+    try {
+        $run  = Invoke-WallGuardedSuite -FilePath $uvCmd[0].Source -Arguments ('run python -m pytest -q -rfE -p no:cacheprovider' + $keepPytestOption + $perTestOption) `
+                                        -WorkingDirectory $suiteDir -WallSeconds $WallSeconds -PerTestSeconds $PerTestTimeoutSeconds
+        $raw  = $run.raw
+        $code = $run.code
+    } finally { Pop-Location; $ErrorActionPreference = $prevEap }
+    $elapsed = [int]((Get-Date) - $started).TotalSeconds
+
+    # THE TALLY IS PARSED AS Invoke-SuiteDefaultRun PARSES IT (tools/mission-lib.ps1:323-335), down
+    # to the deselection rule: Runnable = passed + failed + skipped, and DESELECTED tests are NOT
+    # counted. A parser that added them would let the floor be met by tests that never ran.
+    $passed = 0; $failed = 0; $skipped = 0; $errs = 0; $desel = 0
+    if ($raw -match '(\d+)\s+passed')     { $passed  = [int]$Matches[1] }
+    if ($raw -match '(\d+)\s+failed')     { $failed  = [int]$Matches[1] }
+    if ($raw -match '(\d+)\s+skipped')    { $skipped = [int]$Matches[1] }
+    if ($raw -match '(\d+)\s+error')      { $errs    = [int]$Matches[1] }
+    if ($raw -match '(\d+)\s+deselected') { $desel   = [int]$Matches[1] }
+    $runnable = $passed + $failed + $skipped
+
+    $failedIds   = @()
+    $failedLines = @()
+    foreach ($ln in ($raw -split "`r?`n")) {
+        if ($ln -match '^FAILED\s+(\S+)') { $failedIds += $Matches[1]; $failedLines += $ln }
+    }
+    # C3: a COLLECTION-phase error, which is not a runtime test failure and must never be reported
+    # as one -- a suite that could not collect has no tally worth comparing to a floor.
+    $collErr = ($code -eq 2) -or ($errs -gt 0) -or ($raw -match 'error(s)?\s+during\s+collection') -or ($raw -match '(?m)^ERROR\s')
+
+    # THE PASS-THROUGH, VERBATIM AND BEFORE THE VERDICT, so the runner's reader sees these lines
+    # whatever this member concludes about them.
+    foreach ($ln in $failedLines) { Write-Host $ln }
+
+    Write-Host "TALLY passed=$passed failed=$failed skipped=$skipped deselected=$desel runnable=$runnable stored_floor=$floor collection_error=$([bool]$collErr) pytest_exit=$code elapsed_seconds=$elapsed"
+
+    # -cnotcontains, not -notcontains: a pytest node id is a case-sensitive identifier and
+    # PowerShell's default comparison is case-INSENSITIVE. A case-only difference is a real
+    # difference, and refusing on it is the direction that refuses.
+    $unexpected = @($failedIds | Where-Object { $declared -cnotcontains $_ })
+    $c1 = ($unexpected.Count -eq 0)
+    $c2 = ($runnable -ge $floor)
+    $c3 = (-not $collErr)
+    # C4 IS THE WALL. A suite the guard killed refuses on its own conjunct whatever
+    # its partial counts satisfy, and C4 leads the list because it is the cause. The guard's own
+    # lines are printed before the verdict, prefixed WALL (never FAILED, TALLY or ERROR, so no reader
+    # mistakes one for a measurement), which puts the kill on the transcript's face and in the capture.
+    $c4 = (-not $run.expired)
+    # C5 IS THE PER-TEST GUARD: the tree killed on pytest's faulthandler dump, the test named from
+    # it. It LEADS, because it is the cause, and C4 is not claimed, because the wall did not expire. Its kill is a
+    # WALL note like the wall's: the guard acted. With the flag off it is never false.
+    $c5 = (-not $run.perTest)
+    foreach ($note in @($run.notes)) { Write-Host "WALL $note" }
+    # THE KEPT OUTPUT, after the WALL notes and before the verdict: the whole ordered buffer
+    # M2 parsed, written to the guarded path, UTF-8 without a mark, and ONE line saying where, how many bytes and
+    # their sha256 -- prefixed KEPT, never FAILED, TALLY, ERROR, WALL, NO-TALLY, CHECKS, BOUND or EXIT, so no
+    # reader takes it for a measurement. A write that fails says so on the same prefix; it decides nothing.
+    if ($script:keepPath) {
+        try {
+            $keepDir = [System.IO.Path]::GetDirectoryName($script:keepPath)
+            if ($keepDir) { [void][System.IO.Directory]::CreateDirectory($keepDir) }
+            $keepBytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($raw)
+            [System.IO.File]::WriteAllBytes($script:keepPath, $keepBytes)
+            $keepHasher = [System.Security.Cryptography.SHA256]::Create()
+            try { $keepSha = ([System.BitConverter]::ToString($keepHasher.ComputeHash($keepBytes)) -replace '-', '').ToLowerInvariant() } finally { $keepHasher.Dispose() }
+            Write-Host "KEPT pytest's own output (diagnostic, not a measurement): $($script:keepPath) $($keepBytes.Length) B sha256 $keepSha"
+        } catch {
+            Write-Host "KEPT pytest's own output (diagnostic, not a measurement) was NOT written to $($script:keepPath): $(($_.Exception.Message -replace '[\r\n]+', ' '))"
+        }
+    }
+    $bad = @()
+    if (-not $c5) {
+        $c5What = if ($run.name) { "$($run.name) ran past $PerTestTimeoutSeconds s" } else { "an item ran past $PerTestTimeoutSeconds s and the frames name no test function" }
+        $c5Left = if (@($run.survivors).Count -gt 0) { "; STILL RUNNING after both kills: $(@($run.survivors) -join ', ')" } else { '' }
+        $bad += "C5 per-test-timeout [$c5What; the tree killed$c5Left]"
+    }
+    if (-not $c4) {
+        $survivorText = if (@($run.survivors).Count -gt 0) { "; STILL RUNNING after both kills: $(@($run.survivors) -join ', ')" } else { '; no snapshotted process of its tree survived' }
+        $bad += "C4 wall-guard [pytest killed after $elapsed s; the suite did not finish inside the $WallSeconds s in-suite wall$survivorText]"
+    }
+    if (-not $c1) { $bad += "C1 unexpected-fail [$($unexpected -join ' ')]" }
+    if (-not $c2) { $bad += "C2 collection-regression [runnable $runnable < floor $floor]" }
+    if (-not $c3) { $bad += "C3 collection-error [pytest exit $code, errors $errs]" }
+
+    if ($bad.Count -eq 0) {
+        Write-Member -Id 'M2' -Ok $true -What "the product suite ran clean: runnable $runnable >= floor $floor, $($failedIds.Count) failure(s) and every one of them declared by the mirror's $($declared.Count) id(s), no collection error"
+    } else {
+        Write-Member -Id 'M2' -Ok $false -What ("the product green gate is RED: " + ($bad -join '; '))
+    }
+}
+
+# ================================================================================================
+if ($Member -eq 'all' -or $Member -eq 'M1') { Invoke-M1 }
+if ($Member -eq 'all' -or $Member -eq 'M2') { Invoke-M2 }
+
+Write-Host ""
+Write-Host "------------------------------------------------------------------------------"
+Write-Host "EXIT: $failures"
+exit $failures

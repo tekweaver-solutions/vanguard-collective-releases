@@ -1,0 +1,14 @@
+# THE PLANTED ASSERTION: one assertion the first build cannot satisfy, so validation fails on it
+# and the rework path is exercised.
+#
+# It is unsatisfiable by the first build for a STRUCTURAL reason: A-4 is absent from every build
+# dispatch's assertion_targets, and a dispatch is the work's whole input. Validation judges the WHOLE
+# contract, not the dispatch's slice; that asymmetry is the mechanism. Validation finds the gap and
+# the rework dispatch closes it.
+id: A-4
+feature_id: F-001
+statement: "src/greeting.txt contains a second line reading exactly: REWORKED"
+kind: file
+verification: "Read src/greeting.txt in the tree under judgement; require line 2 to be exactly REWORKED."
+planted: true
+planted_rationale: "Excluded from the build dispatches' assertion_targets so the first validation round must fail, forcing the rework path to be exercised."

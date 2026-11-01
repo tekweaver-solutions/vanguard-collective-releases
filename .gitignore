@@ -1,0 +1,13 @@
+.mission-runtime/
+# No rule here may ignore .claude/settings.json, which is tracked.
+# R8: the evidence plane the Stop hook copies out of .mission-runtime/. Its middle slash anchors it to this root.
+.mission/evidence/
+# release.ps1's output: the release ZIP and SHA256SUMS. The leading slash anchors it to this root.
+/dist/
+# R11: Claude Code's per-checkout files at this root, its local settings and its worktrees. The leading slashes anchor both to this root, and .claude/settings.json is named by neither.
+/.claude/settings.local.json
+/.claude/worktrees/
+# The Python tests' interpreter, made by python -m venv tools\.venv; the instruments prefer it too. The leading slash anchors it to this root.
+/tools/.venv/
+# Python's bytecode caches, which the test runs leave beside the sources; never committed.
+__pycache__/

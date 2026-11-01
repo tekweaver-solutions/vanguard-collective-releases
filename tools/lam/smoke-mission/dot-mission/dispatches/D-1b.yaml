@@ -1,0 +1,32 @@
+# Worker Dispatch -- the build, dispatched again under a new id. THIS ARTIFACT IS THE WORK'S
+# ENTIRE INPUT. D-1 is superseded by this dispatch (.mission/dispatches/D-1.superseded.yaml, ratified
+# by .mission/gates/supersession-D-1.yaml); the work asked for is D-1's, unchanged.
+# Performed by build-smoke-mission.ps1, not by a CLI worker.
+
+id: D-1b
+mission_id: smoke
+worker_id: w-smoke-1b
+kind: mainline
+feature_id: F-001
+assertion_targets: [A-1, A-2, A-3, A-5]
+spec_version: 1
+prior_handoff_id: handoff-D-1
+worktree_id: wt-D-1b
+base_head_at_authoring: {{BASE}}
+suite_command: tests\test-smoke.ps1
+model_class: coding-strong
+tool_scope: [repo.read, worktree.write, shell.exec.sandboxed]
+budget:
+  cost_cap_usd: 2.00
+  wallclock_cap_minutes: 10
+rework_evidence: null
+goal_condition: "A-1, A-2, A-3 and A-5 pass locally AND the build is committed in the worktree AND a schema-valid handoff exists at the path named by the LAM_HANDOFF environment variable"
+
+# ---------------------------------------------------------------------------------------------
+# INSTRUCTIONS -- D-1's, unchanged
+# ---------------------------------------------------------------------------------------------
+# STEP 1 -- create src/greeting.txt (one line: hello from the smoke worker), src/counter.ps1
+#           (prints 3) and tests/test-smoke.ps1 (runs the counter, prints PASS or FAIL, exits 0 or 1).
+# STEP 2 -- run tests/test-smoke.ps1 and confirm it exits 0.
+# STEP 3 -- commit the three files in the worktree.
+# STEP 4 -- write the handoff to LAM_HANDOFF. No runner_anchors.

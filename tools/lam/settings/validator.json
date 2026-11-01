@@ -1,0 +1,52 @@
+{
+  "_role": "validator",
+  "_contract": "LAM-ACCEPT WP-5 K-3: read-only plus its result file -- a DENY-BY-DEFAULT posture, never an enumeration of forbidden paths under an otherwise-permissive mode.",
+  "_authority": "A validator judges built artifacts against an assertion set and writes ONE thing: its own ValidatorResult. Design v2.3 SS4.5 law 6 makes fresh-identity adversarial validation mandatory for evidence-plane artifacts, and SS9.3 states the isolation precondition -- a validator receives the assertion and the built artifact, and no parent context.",
+
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash",
+      "PowerShell",
+      "Edit(tests/lam/validator-*.result.yaml)"
+    ],
+    "deny": [
+      "Bash(git push*)", "PowerShell(git push*)", "PowerShell(* git push*)",
+      "Bash(git commit*)", "PowerShell(git commit*)",
+      "Bash(git add*)", "PowerShell(git add*)",
+      "Bash(git reset*)", "PowerShell(git reset*)",
+      "Bash(git checkout*)", "PowerShell(git checkout*)",
+      "Bash(*rm -rf*)", "PowerShell(Remove-Item *)",
+      "Edit(.claude/settings.json)",
+      "Edit(tools/framework/**)"
+    ]
+  },
+
+  "_memory_off": {
+    "intent": "ADR-032, and for a validator this is the load-bearing case rather than hygiene. Auto memory is persistent state outside the artifact store; a validator that inherited the builder's implementation history would share the builder's blind spots, which is the exact property fresh-identity validation exists to break.",
+    "declared_mechanism": "spawn with --settings pointing at this file, in a fresh session with no parent context",
+    "separation_obtained": "FRESH-IDENTITY SESSION SEPARATION, and nothing stronger. A validator is spawned as a new session that is handed only the contract and the paths it names, so no conversational context crosses. That is the separation actually achieved. It is NOT a memory disable, and project-level auto memory is expressly OUTSIDE it, which is why WP-6 S-2 runs an isolation PROBE before any validator: the probe is the detector, the configuration is only the claim.",
+    "disable_status": "UNOBTAINABLE ON CLI 2.1.241 (erratum E12). No settings key disables auto memory; the only documented control is --bare, which also skips hooks and would leave the role with no evidence plane at all -- strictly worse. Named here rather than implied, per design SS4.5 law 4: a claim with no working detector is an overclaim."
+  },
+
+  "lam_residuals": [
+    "THE POSTURE IS THE MODE, AND THAT IS THE WHOLE OF THIS FILE'S FIX. This template previously set `defaultMode: auto` and then ENUMERATED forbidden paths -- src, tools, docs, .mission, one settings file -- so everything NOT enumerated stayed writable. An outside reader measured the consequence: 17 of 20 probed repository paths were writable, among them tests/lam/instrument-WP-5.ps1 (the instrument whose exit code is WP-5's own check), tests/lam/validator-WP-1.result.yaml (another validator's verdict), and model-routing.yaml and .worktreeinclude (the very artifacts K-1 and K-2 judge). `dontAsk` is documented as 'Auto-denies tools unless pre-approved via /permissions or permissions.allow rules', so no forbidden path has to be foreseen and no TOOL is granted that is not named here. SCOPED, because the unscoped version of that sentence was false: it holds for the FILE-TOOL layer. It does NOT hold for the shell -- see the shell residual below, where the deny enumeration is the whole boundary. The earlier claim that 'nothing is granted that is not named here' read as covering both layers and an outside reader went through the gap.",
+    "WHY THE CARVE-OUT CANNOT BE A HOLE IN A BLANKET DENY. Claude Code's documented rule is explicit: 'Rules are evaluated in order: deny, then ask, then allow. The first match in that order determines the outcome, and rule specificity doesn't change the order', and 'a deny rule can't carry allowlist exceptions'. A blanket `Edit(**)` deny would therefore ALSO block this role's result file, and the template would read as protection while forbidding the one write the role exists to make -- a rule that reads as a restriction and enforces the opposite is worse than an absent one. Deny-by-default has to come from the mode; the single exception comes from the allow list. Cited from the published permissions reference, not driven: `claude -p` could not be exercised in the session that made this change (CLI 2.1.241 exited 1 with 'Failed to authenticate: OAuth session expired and could not be refreshed'). Labelled as documented rather than measured, per design SS4.5 law 4.",
+    "K-3 ALSO SAYS 'auto mode', AND FOR THIS ROLE THE TWO CLAUSES CANNOT BOTH HOLD. `auto` is documented as 'Auto-approves tool calls with background safety checks' -- an otherwise-permissive mode, which is precisely what K-3's validator clause forbids in the same sentence. The narrower, later clause naming this role is taken to govern, and the reading is DISCLOSED HERE AND FLAGGED FOR RATIFICATION rather than resolved silently. orchestrator.json and worker.json keep `auto`: their clauses are role-scoped denials over a role that legitimately writes, and nothing in them is in tension.",
+    "SHELL EXECUTION IS ALLOWED AND THE SHELL WRITE SURFACE IS BOUNDED BY THE DENY LIST ALONE -- CORRECTED, because the previous wording overclaimed IN THE PERMISSIVE DIRECTION. It said redirection targets were 'checked as a file write against the Edit rules', which would mean the allow-list constrained them. It does not. Measured against a byte-identical copy of this file (V-1 round 4, WP-5): `echo CHANGED > model-routing.yaml` and `sed -i ... .worktreeinclude` BOTH WROTE, while the two DENY-listed paths (`tools/framework/**`, `.claude/settings.json`) were refused on that same route and the Edit route refused all of them. So the deny enumeration is the whole of the shell boundary, which is exactly the shape K-3's older text forbade and which amendment 16 now states plainly instead.",
+
+    "THE EXEMPLARS THAT REMAIN WRITABLE, NAMED RATHER THAN GESTURED AT -- and note that three of them are artifacts this very work package judges: `model-routing.yaml` (K-1's subject), `.worktreeinclude` (K-2's subject), `tests/lam/instrument-WP-5.ps1` (the instrument whose exit code is WP-5's own check), and `src/**` product files. A reader who wanted to know what a validator can still reach should not have had to run the experiment.",
+
+    "WHY THE SHELL IS NOT SIMPLY REMOVED: a validator in this build judges BY EXECUTION AND BYTE COMPARISON -- that is what makes its verdict evidence rather than reading -- and under `dontAsk` removing Bash/PowerShell leaves a reader that can only read. Three rounds of independent validation in this build were carried by execution; the trade is made deliberately and the control moves elsewhere.",
+
+    "WHAT ACTUALLY CATCHES A MISUSE, and it is detection rather than prevention (only a sandbox makes a path unreachable). Two controls, both outside this file. (1) SUBJECT INTEGRITY: the orchestrator hashes every artifact a validator is given to judge before the spawn and re-hashes on return; any mismatch VOIDS the verdict, raises a HALT and spends the identity (K-3 as amended by amendment 16). (2) LEDGER PROVENANCE: a result file counts only if its sha256 matches a completed spawn-ledger line the ORCHESTRATOR measured (session-law amendment 3a), so a file written anywhere else satisfies nothing.",
+
+    "RESIDUAL, MEASURED AND NOT CLOSED: `Edit(tests/lam/validator-*.result.yaml)` is a glob over EVERY work package, not this validator's own result -- the same 'any X versus its own X' shape the guard had to fix for worker handoffs, and a validator was measured writing a peer's verdict file by the file-tool route. It is NOT closable in this template, because one shared settings file is passed to every dispatched validator and the pattern cannot name a dispatch that does not exist when the file is written. It IS caught, loudly and after the fact: overwriting a peer's result changes that file's sha256, so it no longer matches the completed ledger line the orchestrator measured, and `validator_pass_count` reports it FOREIGN and FAILS rather than counting it. Recorded here so nobody reads the allow entry as 'its own result file'.",
+    "MEMORY-OFF IS NOT VERIFIED ON THIS CLI BUILD -- see worker.json. For this role the gap matters most, which is why WP-6 S-2 PROBES isolation empirically before trusting it: a probe subagent is asked to report anything it knows about the parent conversation, and it must report nothing. Configuration is the claim; the probe is the detector.",
+    "RULE FORM MATTERS AND THE CLI SAYS SO. Claude Code checks file permissions against `Edit(path)` and `Read(path)` rules only; a path rule written for `Write`, `MultiEdit` or `NotebookEdit` is accepted, never consulted, and warned about at startup. Every file rule here is written as Edit for that reason.",
+    "Denying git commit, add, reset and checkout as well as push is deliberate: a validator that can move the index or the tree can move the tree under its own verdict."
+  ]
+}

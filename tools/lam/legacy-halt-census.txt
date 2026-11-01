@@ -1,0 +1,20 @@
+# tools/lam/legacy-halt-census.txt -- THE LEGACY HALT CENSUS that tools/lam/mission-goal-check.ps1 reads.
+#
+# A goal's halt_absent detector may name HALTs in its legacy_answered_allowlist, as <HALT file name>@<sha256>. The
+# evaluator honours such an entry only when it is a member line of this file -- and the HALT stands at those bytes,
+# and its own marker reads ANSWERED. Every other HALT is answered by a halt-ruling gate, and by nothing else.
+#
+# The framework ships this file EMPTY. A project with no legacy HALTs -- every project started on this framework --
+# leaves it empty: no legacy HALT is honoured. It is HOST-CONFIG: an install writes it once, an upgrade never rewrites
+# it, so the census is the project's own. A project upgrading from a release that carried its census inside the
+# evaluator writes this file, BEFORE it upgrades, with tools/lam/export-legacy-census.ps1 run against that older
+# evaluator (docs/framework/LAM-INSTALL.md section 10); otherwise its legacy HALTs are honoured no longer.
+#
+# ITS FORM. A line whose first non-blank character is '#' is a comment and a blank line is nothing; every other line is
+# one member, <HALT file name>@<64 lower-case hex sha256>, the members in ordinal order; a line of no such form makes
+# the census unreadable: a goal that consults it reads NOT_MET, its evaluator_error naming this file and the line, and
+# its Stop hook blocks until the line is mended. count and census_sha256 are the number of member lines
+# and the sha256 of the canonical census text -- each member line, sorted ordinal, each followed by one LF, ASCII; with
+# no member, the sha256 of nothing.
+#   count : 0
+#   census_sha256 : e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855

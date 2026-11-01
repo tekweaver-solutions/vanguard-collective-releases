@@ -1,0 +1,3 @@
+$count = 0
+foreach ($i in 1..3) { $count++ }
+Write-Output $count

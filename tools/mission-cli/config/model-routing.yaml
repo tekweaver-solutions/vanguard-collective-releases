@@ -1,0 +1,29 @@
+# Model routing configuration (per ADR-005).
+#
+# Maps logical model_class values (per expanded-schemas.md §4 WorkerDispatch.model_class)
+# to concrete provider+model identifiers the runner passes to `claude -p --model`.
+#
+# Per kickoff prompt §5 routing decisions:
+#   coding-strong   -> claude-code-subscription (primary), ollama qwen2.5-coder:7b (fallback on rate-limit)
+#   coding-fast     -> ollama qwen2.5-coder:7b
+#   narrow-validator -> ollama qwen2.5-coder:7b
+#   qa-validator    -> claude-code-subscription (vision per ADR-013)
+#
+# Shape: dict[model_class, {primary: str, fallback: Optional[str]}].
+# The fallback field is informational at v1; the runner uses the primary
+# verbatim. Fallback semantics (rate-limit detection + auto-switch) are
+# deferred to a future amendment.
+
+routing:
+  coding-strong:
+    primary: claude-code-subscription
+    fallback: ollama/qwen2.5-coder:7b
+  coding-fast:
+    primary: ollama/qwen2.5-coder:7b
+    fallback: null
+  narrow-validator:
+    primary: ollama/qwen2.5-coder:7b
+    fallback: null
+  qa-validator:
+    primary: claude-code-subscription
+    fallback: null

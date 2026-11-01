@@ -1,0 +1,53 @@
+{
+    "autoMemoryEnabled":  false,
+    "hooks":  {
+                  "PreToolUse":  [
+                                     {
+                                         "hooks":  [
+                                                       {
+                                                           "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-guard-pretooluse.ps1\"",
+                                                           "timeout":  10,
+                                                           "type":  "command"
+                                                       }
+                                                   ],
+                                         "matcher":  "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell"
+                                     }
+                                 ],
+                  "Stop":  [
+                               {
+                                   "hooks":  [
+                                                 {
+                                                     "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-stop-finalize.ps1\"",
+                                                     "timeout":  60,
+                                                     "type":  "command"
+                                                 }
+                                             ],
+                                   "matcher":  "*"
+                               }
+                           ],
+                  "PostToolUse":  [
+                                      {
+                                          "hooks":  [
+                                                        {
+                                                            "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-post-tool-use.ps1\"",
+                                                            "timeout":  30,
+                                                            "type":  "command"
+                                                        }
+                                                    ],
+                                          "matcher":  "*"
+                                      }
+                                  ],
+                  "PreCompact":  [
+                                     {
+                                         "hooks":  [
+                                                       {
+                                                           "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-pre-compact.ps1\"",
+                                                           "timeout":  60,
+                                                           "type":  "command"
+                                                       }
+                                                   ],
+                                         "matcher":  "*"
+                                     }
+                                 ]
+              }
+}

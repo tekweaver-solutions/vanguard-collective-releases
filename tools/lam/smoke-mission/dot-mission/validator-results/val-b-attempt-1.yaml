@@ -1,0 +1,18 @@
+# Validator result -- written by build-smoke-mission.ps1 from its own checks; no validator agent ran.
+# The builder refuses to write this file unless every check below came out as recorded here.
+id: valresult-b-1
+validator_id: val-b
+validator_type: qa
+assertion_ids: [A-4, A-5]
+assertion_id: A-4
+verdict: fail
+attempt_number: 1
+commit_sha: "{{COMMIT}}"
+evidence:
+  - type: test_output
+    content: "src/greeting.txt holds 1 line; line 2 is absent"
+    description: "A-4 FAIL: there is no second line, so no line 2 can equal REWORKED. The content is absent, not mismatched."
+  - type: test_output
+    content: "D-1c.anchors.yaml worktree_tip_sha equals git rev-parse HEAD in the D-1c worktree; capture_gaps_count: 0"
+    description: "A-5 PASS: both halves hold."
+failure_summary: "A-4 failed. Required: src/greeting.txt contains a second line reading exactly REWORKED. Observed: the file holds exactly one line. A-5 passed on both of its halves. Because A-4 fails, the overall verdict is fail."

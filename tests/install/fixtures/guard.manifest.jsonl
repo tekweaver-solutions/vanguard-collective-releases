@@ -1,0 +1,8 @@
+{"manifest":"provenance","note":"the path-guard probe: install.ps1 must refuse every destination but probe.txt before anything is read or written; @ABS@ is replaced by an absolute path under the falsifier's work folder"}
+{"source":"host","path":"probe.txt","class":"MOVE","sha256":"6ac91f53e7046437d19281c74e95fd90cb1aa4e4d90cd4b42980795521f95be4","bytes":29,"destination":"probe.txt"}
+{"source":"host","path":"escape.txt","class":"MOVE","sha256":"f43557c01cfee2cf7b4567f1e63dce87b289017f5514cb9ce30213641cdb4f07","bytes":50,"destination":"..\\escape.txt"}
+{"source":"host","path":"abs.txt","class":"MOVE","sha256":"2cacfa946fc10f11d5830d19df593a4b23a82b0bcd0525628865183b1d977bfe","bytes":45,"destination":"@ABS@"}
+{"source":"host","path":"under-lock.txt","class":"MOVE","sha256":"2cacfa946fc10f11d5830d19df593a4b23a82b0bcd0525628865183b1d977bfe","bytes":45,"destination":"framework.lock/x.txt"}
+{"source":"host","path":"device.txt","class":"MOVE","sha256":"2cacfa946fc10f11d5830d19df593a4b23a82b0bcd0525628865183b1d977bfe","bytes":45,"destination":"CON/x.txt"}
+{"source":"host","path":"colon.txt","class":"MOVE","sha256":"2cacfa946fc10f11d5830d19df593a4b23a82b0bcd0525628865183b1d977bfe","bytes":45,"destination":"x/a:b.txt"}
+{"source":"host","path":"dot.txt","class":"MOVE","sha256":"2cacfa946fc10f11d5830d19df593a4b23a82b0bcd0525628865183b1d977bfe","bytes":45,"destination":"x/trailing."}

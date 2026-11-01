@@ -1,0 +1,1146 @@
+#Requires -Version 5.1
+
+# THE BLANK LINE BELOW IS LOAD-BEARING AND ITS ABSENCE MADE THIS ENTIRE HELP BLOCK INVISIBLE
+# (register row 112, driven). The file read `#Requires -Version 5.1` on line 1 and `<#` on line 2,
+# and PowerShell 5.1's comment-based-help parser attached NOTHING to the script: `mission-gate.ps1
+# -?` printed one auto-generated syntax line, and `Get-Help mission-gate.ps1 -Full` printed the
+# same -- no SYNOPSIS, no DESCRIPTION, no PARAMETER text -- for the whole life of this file. The
+# block below was never wrong; it was unreachable, which is the worse failure, because a reader
+# maintaining it had every reason to believe operators were seeing it.
+#
+# MEASURED, ON SEVEN VARIANTS OF ONE FILE, because the rule is not the one you would guess: the
+# help block must be preceded by a BLANK LINE, and ANY `#` comment line immediately above `<#`
+# suppresses it just as `#Requires` does -- the parser takes the contiguous comment run as the
+# help candidate, finds no keywords in it, and gives up without a word. `#Requires` + blank + `<#`
+# renders; `#Requires` + comment + `<#` does not; `#Requires` + comment + blank + `<#` renders.
+# THAT IS WHY THERE IS AN EMPTY LINE BETWEEN THIS PARAGRAPH AND THE BLOCK. Do not close it up.
+
+<#
+.SYNOPSIS
+  Gate artifacts -- the physical form of a human touchpoint. (LAM-ACCEPT WP-4 T-1)
+
+.DESCRIPTION
+  Design SS10.5 / ADR-033. Publishing to origin is an operator-gated irreversible in every local
+  topology. In Local Orchestrator Mode the paste of the push dispatch IS the authorization act. In
+  Local Autonomous Mode no paste exists, so the authorization becomes an ARTIFACT: created by the
+  human, hash-bound to one exact tip, consumed once, retained for audit.
+
+  THIS TOOL IS RUN BY THE HUMAN, NOT BY AN AGENT, AND THIS FILE IS NOW THE FIRST LAYER THAT SAYS SO
+  (register row 165). Every gate-MUTATING verb -- approve, reapprove, revoke -- REFUSES, exits 3 and
+  writes nothing when the session it is running in is not an operator's. Four conditions, each tested
+  and NAMED SEPARATELY in the refusal: LAM_DISPATCH is set (the runner's dispatched-worker marker);
+  the harness session environment is present (CLAUDECODE, CLAUDE_CODE_SESSION_ID,
+  CLAUDE_CODE_ENTRYPOINT); the session is not interactive; or the invocation looks like a hook's.
+  The refusal happens BEFORE the gates directory is created and before any byte is written or moved.
+  `list` is untouched -- it reads, and mutates nothing -- and so is `-?`, which PowerShell's
+  parameter binder answers before this script body runs at all.
+
+  THE SENTENCE THAT USED TO STAND HERE WAS FALSE, AND IT IS RECORDED RATHER THAN QUIETLY DELETED.
+  It read: "the guard enforces that from the other side: `.mission/gates/**` is hard-denied to every
+  agent role (T-3)". Measured against the sources and driven, three ways:
+
+    * `.mission/gates` IS NOT A PROTECTED PATH, so "hard-denied" names a tier that does not cover it.
+      `$script:EvidenceProtectedPaths` -- in the sealed library (tools/framework/hooks/lib/
+      evidence-common.ps1:1057-1064) and in the next-generation one alike -- holds
+      `.mission-runtime/evidence`, `.mission/evidence`, `tools/framework/hooks`,
+      `tools/framework/install-evidence-hooks.ps1`, `tools/framework/tests` and
+      `.claude/settings.json`, and nothing else. `.mission` reaches only the PARENT tier, which
+      denies relocation, deletion and metacharacter commands -- not an ordinary write inside.
+      What actually covers the gates directory is TWO OTHER ROUTES: a bespoke TEXT-MATCH predicate
+      (`Test-EvidenceGatePath`, which asks A1's matcher about the literal string `.mission/gates`),
+      and a permission-layer `Edit(.mission/gates/**)` deny that is present in
+      tools/lam/settings/orchestrator.json and tools/lam/settings/worker.json, ABSENT from
+      validator.json, and which validator.json's own residual records as NOT binding the shell.
+      LAM-ACCEPT.md:777-790 reaches the same reading independently.
+
+    * A HOOK IS A TRIPWIRE, NOT A BOUNDARY (AM-418), and it exists only inside a harness session.
+      Outside one -- an operator terminal, a CI runner, any process the harness did not spawn --
+      there is no guard on the other side to enforce anything.
+
+    * AND THE TOOL ITSELF REFUSED NOTHING, WHICH IS THE HALF THAT MATTERED. Driven before this
+      change, from a child process with LAM_DISPATCH set, CLAUDECODE set and stdin redirected:
+      `approve`, `revoke` and `reapprove` each exited 0, wrote real artifacts into a real gates
+      directory, and the real `list` read them back as `open governance`. The artifact an agent had
+      just minted carried, as its own third line, "Agents cannot write under .mission/gates/**".
+
+  TWO LAYERS NOW, BOTH NAMED, IN ORDER. FIRST: this file's refusal, which holds wherever the tool
+  runs, because it is in the tool. SECOND: `Test-EvidenceGateToolMutation` in
+  tools/evidence-hooks-next/hooks/lib/evidence-common.ps1 (register row 135), the guard tripwire
+  that denies any command invoking this tool with a verb other than `list`. That tripwire is
+  untouched by this row and remains the second layer; its own header already named the layer that
+  was missing -- "the durable fix lives on the other side, in an operator/TTY assertion INSIDE
+  mission-gate.ps1, which has none today". This is that assertion.
+
+  THE HONEST BOUND, CARRIED RATHER THAN ARGUED AWAY (AM-418, design SS4.5 law 4). THE CONDITIONS
+  DESCRIBE A SESSION, AND A SESSION CAN SPAWN A PROCESS THAT IS IN A DIFFERENT ONE. A process
+  started with a fresh console and the harness variables removed from its own environment satisfies
+  all four conditions, and an agent can start one: WP-4's T-25 builds exactly such a launcher, in
+  the open, because that is how it drives its positive control. SO THIS IS A REFUSAL, NOT A PROOF
+  OF HUMANITY. What it buys is that the ratified invocation no longer mints by accident, that the
+  refusal travels with the tool instead of living only in a hook, and that a bypass now costs a
+  deliberately constructed process tree rather than one ordinary command. That residual belongs in
+  the register beside row 135's, not in a sentence claiming the hole is closed -- which is the
+  mistake the paragraph above records.
+
+  COMMANDS: approve, reapprove, list, revoke.
+
+  ============================================================================================
+  THE PARAMETER SURFACE OF EVERY VERB (register row 112). THIS BLOCK IS THE AUTHORITY.
+  ============================================================================================
+  The SYNTAX line Get-Help generates above is FLAT -- -Kind, -Id, -Binds, -TipSha, -OriginUrl,
+  -RemoteRef, -ExpiresMinutes, -Reason and -MissionRoot all sit at the top level regardless of
+  verb -- so it cannot tell an operator which parameter belongs to which verb, which are
+  mandatory, or which are simply ignored. It says every parameter is available to every verb,
+  and that is false of all four.
+
+  PARAMETER SETS ARE THE NATIVE MECHANISM AND THEY WERE TRIED AND REJECTED, MEASURED, NOT ASSUMED.
+  Declaring approve/reapprove/revoke/list as four sets over this param block makes Get-Help render
+  one SYNTAX line per set -- but it BREAKS the ratified convention, which is not negotiable.
+  Driven on a probe shaped exactly like this file: `revoke -Kind K -Id I` exits 1 with
+  "Parameter set cannot be resolved using the specified named parameters"
+  (FullyQualifiedErrorId AmbiguousParameterSet), because -Kind and -Id belong to both the approve
+  and the revoke set and nothing in that invocation disambiguates them. Position 0 carries the verb,
+  but a ValidateSet value is not a set discriminator: PowerShell resolves sets from parameter NAMES,
+  never from an argument's value. And even when they resolve, the rendered SYNTAX lines are
+  `[-Command] <string> [-Kind ...]` three times over -- not one of them says which verb it is for.
+  So the mechanism costs every existing call site and does not answer the question either.
+  What follows is therefore written by hand, and the WP-4 instrument asserts it against the real
+  `-?` output rather than against this source text.
+
+    VERB approve     mint ONE gate at <kind>-<id>.yaml. Refuses if any file is already there.
+      mandatory : -Kind -Id -Binds
+      ignored   : -Reason
+
+    VERB reapprove   RE-MINT over the same id in ONE act: revoke the prior, rename it to
+                     <kind>-<id>.revoked-N.yaml at the next free N, then approve. Refuses if the
+                     prior is CONSUMED, if there is no prior, or if -Binds names a different file.
+      mandatory : -Kind -Id -Binds
+      ignored   : (none)
+
+    VERB revoke      withdraw ONE gate by APPENDING revoked_at / revoked_by / revoked_reason.
+                     Never rewrites what was authorized; never renames the file.
+      mandatory : -Kind -Id
+      optional  : -MissionRoot -Reason
+
+    VERB list        print every gate artifact with its state and derived class.
+      mandatory : (none)
+      optional  : -MissionRoot
+
+  WHAT approve RECORDS, and why each field is there:
+    binds / binds_sha256   the artifact this authorization is ABOUT, by hash -- so an approval
+                           cannot be silently re-pointed at different content
+    authorized_tip_sha     for push gates: the exact commit authorized to become origin's tip
+    authorized_by          the invoking host user name -- who, on this machine, said yes
+    created_at/expires_at  an authorization is not open-ended
+
+
+.PARAMETER Command
+
+.PARAMETER Kind
+  The gate kind. Used by approve, reapprove and revoke; IGNORED by list. On revoke and reapprove
+  the ARTIFACT's own `kind:` field is the authority and a mismatch is refused -- a file NAMED for
+
+.PARAMETER Id
+  The gate id. Used by approve, reapprove and revoke; IGNORED by list.
+
+.PARAMETER Binds
+  The ONE file this authorization is about, hashed into binds_sha256. Mandatory for approve and
+  reapprove; IGNORED by revoke and list. Resolved against -MissionRoot, never against the shell's
+  directory. On reapprove it must name THE SAME FILE the prior gate binds; its CONTENT is free to
+  differ, and usually does -- that is what a re-mint is for.
+
+.PARAMETER Reason
+  Why a gate is being withdrawn. Used by revoke and reapprove; IGNORED by approve and list.
+  OPTIONAL by decision, not by omission -- see the note at the parameter itself. When it is absent
+  the artifact records the absence explicitly rather than saying nothing.
+
+.PARAMETER MissionRoot
+  The mission root every mission-scoped path resolves against. Used by all four verbs.
+
+.PARAMETER TipSha
+  The exact commit a push gate authorizes. Used by approve and reapprove, and only for -Kind push
+  (derived from HEAD when omitted); IGNORED by every other kind and by revoke and list.
+
+.PARAMETER OriginUrl
+  The origin URL a push gate DECLARES (amendment 20). Used by approve and reapprove for -Kind push
+  only; IGNORED otherwise.
+
+.PARAMETER RemoteRef
+  The remote ref a push gate DECLARES. Used by approve and reapprove for -Kind push only; IGNORED
+  otherwise.
+
+.PARAMETER ExpiresMinutes
+  Lifetime of an expiring gate. Used by approve and reapprove; IGNORED by revoke and list, and
+
+.EXAMPLE
+
+.EXAMPLE
+
+.EXAMPLE
+
+.EXAMPLE
+  tools\lam\mission-gate.ps1 list
+#>
+[CmdletBinding()]
+param(
+    # `reapprove` (register row 112). ONE verb for what was THREE operator acts plus a manual file
+    # rename: revoke the prior, move it to <kind>-<id>.revoked-N.yaml at the next free N, approve
+    # over the same binds. The record contains ELEVEN revoked artifacts across SEVEN gate ids, so
+    # this dance has been performed by hand eleven times -- and the evidence that it is unguarded is
+    # on disk: dispatch-v-r-s3-r1.revoked-1.yaml carries NO revoked_at at all. It was renamed out of
+    # the way and never revoked, because the rename is the operator's act and nothing checks that
+    # the revoke half happened. `reapprove` is the ONLY place in this tool that renames a gate.
+    [Parameter(Mandatory = $true, Position = 0)]
+    [ValidateSet('approve','reapprove','list','revoke')]
+    [string]$Command,
+
+    # `supersession` (AM-457 as revised by Ruling A2): ratifies ONE *.superseded.yaml marker by
+    # binding its sha256. The runner honours a marker's skip ONLY against a matching gate of this
+    # kind. The provenance source has to be an artifact an agent CANNOT mint -- because a registry
+    # the agent writes would reintroduce, one layer up, exactly the hole that ratifying markers is
+    # meant to close.
+    #
+    # WHAT MAKES IT UNMINTABLE IS RESTATED HERE BECAUSE THE OLD SENTENCE NAMED THE WRONG MECHANISM
+    # (register row 165). It read "T-3 hard-denies every agent role from writing under the gates
+    # directory", and `.mission/gates` is in no `$EvidenceProtectedPaths` list -- see the
+    # .DESCRIPTION block above for what was measured. The unmintability now rests FIRST on this
+    # tool's own refusal (the human-only check below, which runs before any verb mutates anything)
+    # and SECOND on the guard's mint tripwire `Test-EvidenceGateToolMutation` (register row 135),
+    # which is a tripwire and not a boundary and is only present inside a harness session.
+    # `completion-acceptance` (amendment 23, ruling D): accepts ONE package's verdict on the
+    # strength of its registered residuals, by binding the residual manifest's sha256. Governance
+    # class; permanent until revoked, because an acceptance is a recorded ruling and not a capability.
+    # `reclose` (register row 142, operator ruling of 2026-09-08 (3)): authorizes ONE Reworking ->
+    # Complete transition (ADR-029) by binding the re-closure's LEDGER CONTENT FILE by sha256 -- the
+    # file mission-reclose.ps1 is passed as -LedgerContentFile and appends verbatim to the ledger.
+    # It exists because the two re-closures that have been gated so far (reclose-44, reclose-45) had
+    # to borrow `completion-acceptance`, whose own lifecycle text is false of them in two places at
+    # once: it asserts a REFUTED package (a reclose's package is MET) and it asserts the artifact
+    # binds docs/framework/LAM-RESIDUALS.md, which neither of them does. Governance class, permanent
+    # until revoked, for the same reason a supersession is.
+    [ValidateSet('push','amendment-material','witness-attested','dispatch','supersession','completion-acceptance','reclose')]
+    [string]$Kind,
+
+    [string]$Id,
+    [string]$Binds,
+    [string]$MissionRoot = '.',
+    [string]$TipSha,
+
+    # AMENDMENT 20 (ruling HALT-25): A PUSH GATE BINDS A TRIPLE, NOT A SHA.
+    #
+    # `.git/config` is ruled an UNPROTECTABLE control surface. Ordinary work writes it
+    # (`git remote add`, `git config user.email`, the runner's own worktrees), so guarding it would
+    # refuse the workflow it protects -- and by AM-418's own logic a tripwire there would record
+    # rather than prevent. Round 12 drove the consequence: repointing `remote.origin.url` at a decoy
+    # bare repo made S-4 report PASS while the real origin held an unauthorized commit. The detector
+    # was reading the attacker's own configuration and calling it evidence.
+    #
+    # So the operator DECLARES the origin at approval time, on the artifact, and every consumer reads
+    # it FROM THE GATE. A later `remote.origin.url` edit then changes nothing: detection asks the
+    # DECLARED origin what it holds. This is the compensating control for a surface that cannot be
+    # guarded, which is a different thing from pretending the surface is safe.
+    [string]$OriginUrl,
+    [string]$RemoteRef,
+
+    # -Reason (register row 112). A revocation recorded revoked_at and revoked_by and NOTHING about
+    # WHY -- so the eleven revoked artifacts on disk say who withdrew an authorization and when, and
+    # a reader reconstructing why has only the surrounding ledger prose, if anyone wrote any.
+    #
+    # IT IS OPTIONAL, AND THAT IS A DECISION WITH A PRICE, STATED. Making it mandatory would refuse
+    # the ratified convention `mission-gate.ps1 revoke -Kind X -Id Y`, which the record uses, which
+    # this build's own instrument drives, and which the row's cure is forbidden to break. It would
+    # also put the tool's ONE refusal in the operator's way at the moment they are trying to WITHDRAW
+    # a capability -- the one direction where a governance tool must never be the obstacle, because
+    # the fail-closed move is to let the withdrawal through.
+    #
+    # SO THE ABSENCE IS RECORDED INSTEAD OF LEFT BLANK. Every revocation this tool writes carries a
+    # `revoked_reason:` line; without -Reason it reads, verbatim,
+    #     (NO REASON GIVEN -- -Reason was not supplied)
+    # which an audit reader can tell apart from an artifact written before the field existed. A field
+    # that is simply absent is indistinguishable from one that was never offered, and those are two
+    # different facts about the operator.
+    [string]$Reason,
+
+    [int]$ExpiresMinutes = 60
+)
+
+$ErrorActionPreference = 'Stop'
+
+# GATE CLASSIFICATION (operator ruling ZP / LAM-ACCEPT amendment 12). The kind -> class map lives
+# in exactly one file and is dot-sourced by both consumers -- this tool, which WRITES the class,
+# and the WP-6 zero-paste member, which READS it. A predicate two consumers share must live in one
+# place: this build already lost a run to a regex that existed twice and disagreed with itself.
+$gateClassLib = Join-Path $PSScriptRoot 'lam-gate-class.ps1'
+if (-not (Test-Path -LiteralPath $gateClassLib)) {
+    Write-Output "mission-gate: the gate-class map is not on disk at $gateClassLib -- refusing to write a gate whose class would be silently absent."
+    exit 2
+}
+. $gateClassLib
+
+trap {
+    Write-Output "mission-gate: UNHANDLED ERROR -- $($_.Exception.Message)"
+    Write-Output "  stack: $(($_.ScriptStackTrace -split "`r?`n") -join ' | ')"
+    exit 9
+}
+
+if (-not (Test-Path -LiteralPath $MissionRoot -PathType Container)) {
+    Write-Output "mission-gate: mission root not found: $MissionRoot"
+    exit 2
+}
+$MissionRoot = (Resolve-Path -LiteralPath $MissionRoot).Path
+$gatesDir = Join-Path $MissionRoot '.mission\gates'
+
+function Get-GatePath {
+    param([string]$K, [string]$I)
+    Join-Path $gatesDir "$K-$I.yaml"
+}
+
+# ONE SPELLING OF THE REVOCATION STAMP, used by `revoke` and by `reapprove`. Restating it would be
+# the fourth instance of this file's oldest defect class -- lam-gate-class.ps1's header records
+# three predicates that existed twice and whose copies disagreed, each time in the permissive
+# direction. The reason text an absent -Reason produces is the tool's DOCUMENTED decision and is
+# asserted by the instrument against this exact string.
+$script:LamNoReasonText = '(NO REASON GIVEN -- -Reason was not supplied)'
+function Get-RevocationStamp {
+    param([AllowNull()][string]$Why)
+    $r = if ($Why) { $Why } else { $script:LamNoReasonText }
+    # ONE LINE, AND YAML-SAFE. A reason carrying a newline would split the mapping and a reason
+    # carrying a quote or a backslash would end the scalar early -- on an artifact whose whole value
+    # is that a consumer can parse it. Collapsed and escaped here rather than trusted.
+    $r = ($r -replace '\r?\n', ' ').Trim()
+    $r = $r.Replace('\', '\\').Replace('"', '\"')
+    $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+    return "revoked_at: $ts`nrevoked_by: $env:USERNAME`nrevoked_reason: `"$r`"`n"
+}
+
+# =================================================================================================
+# T-3, TRUE BY CONSTRUCTION (register row 165). THE FIRST LAYER; THE GUARD TRIPWIRE IS THE SECOND.
+# =================================================================================================
+# The .DESCRIPTION above records what was false and what was measured. This is the code that makes
+# the sentence true: every gate-MUTATING verb refuses when the session is not an operator's, and it
+# refuses BEFORE the gates directory is created and before any byte is written, renamed or appended.
+#
+# ALLOWLIST THE READ VERB, NEVER BLACKLIST THE MUTATORS -- the same shape the guard's own row-135
+# block argues for, and for the same reason: `[ValidateSet('approve','reapprove','list','revoke')]`
+# at the top of this file is exactly the kind of list that grows, and a blacklist of today's three
+# mutators would admit tomorrow's fourth in silence. `list` is named; everything else is gated.
+#
+# NO OVERRIDE IS PROVIDED, AND THAT IS DELIBERATE. Any environment variable an operator could set to
+# bypass this is a variable an agent can set more cheaply than it can satisfy the conditions -- the
+# bypass would be strictly easier than the thing bypassed, which is the definition of a hole. An
+# operator who needs to mint runs the tool from their own terminal, which is the act the whole
+# control exists to require. The cost is stated rather than argued away: a legitimate operator on a
+# genuinely non-interactive channel (an unattended CI job, a piped-stdin shell, a remote session
+# with no console) is refused and has to re-run from a console. That is the fail-closed direction.
+#
+# WHAT EACH PREDICATE WAS MEASURED TO DO, because two of the obvious ones cannot tell the cases
+# apart and shipping one that cannot would be this build's own overclaim:
+#   [Environment]::UserInteractive   True in BOTH an operator console AND an agent-launched child.
+#                                    IT DOES NOT DISTINGUISH THEM. It is still consulted, because a
+#                                    False is conclusive (a service or a window-station-less host),
+#                                    but it is never the only thing asked.
+#   [Console]::IsInputRedirected     False in an operator console; True in a child whose stdin the
+#                                    parent redirected. THIS IS THE ONE THAT DISTINGUISHES, driven
+#                                    both ways.
+#   [Console]::KeyAvailable          Returns in a console; THROWS where there is no console input
+#                                    buffer. Corroborates the same underlying fact by a second
+#                                    route, which is why both are asked rather than one.
+$script:LamGateMutatingVerbs = @('approve','reapprove','revoke')
+
+# THE HARNESS SESSION MARKERS, DERIVED FROM SOURCES AND FROM A LIVE SESSION, NOT GUESSED.
+# CLAUDECODE / CLAUDE_CODE_SESSION_ID / CLAUDE_CODE_ENTRYPOINT were read out of the environment of
+# a child process the harness actually spawned. CLAUDE_PROJECT_DIR is handled separately, under the
+# hook condition, because that is where it belongs: the installed hook commands in
+# .claude/settings.json are written in terms of it and the guard library reads it as the hook-side
+# repo root (tools/framework/hooks/lib/evidence-common.ps1:37-38), while an ordinary agent-spawned
+# shell does not carry it -- measured absent.
+$script:LamHarnessSessionVars = @('CLAUDECODE','CLAUDE_CODE_SESSION_ID','CLAUDE_CODE_ENTRYPOINT')
+
+function Test-LamHookAncestry {
+    <#
+      IS THIS PROCESS, OR AN ANCESTOR OF IT, A HOOK SCRIPT?
+
+      A `.ps1` sitting DIRECTLY inside a `hooks` directory, which is the shape every installed entry
+      point has (tools/evidence-hooks-next/hooks/evidence-guard-pretooluse.ps1 and its siblings).
+      Narrowed to a direct child on purpose: `hooks/lib/evidence-common.ps1` is a library, not an
+      entry point, and matching it would refuse an operator whose shell merely dot-sourced one.
+
+      THE CURRENT PROCESS IS SCANNED TOO, NOT ONLY ITS ANCESTORS. A hook that invoked this tool with
+      the call operator would run it IN ITS OWN PROCESS -- no child is created, so an ancestors-only
+      walk would see nothing at all.
+
+      FAILS OPEN ONLY INTO THE OTHER THREE CONDITIONS, NEVER INTO AN ALLOW. If the CIM query is
+      unavailable this returns no reason, and the harness, dispatch and interactivity conditions are
+      untouched -- they are what actually catch every case this build has driven.
+    #>
+    $hookPattern = '(?i)[\\/]hooks[\\/][^\\/]+\.ps1'
+    try {
+        $procId = $PID
+        for ($depth = 0; $depth -lt 6; $depth++) {
+            if (-not $procId -or $procId -le 0) { break }
+            $proc = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId = " + $procId) -ErrorAction Stop
+            if (-not $proc) { break }
+            $cmdLine = [string]$proc.CommandLine
+            if ($cmdLine -and ($cmdLine -match $hookPattern)) {
+                return ("a " + $(if ($depth -eq 0) { 'process' } else { 'parent process' }) +
+                        " in this invocation's chain is a hook entry point: " + $proc.Name +
+                        " (pid " + $procId + ")")
+            }
+            $procId = [int]$proc.ParentProcessId
+        }
+    } catch {
+        return $null
+    }
+    return $null
+}
+
+function Get-LamNonOperatorConditions {
+    <#
+      EVERY CONDITION THAT FIRED, NOT THE FIRST ONE. Returning on the first match would make the
+      refusal text depend on evaluation order, and the instrument has to be able to drive each
+      condition SEPARATELY and read its own name back out of the message.
+    #>
+    $found = New-Object System.Collections.Generic.List[string]
+
+    # (i) THE RUNNER'S DISPATCHED-WORKER MARKER.
+    if ($env:LAM_DISPATCH) {
+        [void]$found.Add("LAM_DISPATCH -- this process carries the runner's dispatched-worker marker (LAM_DISPATCH='$env:LAM_DISPATCH'). A dispatched worker is an agent by construction.")
+    }
+
+    # (ii) THE HARNESS'S SESSION ENVIRONMENT.
+    $harnessHits = @()
+    foreach ($varName in $script:LamHarnessSessionVars) {
+        $varValue = [Environment]::GetEnvironmentVariable($varName)
+        if ($varValue) { $harnessHits += $varName }
+    }
+    if ($harnessHits.Count -gt 0) {
+        [void]$found.Add("HARNESS-SESSION -- the agent harness's session environment is present in this process (" + ($harnessHits -join ', ') + "). Every process the harness spawns inherits these, so a gate minted here would be minted by the session, not by a person.")
+    }
+
+    # (iii) THE SESSION IS NOT INTERACTIVE.
+    $interactiveNotes = @()
+    if (-not [Environment]::UserInteractive) {
+        $interactiveNotes += '[Environment]::UserInteractive is False'
+    }
+    $inputRedirected = $true
+    try { $inputRedirected = [Console]::IsInputRedirected } catch { $inputRedirected = $true }
+    if ($inputRedirected) { $interactiveNotes += '[Console]::IsInputRedirected is True (stdin is a pipe or a file, not a console)' }
+    $consoleInputUsable = $true
+    try { $null = [Console]::KeyAvailable } catch { $consoleInputUsable = $false }
+    if (-not $consoleInputUsable) { $interactiveNotes += '[Console]::KeyAvailable throws (there is no console input buffer)' }
+    if ($interactiveNotes.Count -gt 0) {
+        [void]$found.Add("NOT-INTERACTIVE -- no operator is at this console: " + ($interactiveNotes -join '; ') + ". A gate is a human touchpoint, so a session nobody is sitting at cannot make one.")
+    }
+
+    # (iv) INVOKED FROM A HOOK.
+    $hookNotes = @()
+    if ($env:CLAUDE_PROJECT_DIR) {
+        $hookNotes += "CLAUDE_PROJECT_DIR is set ('$env:CLAUDE_PROJECT_DIR') -- the harness defines it for hook commands and the guard library reads it as the hook-side repo root"
+    }
+    $ancestry = Test-LamHookAncestry
+    if ($ancestry) { $hookNotes += $ancestry }
+    if ($hookNotes.Count -gt 0) {
+        [void]$found.Add("HOOK-INVOCATION -- this looks like a hook's invocation: " + ($hookNotes -join '; ') + ". A hook runs on the harness's behalf, so it is not the human either. STATED BOUND: CLAUDE_PROJECT_DIR is also set by tools/lam/mission-dispatch.ps1 for a dispatched worker, so this condition is a SUPERSET of 'from a hook' -- which refuses more, never less.")
+    }
+
+    $result = $found.ToArray()
+    return , $result
+}
+
+if ($script:LamGateMutatingVerbs -contains $Command) {
+    $nonOperator = Get-LamNonOperatorConditions
+    $nonOperator = @($nonOperator)
+    if ($nonOperator.Count -gt 0) {
+        Write-Output "mission-gate: REFUSED -- '$Command' is a GATE-MUTATING verb and this session is not an operator's."
+        Write-Output "  A gate artifact IS the human touchpoint (design v2.3 SS10.5 / ADR-033, LAM-ACCEPT T-3). An agent"
+        Write-Output "  that could mint, re-mint or withdraw one would be authorizing -- or disarming -- its own"
+        Write-Output "  irreversible act, so this tool refuses the act rather than pointing at a guard to refuse it."
+        Write-Output "  NOTHING WAS WRITTEN: no gates directory was created, no artifact minted, renamed or appended."
+        Write-Output "  CONDITIONS THAT FIRED ($($nonOperator.Count)):"
+        foreach ($condition in $nonOperator) { Write-Output "    - $condition" }
+        Write-Output "  'list' is unaffected and so is '-?'. To mint, re-mint or revoke, run this tool yourself from"
+        Write-Output "  your own terminal. There is no override flag and no environment variable that bypasses this:"
+        Write-Output "  any such switch would be easier for an agent to set than the conditions it bypasses."
+        Write-Output "  SECOND LAYER, UNCHANGED: Test-EvidenceGateToolMutation in the evidence guard (register row 135)"
+        Write-Output "  denies a harness-side command that invokes this tool with any verb but 'list'."
+        exit 3
+    }
+}
+
+switch ($Command) {
+
+    'list' {
+        if (-not (Test-Path -LiteralPath $gatesDir)) {
+            Write-Output "mission-gate: no gates directory at $gatesDir"
+            exit 0
+        }
+        $any = $false
+        foreach ($f in @(Get-ChildItem -LiteralPath $gatesDir -File -Filter '*.yaml' -ErrorAction SilentlyContinue)) {
+            $any = $true
+            $t = [System.IO.File]::ReadAllText($f.FullName)
+            # open / REVOKED / CONSUMED comes from the ONE shared predicate. It used to live here
+            # AND in mission-goal-check's gate_present detector, and the two copies disagreed: this
+            # one carried the load-bearing (?!null), that one did not, so that one reported every
+            # fresh gate as consumed and could never pass. One definition, every consumer.
+            $state = (Get-LamGateState -Path $f.FullName).state
+            $tip = if ($t -match '(?m)^authorized_tip_sha:[ \t]*(\S+)') { $Matches[1] } else { '-' }
+            # Class is DERIVED at read time (ruling ZP), so gates written before the field existed
+            # list correctly without anybody editing an audit artifact after the fact.
+            $cls = (Get-LamGateClassForArtifact -Path $f.FullName).class
+            Write-Output ("{0,-34} {1,-9} {2,-20} tip={3}" -f $f.BaseName, $state, $cls, $tip)
+        }
+        if (-not $any) { Write-Output "mission-gate: no gate artifacts in $gatesDir" }
+        exit 0
+    }
+
+    'revoke' {
+        if (-not $Kind -or -not $Id) { Write-Output 'mission-gate: revoke needs -Kind and -Id'; exit 2 }
+        $p = Get-GatePath -K $Kind -I $Id
+        if (-not (Test-Path -LiteralPath $p)) { Write-Output "mission-gate: no gate at $p"; exit 2 }
+        $t = [System.IO.File]::ReadAllText($p)
+        # THE ARTIFACT IS THE AUTHORITY ON ITS OWN KIND, AND REVOKE ADDRESSES BY FILENAME.
+        # `revoke -Kind dispatch -Id X` opened whatever sat at `dispatch-X.yaml` and revoked it. If
+        # that file declares `kind: push`, the operator has just revoked a PUSH authorization while
+        # the tool reports "revoked dispatch-X" -- they believe one capability is withdrawn and a
+        # different one actually is. Both halves are wrong: the gate they meant to close stays open,
+        # and the record says something that did not happen.
+        #
+        # `approve` cannot hit this (it WRITES the kind and refuses to overwrite an existing gate),
+        # which is why enumerating the class mattered rather than fixing "gates" in general: this
+        # sub-command is the only member here, and it is the destructive one.
+        $declared = (Get-LamGateClassForArtifact -Path $p).kind
+        if ($declared -and ($declared -ne $Kind)) {
+            Write-Output "mission-gate: REFUSED -- the artifact at $p declares 'kind: $declared', not '$Kind'. A file NAMED for a kind is not a gate of that kind, and revoking it under the wrong name would withdraw a capability you did not mean to touch while recording one you did. Revoke it as '$declared', or fix the filename."
+            exit 2
+        }
+        if (-not $declared) {
+            Write-Output "mission-gate: REFUSED -- the artifact at $p declares no kind at all, so there is nothing to check '$Kind' against. A gate whose own face does not say what it is cannot be revoked by name."
+            exit 2
+        }
+        # THE SHARED PREDICATE, NOT A THIRD COPY OF IT. This line restated revocation as
+        # `^revoked_at:\s*\S` -- WITHOUT the `(?!null)` that `Get-LamGateState` carries and that
+        # `list` two blocks above already relies on. A gate carrying the literal `revoked_at: null`
+        # -- which every hand-written gate does, because LAM-INSTALL's snippets and the runner's own
+        # supersession lookup both treat that as the normal UNREVOKED state -- read as ALREADY
+        # REVOKED here. Revoke then reported success and exited 0 having changed nothing.
+        #
+        # That is the operator's only withdrawal mechanism silently failing, and for a `supersession`
+        # gate it is the ONLY one there is: the runner deliberately does not consult expiry, so a
+        # ratification that cannot be revoked cannot be taken back at all.
+        #
+        # THIRD INSTANCE OF ONE DEFECT. `consumed_at` had exactly this shape twice -- once in
+        # `gate_present`, once here -- and both times the fix was to stop restating the predicate.
+        # Caught by the CONTROL row of a member written for a different fix, which is the only
+        # reason it was found: the refusal half passed, and a member without its control would have
+        # reported green.
+        if ((Get-LamGateState -Path $p).revoked) { Write-Output "mission-gate: $Kind-$Id is already revoked"; exit 0 }
+        # Revocation APPENDS. The record of what was authorized is never rewritten away -- a gate
+        # is an audit artifact first and a permission second. -Reason joins the appended block
+        # (register row 112) and does not disturb one byte above it.
+        $t = $t.TrimEnd() + "`n" + (Get-RevocationStamp -Why $Reason)
+        [System.IO.File]::WriteAllText($p, $t, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Output "mission-gate: revoked $Kind-$Id"
+        if ($Reason) {
+            Write-Output "  reason   : $Reason"
+        } else {
+            Write-Output "  reason   : $script:LamNoReasonText"
+            Write-Output "  NOTE: -Reason is optional and its absence is now RECORDED on the artifact rather than left blank."
+        }
+        Write-Output "  NOTE: revoke does not rename the file. To re-mint over this id in one act, use 'reapprove'."
+        exit 0
+    }
+
+    # APPROVE AND REAPPROVE SHARE ONE PATH, DELIBERATELY (register row 112). A re-mint that ran a
+    # SECOND copy of the mint logic would be a gate written by machinery no member of this build
+    # drives -- and every refusal approve carries (the wildcard -Binds, the drive-relative path, the
+    # directory, the locked file, the unmapped kind, the push gate with no declared origin) would
+    # have to be restated to hold for it. They are not restated: reapprove is approve, with a prior.
+    { @('approve','reapprove') -contains $_ } {
+        $isReapprove = ($Command -eq 'reapprove')
+        $verb = $Command
+        if (-not $Kind -or -not $Id) { Write-Output "mission-gate: $verb needs -Kind and -Id"; exit 2 }
+        if (-not $Binds) { Write-Output "mission-gate: $verb needs -Binds <path> -- an authorization that binds nothing authorizes everything"; exit 2 }
+        # A GATE IS A STATEMENT ABOUT A MISSION, NOT ABOUT A SHELL (V-1 round 14, orchestrator,
+        # driven while building the round's falsification harness). Both the existence check and
+        # the hash below resolved `-Binds` against the PROCESS CWD, while every other mission-scoped
+        # path in this build resolves against `-MissionRoot`.
+        #
+        # The refusal is the harmless half. The harmful half is silent: with the operator's shell
+        # standing in a directory that happens to hold a file of that name, this check PASSES and
+        # `binds_sha256` is computed over a DIFFERENT FILE THAN THE GATE NAMES -- and that field is
+        # what mission-dispatch compares, on an artifact HALT-26 rules immutable. An authorization
+        # for the wrong bytes, unamendable by construction.
+        #
+        # S7, instance EIGHT. mission-goal-check's `file_exists` detector carries this same cure with
+        # a comment dated V-1 round 3 -- "Every other detector is mission-scoped; this one silently
+        # answered about whatever directory the evaluator happened to be launched from". The class
+        # was named eleven rounds ago and the MINT path was never enumerated against it, which is
+        # E56 in the plainest form the build has produced.
+        # "ROOTED" IS NOT "FULLY QUALIFIED", AND THE DIFFERENCE MINTED A GATE FOR THE WRONG FILE
+        # (V-1 round 15, WP-4 Q2, driven). `[IO.Path]::IsPathRooted` returns True for `C:e.txt` --
+        # the current directory OF DRIVE C -- and for `\dir\file.txt`, the current DRIVE's root.
+        # Both are relative to per-process state, so both skipped the mission-root join: with the
+        # shell in one directory and -MissionRoot in another, `-Binds C:e.txt` minted successfully
+        # and bound the SHELL-side file, recording `binds_resolved: C:e.txt` -- a string that
+        # identifies no determinate file. On an artifact HALT-26 rules immutable.
+        #
+        # RESTATED FROM `Test-EvidencePathIsFullyQualified` IN THE HOOKS LIBRARY, WHICH IS THE
+        # AUTHORITY. This tool is on the other plane -- it dot-sources lam-gate-class.ps1 only -- and
+        # dot-sourcing the guard library into an operator CLI to share one predicate would drag
+        # Set-StrictMode and the whole guard surface with it. The duplication is therefore
+        # deliberate and is marked, rather than left for a later reader to discover the way the
+        # origin read and the gate-state predicate were.
+        # THE INPUT IS VALIDATED BEFORE ANY PATH CALL TOUCHES IT (V-1 round 16, WP-4 F1, driven).
+        # Catching around the join was not enough: `*` and `?` reached the join and were caught, but
+        # `<` and `|` still exited 9, because an EARLIER path call throws on them first. Chasing
+        # which call throws is the wrong shape -- the question is whether this string can name ONE
+        # FILE AT ALL, and that is answerable before anything tries to resolve it.
+        #
+        # A gate binds one file BY HASH, so a wildcard cannot be bound even in principle: it names a
+        # set. Checking first means every unusable shape produces the SAME refusal rather than
+        # whichever exception the first path call happens to raise -- which is the difference
+        # between a refusal and a crash, and the reason this finding existed at all.
+        $badChars = @([IO.Path]::GetInvalidPathChars()) + @([char]'*', [char]'?')
+        $offending = @($badChars | Where-Object { $Binds.IndexOf($_) -ge 0 } | Sort-Object -Unique)
+        if ($offending.Count -gt 0) {
+            $shown = (@($offending | ForEach-Object {
+                $code = [int][char]$_
+                if ($code -lt 32) { 'chr(' + $code + ')' } else { "'" + $_ + "'" }
+            }) -join ', ')
+            Write-Output "mission-gate: REFUSING -- -Binds '$Binds' cannot name a single file."
+            Write-Output "  Offending character(s): $shown"
+            Write-Output '  A gate binds ONE file by hash. A wildcard names a set, and the rest are not legal in a'
+            Write-Output '  Windows path at all. Pass a single mission-relative or fully qualified path.'
+            exit 2
+        }
+        $bindsResolved = $Binds
+        $fullyQualified = [bool]([regex]::IsMatch($Binds, '^[A-Za-z]:[\\/]') -or [regex]::IsMatch($Binds, '^[\\/][\\/]'))
+        # A DRIVE-RELATIVE PATH IS REFUSED, NOT REPAIRED. `C:e.txt` is the current directory OF
+        # DRIVE C and `\dir\f` is the current DRIVE's root -- both per-process state, so no root
+        # this tool holds resolves them to a determinate file. The first draft of this cure joined
+        # them against -MissionRoot anyway, which builds an invalid path and made GetFullPath THROW:
+        # fail-closed by accident, as an unhandled exception rather than a refusal, which tells the
+        # operator nothing and reads as a broken tool rather than a rejected input.
+        if ((-not $fullyQualified) -and [IO.Path]::IsPathRooted($Binds)) {
+            Write-Output "mission-gate: REFUSING -- -Binds '$Binds' is DRIVE-RELATIVE, not a determinate file."
+            Write-Output '  A path of the form C:name, or one beginning with a single separator, is anchored to'
+            Write-Output '  per-process state, so which file it names depends on the shell that ran this command.'
+            Write-Output '  Pass a mission-relative path, or a fully qualified one.'
+            exit 2
+        }
+        if (-not $fullyQualified) {
+            # AND THE JOIN IS GUARDED, BECAUSE THE rc-9 CLASS WAS NOT CLOSED -- ONLY ITS
+            # DRIVE-RELATIVE INSTANCE (V-1 round 16, WP-4 F1, driven). The refusal above removes one
+            # input family from this call; every other non-rooted -Binds still reaches it, and
+            # GetFullPath throws on a path containing characters Windows forbids. The script trap
+            # then converts that into UNHANDLED ERROR plus a stack trace and exit 9.
+            #
+            # `-Binds 'notes*.md'` and `-Binds 'who?.txt'` both did exactly that -- and a WILDCARD is
+            # the first thing an operator reaches for. Fail-closed, so the harm is diagnostic only,
+            # but it is precisely the outcome the commit that introduced the refusal named
+            # unacceptable: "it crashed" and "it refused" are different outcomes and only one of them
+            # tells the operator anything. That commit's own SCOPE paragraph covered IsPathRooted and
+            # not this.
+            try {
+                $bindsResolved = [IO.Path]::GetFullPath((Join-Path $MissionRoot $Binds))
+            } catch {
+                Write-Output "mission-gate: REFUSING -- -Binds '$Binds' is not a usable path: $($_.Exception.Message)"
+                Write-Output "  A gate binds ONE file by hash. Wildcards and characters Windows forbids in a path"
+                Write-Output "  cannot name one file, so there is nothing to bind. Pass a single mission-relative or"
+                Write-Output "  fully qualified path."
+                exit 2
+            }
+        }
+        if (-not (Test-Path -LiteralPath $bindsResolved)) {
+            Write-Output "mission-gate: the bound artifact is not on disk: $Binds"
+            Write-Output "  resolved against -MissionRoot '$MissionRoot' to: $bindsResolved"
+            Write-Output "  (relative -Binds is mission-scoped, NOT relative to your shell's directory)"
+            Write-Output "  -MissionRoot is the RESOLUTION BASE, not a boundary: '..\\outside.txt' resolves and mints."
+            Write-Output "  What a gate binds is recorded by sha256, so a file outside the mission is bound honestly;"
+            Write-Output "  containment is not claimed here and no consumer infers it (V-1 round 17, WP-4 V17-WP4-06)."
+            exit 2
+        }
+        # AND IS IT A FILE? `Test-Path` IS TRUE OF DIRECTORIES (V-1 round 17, WP-4 V17-WP4-01,
+        # driven). `-Binds sub`, `-Binds .` and `-Binds sub\` all reached `Get-FileHash` below,
+        # which returns nothing for a directory, so `.Hash.ToLowerInvariant()` threw and the tool
+        # exited 9 with a stack trace.
+        #
+        # Fail-closed, and still wrong in the way E112 names: a CRASH is not a refusal. It tells the
+        # operator nothing about what to fix, it is indistinguishable from the tool being broken,
+        # and exit 9 is fail-closed BY ACCIDENT rather than by decision (E105).
+        #
+        # THE ROUND-16 CURE ANSWERED A NARROWER QUESTION THAN ITS OWN RATIONALE CLAIMED. It validated
+        # the input for wildcards and characters Windows forbids, under the heading "can this string
+        # name ONE FILE at all" -- which a directory path passes at the character level and fails in
+        # fact. Same question, one layer down: the string is a legal path, and the path is not a file.
+        if (-not (Test-Path -LiteralPath $bindsResolved -PathType Leaf)) {
+            Write-Output "mission-gate: REFUSING -- -Binds '$Binds' names a DIRECTORY, not a file."
+            Write-Output "  resolved against -MissionRoot '$MissionRoot' to: $bindsResolved"
+            Write-Output "  A gate binds ONE artifact and records its sha256; a directory has none."
+            exit 2
+        }
+
+        if (-not (Test-Path -LiteralPath $gatesDir)) { New-Item -ItemType Directory -Path $gatesDir -Force | Out-Null }
+        $p = Get-GatePath -K $Kind -I $Id
+        $priorExists = Test-Path -LiteralPath $p
+
+        # =========================================================================================
+        # THE PRIOR (register row 112). EVERY REFUSAL BELONGING TO THE RE-MINT IS DECIDED HERE, AND
+        # HERE IS BEFORE ANY MUTATION. Nothing on disk moves until the whole artifact has been built.
+        # =========================================================================================
+        $priorText  = $null
+        $priorState = $null
+        if (-not $isReapprove) {
+            if ($priorExists) {
+                Write-Output "mission-gate: a gate already exists at $p. Revoke it before re-approving -- overwriting an authorization silently is how a consumed one comes back to life."
+                Write-Output "  To re-mint over this id in ONE act -- revoke, rename to .revoked-N, approve -- run 'reapprove' with the same arguments."
+                exit 2
+            }
+        } else {
+            # (1) A RE-MINT IS NOT A FIRST MINT. Without a prior there is nothing to supersede, and
+            #     silently behaving like `approve` would make the verb a synonym an operator could
+            #     reach for by habit -- which is how a first authorization gets minted by a command
+            #     whose name says something already existed.
+            if (-not $priorExists) {
+                Write-Output "mission-gate: REFUSED -- reapprove found no gate at $p."
+                Write-Output "  reapprove RE-MINTS over an existing authorization: it revokes the prior, renames it to"
+                Write-Output "  $Kind-$Id.revoked-N.yaml and approves in its place. There is no prior here, so there is"
+                Write-Output "  nothing to revoke and nothing to rename. Use 'approve' to mint the first gate for this id."
+                exit 2
+            }
+            $priorText = [System.IO.File]::ReadAllText($p)
+            # (2) THE ARTIFACT IS THE AUTHORITY ON ITS OWN KIND -- revoke's rule, and reapprove
+            #     revokes, so it inherits the rule rather than restating a weaker one. A file NAMED
+            #     for one kind that declares another would otherwise be revoked-and-renamed under a
+            #     name the operator did not mean to touch, and re-minted as something it never was.
+            $priorKind = (Get-LamGateClassForArtifact -Path $p).kind
+            if (-not $priorKind) {
+                Write-Output "mission-gate: REFUSED -- the artifact at $p declares no kind at all, so there is nothing to check '$Kind' against. A gate whose own face does not say what it is cannot be re-minted by name."
+                exit 2
+            }
+            if ($priorKind -ne $Kind) {
+                Write-Output "mission-gate: REFUSED -- the artifact at $p declares 'kind: $priorKind', not '$Kind'. reapprove REVOKES the prior, so it would withdraw a capability you did not mean to touch and mint a different one in its place. Re-mint it as '$priorKind', or fix the filename."
+                exit 2
+            }
+            # (3) THE CENTRAL REFUSAL. A CONSUMED AUTHORIZATION WAS SPENT.
+            #     approve's own refusal already names the hazard -- "overwriting an authorization
+            #     silently is how a consumed one comes back to life" -- and a verb that renames the
+            #     prior out of the way and mints over it is EXACTLY that overwrite, performed
+            #     politely. The consumption record would still exist under a .revoked-N name, so
+            #     nothing would be lost from the audit trail; what would be lost is the guarantee,
+            #     because a fresh unconsumed gate would stand at the canonical path that a spent one
+            #     occupied, and every consumer reads the canonical path. single_use enforced by the
+            #     hook means nothing if the operator can re-mint past it with one command.
+            #     Withdrawing a spent authorization is `revoke`; issuing a NEW capability after one
+            #     was used is a NEW id, and the operator states that intent by typing it.
+            $priorState = Get-LamGateState -Path $p
+            if ($priorState.consumed) {
+                Write-Output "mission-gate: REFUSED -- the gate at $p is CONSUMED."
+                Write-Output "  A consumed authorization was SPENT. Re-minting over it would resurrect a capability that"
+                Write-Output "  has already been used: the prior would move to a .revoked-N name and a FRESH, unconsumed"
+                Write-Output "  gate would stand at the canonical path every consumer reads. That is the hazard approve's"
+                Write-Output "  own refusal names -- overwriting an authorization silently is how a consumed one comes"
+                Write-Output "  back to life -- performed politely instead of silently, which does not make it safe."
+                Write-Output "  If the capability is genuinely needed again, that is a NEW authorization: mint a new id."
+                exit 2
+            }
+            # (4) WHAT "THE SAME BINDS" MEANS, DECIDED AND DISCLOSED.
+            #     -Binds is MANDATORY on reapprove and must name THE SAME FILE the prior binds. Its
+            #     CONTENT is deliberately free to differ, and normally does: that is the whole reason
+            #     re-mints exist. The record settles it -- AM-463 v2 (ledger 1297) re-minted
+            #     amendment-material-am-463 over the SAME path
+            #     .mission\amendments\AM-463-bypass-era-admission.yaml while binds_sha256 moved
+            #     verb that required the digest to match would have refused the only re-mint the
+            #     record documents field by field. Every one of the seven re-minted ids on disk shows
+            #     the same shape: identical `binds:` across the live gate and its .revoked-N siblings.
+            #     THE PATH IS HELD BECAUSE THE ALTERNATIVE IS A SILENT RE-POINT, which is precisely
+            #     what binds_sha256 exists to prevent ("an approval cannot be silently re-pointed at
+            #     different content"). A re-mint that also changed WHICH file is bound is not a
+            #     re-mint of this authorization; it is a different authorization wearing its id, and
+            #     the operator can still perform it with the three-act manual form, which this verb
+            #     does not remove.
+            $priorBinds = ''
+            if ($priorText -match '(?m)^binds:[ \t]*(.+?)[ \t]*\r?$') { $priorBinds = $Matches[1] }
+            $priorBindsResolved = ''
+            if ($priorText -match '(?m)^binds_resolved:[ \t]*(.+?)[ \t]*\r?$') { $priorBindsResolved = $Matches[1] }
+            $priorBindsSha = ''
+            if ($priorText -match '(?m)^binds_sha256:[ \t]*(\S+)') { $priorBindsSha = $Matches[1] }
+            # Normalized for separator and case only -- Windows path equality, not string equality.
+            # `.mission/dispatches/X.yaml` and `.mission\dispatches\X.yaml` are the same file and an
+            # operator types both; a refusal over a slash would be a refusal about nothing.
+            $normPrior = ($priorBinds -replace '/', '\').Trim().TrimEnd('\').ToLowerInvariant()
+            $normGiven = ($Binds      -replace '/', '\').Trim().TrimEnd('\').ToLowerInvariant()
+            $sameBinds = ($normPrior -ne '') -and ($normPrior -eq $normGiven)
+            if ((-not $sameBinds) -and $priorBindsResolved) {
+                # The operator may spell it fully qualified where the prior recorded a relative path,
+                # or the reverse. Both resolve to one absolute file, and that is the real comparison.
+                $sameBinds = (($priorBindsResolved -replace '/', '\').Trim().TrimEnd('\').ToLowerInvariant() -eq
+                              ($bindsResolved      -replace '/', '\').Trim().TrimEnd('\').ToLowerInvariant())
+            }
+            if (-not $sameBinds) {
+                Write-Output "mission-gate: REFUSED -- reapprove must bind THE SAME FILE the prior gate binds."
+                Write-Output "  prior binds : $priorBinds"
+                Write-Output "  you passed  : $Binds"
+                Write-Output "  A re-mint exists because the bound file's BYTES changed -- its content is free to differ"
+                Write-Output "  and normally does. Which FILE is bound is not: re-pointing an id at different content is"
+                Write-Output "  exactly what binds_sha256 exists to prevent. If you mean a different file, that is a"
+                Write-Output "  different authorization: mint a new id, or perform the revoke / rename / approve by hand."
+                exit 2
+            }
+        }
+
+        # A FILE ANOTHER PROCESS HOLDS OPEN IS A REFUSAL, NOT A CRASH (V-1 round 19, WP-4 F2, driven).
+        # This line was `Get-FileHash` with no guard, so a locked artifact surfaced as
+        # "UNHANDLED ERROR" and exit 9 -- fail-closed BY ACCIDENT rather than by decision, which is
+        # this script's own phrase about a different defect forty lines up (E105).
+        #
+        # AND THE SHARE MODE IS THE OTHER HALF. Share modes are checked in BOTH directions: the
+        # reader's requested access must be allowed by the holder's share mode, and the reader's own
+        # share mode must allow the access the holder already has. Get-FileHash asks for
+        # FileShare::Read, which does not admit a holder's WRITE handle -- so the ordinary "a log is
+        # being appended to" case failed too. Driven: holder with FileAccess::ReadWrite and
+        # FileShare::Read gave exit 9 under Get-FileHash and mints through the stream below. The
+        # finding predicted that case already worked; it did not.
+        #
+        # THE DIGEST IS UNCHANGED. `binds_sha256` is recorded in live gate artifacts, so a different
+        # digest here would silently invalidate every existing binding. Asserted byte-equal to
+        # Get-FileHash's output on an ordinary file.
+        $bindsSha = $null
+        try {
+            $bindsStream = New-Object System.IO.FileStream(
+                $bindsResolved,
+                [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::Read,
+                ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+            try {
+                $bindsHasher = [System.Security.Cryptography.SHA256]::Create()
+                try {
+                    $bindsSha = ([BitConverter]::ToString($bindsHasher.ComputeHash($bindsStream))).Replace('-', '').ToLowerInvariant()
+                } finally { $bindsHasher.Dispose() }
+            } finally { $bindsStream.Dispose() }
+        } catch {
+            Write-Output "mission-gate: REFUSING -- -Binds '$Binds' names a file that cannot be READ right now."
+            Write-Output "  resolved against -MissionRoot '$MissionRoot' to: $bindsResolved"
+            Write-Output "  $($_.Exception.Message)"
+            Write-Output "  A gate records the sha256 of what it binds; a digest that could not be computed is not one."
+            Write-Output "  Most often another process holds the file with no sharing -- close it and approve again."
+            exit 2
+        }
+
+        # For a push gate the tip is mandatory: an authorization not bound to a specific commit is
+        # a standing capability, which is the thing ADR-033 exists to abolish.
+        $tip = $TipSha
+        if ($Kind -eq 'push') {
+            if (-not $tip) {
+                $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+                try {
+                    $s = & git -C $MissionRoot rev-parse HEAD 2>&1
+                    if ($LASTEXITCODE -eq 0) { $tip = ("$s").Trim() }
+                } finally { $ErrorActionPreference = $prev }
+            }
+            if (-not $tip) {
+                Write-Output 'mission-gate: a push gate needs -TipSha, and HEAD could not be derived. Refusing to authorize an unspecified tip.'
+                exit 2
+            }
+        }
+
+        # CLASSIFY BEFORE WRITING, AND REFUSE RATHER THAN DEFAULT. A kind the map does not carry
+        # would otherwise be written with an empty or guessed class, and a counting consumer would
+        # then either drop it silently or invent a meaning for it. A new kind is a decision, not a
+        # fall-through: add it to the map deliberately.
+        $gateClass = Get-LamGateClassForKind -Kind $Kind
+        if ($gateClass -eq 'unknown') {
+            Write-Output "mission-gate: kind '$Kind' is not in the gate-class map ($gateClassLib). Refusing to write an unclassified gate -- the zero-paste attestation counts by class, and an unclassified gate would be counted by nobody."
+            exit 2
+        }
+
+        $now = (Get-Date).ToUniversalTime()
+        $sb = New-Object System.Text.StringBuilder
+        [void]$sb.AppendLine("# Gate artifact -- created by a human, consumed once, retained for audit.")
+        [void]$sb.AppendLine("# design v2.3 SS10.5 / SS12.4, ADR-033, expanded-schemas SS13.")
+        # THE LINE BELOW USED TO READ "Agents cannot write under .mission/gates/** -- the guard
+        # hard-denies it (LAM-ACCEPT T-3)", AND AN AGENT MINTED ARTIFACTS CARRYING IT (register
+        # row 165, driven). It is in scope for this row precisely because it is the SAME false
+        # claim as the one in .DESCRIPTION, stamped onto every artifact this tool has ever written
+        # -- an audit artifact whose own face asserted a control that had not held when it was
+        # created. A gate is read by people reconstructing what authorized what; a false sentence
+        # there is worse than in a header, because the header is read by maintainers and this is
+        # read as evidence. What replaces it says only what this tool actually does.
+        [void]$sb.AppendLine("# Minting is refused to any session that is not an operator's: mission-gate.ps1 checks LAM_DISPATCH,")
+        [void]$sb.AppendLine("# the harness session environment, interactivity and hook invocation BEFORE it writes (LAM-ACCEPT T-3,")
+        [void]$sb.AppendLine("# register row 165). The evidence guard's mint tripwire (row 135) is the second layer, not the first.")
+        [void]$sb.AppendLine("kind: $Kind")
+        # WHAT CLASS OF HUMAN ACT THIS IS (ruling ZP / amendment 12), written adjacent to the kind
+        # it derives from so the two are never read apart. `build-authorization` (push, dispatch) is
+        # a human authorizing an irreversible effect; `governance` (supersession, amendment-material,
+        # zero-paste attestation counts the first class only and enumerates the second on its face.
+        [void]$sb.AppendLine("gate_class: $gateClass")
+        [void]$sb.AppendLine("id: $Id")
+        [void]$sb.AppendLine("push_id: $Kind-$Id")
+        [void]$sb.AppendLine("binds: $Binds")
+        # ADDED, NOT SUBSTITUTED. `binds` keeps recording the value exactly as the operator gave it:
+        # consumers compare `binds_sha256` (mission-dispatch.ps1:458) and HALT-26 freezes existing
+        # fields as immutable history. What was missing was any way to tell WHICH file of that name
+        # was hashed, so the resolved path is recorded beside it rather than in place of it.
+        #
+        # THIS FIELD IS A RECORD, NOT AN INPUT TO ANY CHECK, and it says so because an independent
+        # reader counted its readers and found none (V-1 round 15, WP-4 Q2). E85 governs a field that
+        # implies a check which does not happen; this one implies no check. It states which file was
+        # hashed, in the same category as `authorized_by`, `host` and `created_at` -- none of which
+        # has a code reader either, and none of which is a defect. Consumers deliberately RE-DERIVE
+        # the path rather than trust the artifact's own word about itself (instrument-WP-6's S-4 (b)
+        # says so at its own call site), and that is the right instinct on an audit artifact. What
+        # was missing was the field declaring which of the two it is.
+        # SINGLE-QUOTED: in PowerShell a backslash escapes nothing, so \" inside a double-quoted
+        # string ENDS it. This line was authored that way and produced 8 parse errors -- caught by
+        # the parse check before it shipped, which is the only reason it is a footnote and not a
+        # round-16 finding. The text is static, so it needs no interpolation.
+        [void]$sb.AppendLine('binds_resolved_note: "RECORD, not an input: the absolute path this mint actually hashed. Consumers re-derive rather than trust it."')
+        [void]$sb.AppendLine("binds_resolved: $bindsResolved")
+        [void]$sb.AppendLine("binds_sha256: $bindsSha")
+        # A supersession gate names the dispatch it RETIRES, explicitly. `id` alone would carry it
+        # by convention, and a convention is not a field a consumer can check.
+        if ($Kind -eq 'supersession') { [void]$sb.AppendLine("retires_dispatch: $Id") }
+        if ($tip) { [void]$sb.AppendLine("authorized_tip_sha: $tip") }
+        # THE OTHER TWO THIRDS OF THE TRIPLE. Read from the repository ONCE, here, at the moment a
+        # human approves -- and then never read from configuration again by anybody.
+        if ($Kind -eq 'push') {
+            $declaredUrl = $OriginUrl
+            if (-not $declaredUrl) {
+                $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+                try {
+                    # THE PUSH URL, NOT THE FETCH URL (V-1 round 14, WP-4 #3b). `get-url` without
+                    # `--push` returns `remote.origin.url`; git PUSHES to `remote.origin.pushurl`
+                    # when that is set. The gate then declared a URL git would never contact, so the
+                    # decider's comparison against the real remote failed and the origin leg asked a
+                    # remote that could never hold the sha -- an authorization incapable of
+                    # authorizing anything, minted silently. `--push` falls back to `url` when no
+                    # pushurl is set, so the ordinary case is unchanged.
+                    #
+                    # Reading config HERE is what amendment 20 permits, and only here: this is the
+                    # moment a human approves, and the value is DECLARED into the artifact. What the
+                    # amendment forbids is a CONSUMER re-reading config later, which none now does.
+                    $u = & git -C $MissionRoot remote get-url --push origin 2>&1
+                    if ($LASTEXITCODE -eq 0) { $declaredUrl = ("$u").Trim() }
+                } finally { $ErrorActionPreference = $prevEap }
+            }
+            $declaredRef = $RemoteRef
+            if (-not $declaredRef) {
+                $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+                try {
+                    $b = & git -C $MissionRoot rev-parse --abbrev-ref HEAD 2>&1
+                    if ($LASTEXITCODE -eq 0 -and ("$b").Trim() -and ("$b").Trim() -ne 'HEAD') {
+                        $declaredRef = 'refs/heads/' + ("$b").Trim()
+                    }
+                } finally { $ErrorActionPreference = $prevEap }
+            }
+            # A PUSH GATE THAT DECLARES NO ORIGIN CANNOT BE CHECKED, so it is not written. Refusing
+            # to mint is the fail-closed direction: an artifact that looks like an authorization but
+            # cannot support the guarantee is worse than no artifact, because it reads as one.
+            if (-not $declaredUrl) {
+                Write-Output "mission-gate: REFUSING to mint a push gate with no declared origin URL."
+                Write-Output "  Amendment 20 binds a push gate to (origin URL, ref, sha). The URL could not be derived"
+                Write-Output "  from '$MissionRoot' and none was supplied. Pass -OriginUrl explicitly."
+                exit 2
+            }
+            if (-not $declaredRef) {
+                Write-Output "mission-gate: REFUSING to mint a push gate with no declared remote ref."
+                Write-Output "  Pass -RemoteRef explicitly (for example refs/heads/main)."
+                exit 2
+            }
+            [void]$sb.AppendLine("origin_url: $declaredUrl")
+            [void]$sb.AppendLine("remote_ref: $declaredRef")
+            [void]$sb.AppendLine("origin_binding_note: `"Amendment 20: consumers read THIS url, never remote.origin.url. A repointed remote does not move the authorization.`"")
+        }
+        [void]$sb.AppendLine("authorized_by: $env:USERNAME")
+        [void]$sb.AppendLine("host: $env:COMPUTERNAME")
+        [void]$sb.AppendLine("created_at: $($now.ToString('yyyy-MM-ddTHH:mm:ss.fffZ'))")
+        # LIFECYCLE IS PER-KIND, and conflating them was a defect. A `push` gate MUST expire and MUST
+        # be single-use: a standing publish capability is the thing ADR-033 exists to abolish. A
+        # `supersession` gate is not a capability at all -- it is a RECORDED RULING, a historical
+        # fact consulted afresh by every later dispatch. It does not get "used up", and it does not
+        # stop being true after an hour. Given expiry it would have to be re-ratified hourly forever,
+        # and given single_use the first dispatch to read it would spend it.
+        # WITHDRAWAL IS STILL AVAILABLE, and is the right mechanism for a ruling: `revoke`.
+        if ($Kind -eq 'supersession') {
+            [void]$sb.AppendLine("permanence: until-revoked")
+            [void]$sb.AppendLine("lifecycle_note: `"A ratified supersession is a recorded ruling, not a capability. It neither expires nor is consumed; revoke it to withdraw it.`"")
+        } elseif ($Kind -eq 'completion-acceptance') {
+            # THE SAME LIFECYCLE AS A SUPERSESSION, FOR THE SAME REASON (amendment 23). The goal
+            # evaluator consults this gate on every Stop; single-use would spend it on the first
+            # evaluation and expiry would un-accept the package an hour later. It binds ONE file by
+            # hash, so editing that file voids it without anyone revoking anything.
+            #
+            # THE NOTE STOPPED ASSERTING TWO THINGS IT COULD NOT KNOW (register row 142, operator
+            # ruling of 2026-09-08 (3)). It said, on EVERY artifact of this kind:
+            #   (i)  "a REFUTED package's registered residuals" -- the verdict of the package. This
+            #        writer never sees a verdict. It sees -Kind, -Id and -Binds. The kind was used
+            #        twice over a MET package (reclose-44, reclose-45), so the assertion was false on
+            #        two of the three artifacts that exist.
+            #   (ii) "it binds docs/framework/LAM-RESIDUALS.md by sha256" -- a LITERAL PATH, written
+            #        onto an artifact whose `binds` field four lines above it may say something else
+            #        entirely. reclose-44 and -45 bind a file under .mission-runtime/lam/close/ and
+            #        say LAM-RESIDUALS.md on their own face. An audit artifact naming a file it does
+            #        not bind is the E85 shape one layer out: the face implies a check on a file no
+            #        consumer ever looks at.
+            # The cure is to the WRITER. The three artifacts already on disk are IMMUTABLE audit
+            # records (HALT-26) and are NOT edited here; they are addressed in prose, in the ledger
+            # entry that records this row, and by `reclose` existing so the borrowing stops.
+            #
+            # WHAT THE NOTE MAY SAY IS BOUNDED BY WHAT THIS WRITER KNOWS. It knows the kind, it knows
+            # the lifecycle it is about to write, and it knows that `binds`/`binds_sha256` sit on the
+            # same artifact. So it says THAT, and points at the field rather than restating a path.
+            [void]$sb.AppendLine("permanence: until-revoked")
+            [void]$sb.AppendLine("lifecycle_note: `"A completion acceptance is a recorded ruling accepting ONE package on the strength of its registered residuals. It neither expires nor is consumed; it binds by sha256 exactly the file named in this artifact's own binds field, so editing that file voids it. Revoke it to withdraw it.`"")
+        } elseif ($Kind -eq 'reclose') {
+            # THE SEVENTH KIND (register row 142). A re-closure gate is a recorded ruling, not a
+            # capability: mission-reclose.ps1 consults it before every Reworking -> Complete, and
+            # single_use would spend it on a run that then refused for an unrelated reason while
+            # expiry would un-authorize a re-closure the operator had already ruled on.
+            #
+            # WHAT IT BINDS IS NOT A GUESS. reclose-44 and reclose-45 -- the two artifacts that
+            # actually exist for this act -- both bind the re-closure's ledger content file, the file
+            # mission-reclose.ps1 receives as -LedgerContentFile and appends to the ledger verbatim.
+            # That is the right thing to bind, because it is the only artifact of a re-closure that
+            # carries the operator's own words, and the consumer RE-DERIVES its sha256 at run time
+            # rather than trusting this record. The note therefore names it, and the name is true of
+            # every reclose gate the tool will write, because the consumer refuses any other file.
+            [void]$sb.AppendLine("permanence: until-revoked")
+            [void]$sb.AppendLine("lifecycle_note: `"A reclose gate is a recorded ruling authorizing ONE Reworking -> Complete transition (ADR-029). It neither expires nor is consumed; it binds by sha256 the re-closure's ledger content file named in this artifact's own binds field, and mission-reclose re-derives that digest and refuses unless it matches, so editing that file voids it. Revoke it to withdraw it.`"")
+        } else {
+            [void]$sb.AppendLine("expires_at: $($now.AddMinutes($ExpiresMinutes).ToString('yyyy-MM-ddTHH:mm:ss.fffZ'))")
+            [void]$sb.AppendLine("single_use: true")
+        }
+        [void]$sb.AppendLine("consumed_at: null")
+
+        # =========================================================================================
+        #
+        # ATOMIC IN THE FAIL-CLOSED DIRECTION. The failure that must not happen is the one the manual
+        # dance produces every time it is interrupted: the prior revoked and renamed, and NOTHING at
+        # the canonical path -- an id with no authorization and an operator who has to reconstruct
+        # which half ran. So the ordering is refuse-then-mutate, and the mutation is wrapped: if any
+        # of the three steps throws, the prior is put back at its original name with its ORIGINAL
+        # BYTES and the command refuses. The restore is the second line; the ordering is the first.
+        # =========================================================================================
+        $revPath = $null
+        if ($isReapprove) {
+            # THE NEXT FREE N IS max(existing) + 1, NOT THE LOWEST GAP, AND THAT IS A DECISION.
+            # Filling a gap would put a NEWER revocation at an OLDER number and silently reorder the
+            # register: a reader walking .revoked-1, -2, -3 expects chronology, and dispatch-D-L2-1-DIAG
+            # has three of them. A hand-made hole stays a hole, visibly.
+            $revBase = "$Kind-$Id"
+            $maxN = 0
+            $revRe = '^' + [regex]::Escape($revBase) + '\.revoked-(\d+)\.yaml$'
+            foreach ($f in @(Get-ChildItem -LiteralPath $gatesDir -Filter "$revBase.revoked-*.yaml" -ErrorAction SilentlyContinue)) {
+                if ($f.Name -match $revRe) {
+                    $n = [int]$Matches[1]
+                    if ($n -gt $maxN) { $maxN = $n }
+                }
+            }
+            $nextN = $maxN + 1
+            $revPath = Join-Path $gatesDir "$revBase.revoked-$nextN.yaml"
+            # AND THE CHOSEN NAME IS CHECKED, not merely computed. A DIRECTORY at that name, or a
+            # file the pattern above did not match, would make the move throw or -- worse -- land the
+            # artifact inside it. Walk forward until the name is genuinely free.
+            while (Test-Path -LiteralPath $revPath) {
+                $nextN++
+                $revPath = Join-Path $gatesDir "$revBase.revoked-$nextN.yaml"
+            }
+
+            $moved = $false
+            try {
+                Move-Item -LiteralPath $p -Destination $revPath -ErrorAction Stop
+                $moved = $true
+                # STAMP THE REVOCATION AT THE ARTIFACT'S RESTING NAME, and only if it is not already
+                # revoked: an operator who ran `revoke` by hand and stopped before the rename is
+                # finishing that dance here, and double-stamping would put two revoked_at lines on
+                if (-not $priorState.revoked) {
+                    $stamped = $priorText.TrimEnd() + "`n" + (Get-RevocationStamp -Why $Reason)
+                    [System.IO.File]::WriteAllText($revPath, $stamped, (New-Object System.Text.UTF8Encoding($false)))
+                }
+            } catch {
+                $restored = $false
+                $restoreNote = ''
+                try {
+                    if ($moved -and (Test-Path -LiteralPath $revPath) -and (-not (Test-Path -LiteralPath $p))) {
+                        Move-Item -LiteralPath $revPath -Destination $p -ErrorAction Stop
+                    }
+                    if (Test-Path -LiteralPath $p) {
+                        if ([System.IO.File]::ReadAllText($p) -ne $priorText) {
+                            [System.IO.File]::WriteAllText($p, $priorText, (New-Object System.Text.UTF8Encoding($false)))
+                        }
+                        $restored = ([System.IO.File]::ReadAllText($p) -eq $priorText)
+                    }
+                } catch { $restoreNote = $_.Exception.Message }
+                Write-Output "mission-gate: REFUSED -- reapprove could not set the prior aside, and NOTHING was minted."
+                Write-Output "  prior    : $p"
+                Write-Output "  target   : $revPath"
+                Write-Output "  $($_.Exception.Message)"
+                if ($restored) {
+                    Write-Output "  RESTORED : the prior stands at its original name with its original bytes; no new gate was written."
+                } else {
+                    Write-Output "  NOT FULLY RESTORED -- inspect both names by hand before doing anything else. $restoreNote"
+                }
+                exit 2
+            }
+        }
+
+        try {
+            [System.IO.File]::WriteAllText($p, $sb.ToString(), (New-Object System.Text.UTF8Encoding($false)))
+        } catch {
+            if ($isReapprove) {
+                $restored = $false
+                try {
+                    if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }
+                    if (Test-Path -LiteralPath $revPath) { Move-Item -LiteralPath $revPath -Destination $p -ErrorAction Stop }
+                    if (Test-Path -LiteralPath $p) {
+                        if ([System.IO.File]::ReadAllText($p) -ne $priorText) {
+                            [System.IO.File]::WriteAllText($p, $priorText, (New-Object System.Text.UTF8Encoding($false)))
+                        }
+                        $restored = ([System.IO.File]::ReadAllText($p) -eq $priorText)
+                    }
+                } catch { }
+                Write-Output "mission-gate: REFUSED -- the new gate could not be written, and the re-mint was rolled back."
+                Write-Output "  $($_.Exception.Message)"
+                if ($restored) {
+                    Write-Output "  RESTORED : the prior stands at its original name with its original bytes."
+                } else {
+                    Write-Output "  NOT FULLY RESTORED -- inspect $p and $revPath by hand before doing anything else."
+                }
+                exit 2
+            }
+            Write-Output "mission-gate: REFUSING -- the gate artifact could not be written to $p."
+            Write-Output "  $($_.Exception.Message)"
+            exit 2
+        }
+
+        if ($isReapprove) {
+            Write-Output "mission-gate: REAPPROVED $Kind-$Id -- one act: revoke, rename, approve (register row 112)"
+            Write-Output "  prior    : $revPath"
+            if ($priorState.revoked) {
+                Write-Output "  NOTE: the prior was ALREADY revoked before this run; its existing revoked_at stands and was not re-stamped."
+            } else {
+                Write-Output "  reason   : $(if ($Reason) { $Reason } else { $script:LamNoReasonText })"
+            }
+            if ($priorBindsSha -and ($priorBindsSha -eq $bindsSha)) {
+                Write-Output "  bytes    : UNCHANGED -- the bound file hashes the same as it did for the prior ($bindsSha)."
+                Write-Output "             That is lawful and is not an error, but a re-mint over identical bytes re-issues"
+                Write-Output "             an authorization nothing about the subject required. Check that you meant it."
+            } elseif ($priorBindsSha) {
+                Write-Output "  bytes    : MOVED -- $priorBindsSha -> $bindsSha (the same file, new content: what a re-mint is for)."
+            }
+        } else {
+            Write-Output "mission-gate: approved $Kind-$Id"
+        }
+        Write-Output "  artifact : $p"
+        Write-Output "  binds    : $Binds ($bindsSha)"
+        if ($tip) { Write-Output "  tip      : $tip" }
+        if ($Kind -eq 'push') {
+            Write-Output "  origin   : $declaredUrl"
+            Write-Output "  ref      : $declaredRef"
+        }
+        Write-Output "  by       : $env:USERNAME on $env:COMPUTERNAME"
+        Write-Output "  NOTE: operator browser confirmation of the origin tip after a push remains standing law."
+        exit 0
+    }
+}

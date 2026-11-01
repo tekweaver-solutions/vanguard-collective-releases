@@ -1,0 +1,14 @@
+# Handoff -- dispatch D-2 (rework), mission smoke. Written by build-smoke-mission.ps1, which
+# performed the dispatch's work itself; no CLI worker ran. No runner_anchors block.
+id: handoff-D-2
+from_worker: w-smoke-2
+dispatch_id: D-2
+feature_id: F-001
+spec_version: 1
+completed_assertions: [A-4]
+unfinished: []
+commits: ["{{COMMIT}}"]
+commands_run: ["append the line REWORKED to src/greeting.txt", "read src/greeting.txt back -- line 1 hello from the smoke worker, line 2 REWORKED", "git commit in the worktree"]
+issues_observed: []
+procedure_adherence: confirmed
+terminated_reason: completed

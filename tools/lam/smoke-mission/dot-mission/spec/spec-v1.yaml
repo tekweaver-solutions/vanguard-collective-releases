@@ -1,0 +1,45 @@
+# Living Spec v1 -- the smoke mission.
+#
+# This mission exists to EXERCISE the Local Autonomous Mode toolchain end to end, not to build
+# anything anyone will use. It is deliberately tiny: two features, one milestone, five assertions.
+# What is exercised is the machinery around the work -- dispatch, evidence, validation, rework,
+# supersession, the push gate and the close ceremony -- so the work itself is small enough that a
+# failure is unambiguously the toolchain's and not the task's.
+
+version: 1
+mission_id: smoke
+created_at: 2026-01-01T00:00:00Z
+state: accepted
+
+features:
+  - id: F-001
+    name: "Greeting artifact"
+    description: >
+      One text artifact with exact content: the smallest thing that shows a dispatch's work landing
+      in its worktree and being judged there.
+    assertions: [A-1, A-4]
+
+  - id: F-002
+    name: "Counter script and its test"
+    description: >
+      A tiny script plus a test that exercises it, so validation has something to run rather than
+      only something to read.
+    assertions: [A-2, A-3]
+
+milestones:
+  - id: M-1
+    name: "Smoke milestone"
+    features: [F-001, F-002]
+    assertions: [A-1, A-2, A-3, A-4, A-5]
+    exit_criteria: >
+      All five contract assertions pass under validation, the rework cycle has been exercised at
+      least once, and the milestone closes with a ceremony-class operation.
+
+decisions:
+  - id: D-SMOKE-1
+    decision: >
+      A-4 is deliberately EXCLUDED from the build dispatches' assertion_targets, so the first
+      validation round must fail on it and the rework path is exercised.
+    rationale: >
+      A rework dispatch is fully determined by the contract and the failure evidence, which is why
+      it runs without a gate. A smoke run that never reworks has not exercised that path.

@@ -1,0 +1,43 @@
+# Worker Dispatch -- REWORK. THIS ARTIFACT IS THE WORK'S ENTIRE INPUT. It is authored from the
+# validator's failure evidence below, which with the contract fully determines it -- which is why a
+# rework dispatch runs WITHOUT A GATE.
+# Performed by build-smoke-mission.ps1, not by a CLI worker.
+
+id: D-2
+mission_id: smoke
+worker_id: w-smoke-2
+kind: rework
+feature_id: F-001
+assertion_targets: [A-4]
+spec_version: 1
+prior_handoff_id: handoff-D-1c
+worktree_id: wt-D-2
+base_head_at_authoring: {{BASE}}
+suite_command: tests\test-smoke.ps1
+model_class: coding-strong
+tool_scope: [repo.read, worktree.write, shell.exec.sandboxed]
+budget:
+  cost_cap_usd: 2.00
+  wallclock_cap_minutes: 10
+
+rework_evidence:
+  failing_assertion: A-4
+  reported_by: val-b
+  attempt_number: 1
+  result_artifact: .mission/validator-results/val-b-attempt-1.yaml
+  observed: >
+    src/greeting.txt holds one line only; there is no second line at all -- the content is absent,
+    not mismatched.
+  required: >
+    src/greeting.txt contains a second line reading exactly: REWORKED
+
+goal_condition: "A-4 passes locally AND the change is committed in the worktree AND a schema-valid handoff exists at the path named by the LAM_HANDOFF environment variable"
+
+# ---------------------------------------------------------------------------------------------
+# INSTRUCTIONS
+# ---------------------------------------------------------------------------------------------
+# STEP 1 -- keep line 1 of src/greeting.txt exactly as it is (hello from the smoke worker) and
+#           append a second line reading exactly REWORKED. Change nothing else.
+# STEP 2 -- read the file back and confirm both lines.
+# STEP 3 -- commit the change in the worktree.
+# STEP 4 -- write the handoff to LAM_HANDOFF. No runner_anchors.

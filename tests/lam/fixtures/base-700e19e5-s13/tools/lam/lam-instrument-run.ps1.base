@@ -1,0 +1,512 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  Run an instrument, PERSIST its stdout and its TALLY beside the run, and hand back the parsed
+  tally. The ONE shared definition, dot-sourced by the runner (tools/lam/mission-dispatch.ps1)
+  and by the goal evaluator's instrument_exit0 detector (tools/lam/mission-goal-check.ps1).
+
+.DESCRIPTION
+  REGISTER ROW 122, AND ROW 178 WHICH IS ITS OTHER HALF.
+
+  Row 122: mission-dispatch.ps1 synthesized the anchors' suite.passed / failed / skipped from the
+  suite's EXIT CODE -- 1/0/0 or 0/1/0 -- reading neither the instrument's own TALLY line nor its
+  PASS/FAIL member lines, and then discarded the suite's stdout. Thirty-four *.anchors.yaml files
+  on this mission carry that shape and not one of them carries a real tally. D-L2-2-S4-R1c banks
+  passed: 1 for a run whose own handoff records passed=1893 failed=0 skipped=11 runnable=1904.
+
+  Row 178: mission-goal-check.ps1's instrument_exit0 detector runs the same instrument as
+  $null = and keeps only $LASTEXITCODE. A detector that takes 456 seconds and executes a
+  1912-test product suite can therefore fail and leave no member name, no tally, no pytest output
+  -- nothing a later reader can refute. That happened: four goal readings inside forty minutes at
+  one HEAD, one of them NOT_MET, and the failing run's reason is not on disk anywhere.
+
+  THE CURE IS ONE FUNCTION BOTH CALLERS USE, so the persisted transcript and whatever an artifact
+  says about the run cannot come from two different readings of it.
+
+  THE CONTRACT, and every clause of it is a thing that would otherwise break a caller:
+
+  (a) THE EXIT CODE IS THE CONTRACT. Save-LamInstrumentRun sets $LASTEXITCODE to the instrument's
+      exit code and runs NOTHING NATIVE afterwards -- the detector reads the ambient value on its
+      very next line, and a git or uv call in here would silently overwrite the verdict input.
+      WriteAllText, New-Item, Join-Path, SHA256 and regex are .NET or cmdlet calls, not native
+      processes, and do not touch it. The value is ALSO re-asserted explicitly before the return,
+      so the guarantee does not rest on that reasoning alone.
+
+  (b) IT MUST NOT THROW. A throw propagates to the detector's per-detector catch and turns a GREEN
+      instrument into a FAILED detector -- the cure causing the class of failure it was written to
+      make legible. An unwritable output directory degrades to persisted = false with a reason;
+      it never degrades to a verdict. PERSISTENCE IS A SIDE EFFECT.
+
+  (c) THE MIXED PIPELINE IS FLATTENED BEFORE ANYTHING READS IT. powershell ... 2>&1 yields both
+      System.String and ErrorRecord, and ONE item can carry embedded newlines, so a FAILED line
+      or a TALLY line can arrive inside a multi-line chunk and be invisible to a per-item match.
+      The house idiom is the one mission-goal-check.ps1's verify_pass_or_dib detector applies to
+      verify's output: every item rendered as a string, the items joined with a bare LF.
+
+  (d) TWO READERS OF ONE RUN CANNOT DISAGREE. The TALLY is matched ANCHORED AT COLUMN 0 under
+      RegexOptions Multiline; the FAILED ids are mined with EXACTLY the runner's own pattern,
+      over the SAME flattened text that gets persisted.
+
+  (e) UTF-8 WITHOUT BOM, because everything else in this tree is.
+
+  (f) IDEMPOTENT AND BOUNDED: the two files are OVERWRITTEN IN PLACE, never appended. Register
+      row 110 is the complaint about stores that only ever grow.
+
+  (g) THE FILENAME IS DERIVABLE BY BOTH CALLERS from what each already holds, so neither has to be
+      told it: Get-LamInstrumentRunPath is the one derivation.
+
+  (h) THE CAPTURE STATES ITSELF (register row 181; amendment 38 item 5). The private capture this
+      helper replaced inside mission-goal-check.ps1 kept four things the first version of this
+      file lost. All four are back:
+      1. EVERY TALLY LINE. <base>.tally.txt keeps every column-0 TALLY line, in order. Its FIRST
+         further TALLY lines follow it, bounded at 64 with a BOUND line saying so when the bound
+         is hit. Each kept line is bounded in LENGTH as well: a TALLY line longer than 2048
+         characters keeps its first 2048 (2047 rather than split a surrogate pair) and carries,
+         on the same line, a bracketed TRUNCATED note stating its true length. So the tally file's
+         size is bounded, not only its line count, and its first line is what it always was for
+         every TALLY line inside that bound. The whole line stays in the stdout file's verbatim
+         body, and fields and tally_line are still read from the whole first line. The grammar is
+         contract (d)'s, column 0: NOT the private capture's leading-whitespace 'TALLY passed='
+         grammar, so an indented or mid-line TALLY still does not count. fields and tally_line
+         remain the FIRST line's, so no anchors figure moves.
+      2. A PROVENANCE HEADER. <base>.stdout.txt opens with writer, capture_format, run_key, goal,
+         detector_ordinal, instrument (as given), cwd, captured_at (UTC, from .NET), ran,
+         between two delimiter lines. Every control character in a header value -- CR and LF
+         included -- becomes a space, so no RunKey or Goal can forge a column-0 TALLY or FAILED
+         line in either file. detector_ordinal is DERIVED, never passed: it is read back from
+         run_key under mission-goal-check.ps1's own RunKey fold (Get-LamCaptureDetectorOrdinal
+         below states the fold), its value says DERIVED, and for any run_key outside that fold it
+         says 'not derivable' rather than guess. The runner passes no goal, so its captures always
+         say 'not derivable'.
+         HOW A READER SPLITS THE FILE. The header is every line BEFORE the FIRST line that is
+         exactly '--- instrument stdout and stderr, verbatim ---'. Read header keys from there and
+         nowhere else, one 'key: value' per line: the body is the instrument's, and it can print
+         any line at all, both delimiter lines, 'exit_code: 0' and an EXIT line included. The body
+         starts on the line after that first delimiter. When body_bytes is above 0 the body is
+         exactly body_bytes bytes of UTF-8, followed by one LF, the closing line
+         '--- end of instrument output ---' and its LF, which end the file. Cut the body by that
+         count, or at the file's LAST closing line; never at the first closing line found.
+      3. NEVER A ZERO-BYTE BODY, AND THE HEADER TELLS SILENCE FROM SPEECH. body_bytes counts the
+         instrument's flattened output. When it is above 0, everything between the delimiters is
+         the instrument's own, including any sentence it chose to print. When it is 0, the
+         flattened output is empty, and the helper writes ONE sentence of its own between the
+         delimiters, saying which of two things happened: the instrument printed nothing at all
+         ('It was run and it said nothing'), or it printed exactly one empty line, which flattens
+         to no text and is recorded as an empty line, not as a silence. A reader therefore tests
+         the header's column-0 body_bytes, read under the splitting rule above, and reads the
+         sentence only when body_bytes is 0. A test for the sentence alone is forgeable by any
+         instrument that prints it, and a file-length test is vacuous, since the header alone is
+         hundreds of bytes.
+      4. THE EXIT CODE BESIDE THE TALLY. <base>.tally.txt always ENDS with
+         EXIT exit_code=<n> ran=<bool> tally_count=<k> captured_at=<UTC>, carrying the
+         instrument's OWN exit code -- never a pytest_exit= its TALLY happened to print. The line
+         cannot begin TALLY, FAILED or NO-TALLY, and its captured_at is the stdout header's, so
+         the two files of one run can be paired and a stale file of another key told apart.
+      WHAT A PLANTED REVERT OF EACH LINE REMOVES. Each guarantee rests on one line of
+      Save-LamInstrumentRun, but the lines are not independent, and this is what each one's revert
+      really removes. The loop that adds the second and later TALLY lines: those lines only; line
+      1 and the EXIT line stay. The line that joins the header to the body: the whole header, which
+      is all of guarantee 2, detector_ordinal included, AND the numeric half of guarantee 3, AND
+      the header that guarantee 4's captured_at pairs with. Under that revert a silent capture and
+      a capture whose instrument printed exactly the silence sentence are byte-identical, and the
+      EXIT line pairs with nothing. The line that puts the sentence in an empty body: the sentence
+      only, leaving body_bytes: 0 and an empty body. The line that writes the EXIT line: the EXIT
+      line only, leaving exit_code in the header. The detector_ordinal line, the one-empty-line
+      line and the TALLY length bound each remove only their own statement.
+      WHAT A READER OF THE RETURN OBJECT MUST KNOW: stdout_sha256 and stdout_bytes measure the file
+      AS WRITTEN, header included, so two identical runs no longer hash equal (captured_at moves).
+      body_sha256 and body_bytes measure the instrument's own output. tally_lines (bounded in
+      length exactly as in the file) and tally_count are guarantee 1 in memory. failed_ids,
+      fields and tally_line are mined from the body alone, first TALLY wins, exactly as before.
+
+  WHERE IT WRITES, AND WHY NOT BESIDE THE VERDICT. The one ignore rule written for .mission/goals/
+  is the verdict glob, /.mission/goals/*.verdict.yaml, so a capture there would be an undeclared
+  '?? .mission/goals/<file>' porcelain line. The clean-tree gate is Assert-CleanWorkingTree in
+  tools/mission-lib.ps1, and the lifecycle commands that gate on it run it unless -NoCommit:
+  close-milestone, reclose, reopen, spec-bump, promote-contract, ledger-append, green-gate-seed
+  and prune-objects. Not every lifecycle command gates: mission-reclaim commits the whole .mission
+  directory with no clean-tree gate at all. Since register row 171 (amendment 36) the gate carries
+  NO code exemption: a line passes only if the WHOLE line, status code included,
+  begins with an entry the mission DECLARES under admitted_porcelain in .mission/mission.yaml (the
+  declaration read by Get-LamDeclaredAdmittedPorcelain and the porcelain by Get-LamPorcelainState,
+  both in tools/lam/lam-verify-admission.ps1), or its path is named exactly in the caller's
+  -AllowPaths. A failing git status refuses. No declared entry begins '?? .mission/goals/', so that
+  line would refuse every gated command, close included, and spec-accept's Assert-CleanGitTree
+  exempts no .mission/goals/ path either.
+  WHAT THE GATE JUDGES, AND WHAT IT DOES NOT. It judges the porcelain git status prints under
+  git's default index flags, excludes and status configuration. Under those defaults a capture
+  there is admitted only by something committed -- a declaration line, or an ignore rule in a
+  committed .gitignore -- and an uncommitted widening of the declaration is itself a line such as
+  ' M .mission/mission.yaml', which no declaration can admit (every entry must begin '?? ') and no
+  gated command's -AllowPaths (at most its amendment file) names. Outside those defaults the gate
+  is NOT closed. These routes admit a .mission/goals/ capture with nothing committed and nothing
+  in the porcelain: skip-worktree or assume-unchanged set on .mission/mission.yaml, so that an
+  uncommitted widening prints no porcelain line; an entry in .git/info/exclude or in the file
+  core.excludesFile names; and status.showUntrackedFiles=no, because the porcelain is read
+  without pinning --untracked-files. Each of these is local index or configuration state, and the
+  gate does not see it. So a widening CAN happen quietly, and the home does not rest on the gate
+  being closed: it is <MissionRoot>/.mission-runtime/lam/instrument-runs/, ignored whole by the
+  .mission-runtime/ rule.
+
+  THE RESIDUAL, DISCLOSED AND NOT RESOLVED: a gitignored home is NOT durable evidence. These files
+  do not survive a fresh clone, are not bound by any sha256 on a gate, and nothing stops a later
+  run of the same key from overwriting them. That is strictly more than the nothing that stood
+  here before, and strictly less than evidence. Where the record must be durable it is the
+  anchors artifact that carries it -- which is why the runner also writes the tally INTO the
+  anchors rather than merely pointing at this file. The detector has no artifact of its own to
+  write into, so for it this file is the whole of the improvement. RULING OWED.
+#>
+
+# ------------------------------------------------------------------------------------------------
+# THE FILENAME DERIVATION -- one definition, so both callers compute the same name from what they
+# already hold. The runner holds a dispatch id; the detector holds a goal name. Neither is reported
+# back to the other.
+# ------------------------------------------------------------------------------------------------
+function ConvertTo-LamRunToken {
+    param([string]$Text)
+    # A FILENAME SEGMENT, not a path: every separator and every shell metacharacter collapses to a
+    # dash. A goal name or a dispatch id that contained a slash would otherwise choose a directory.
+    $t = ([string]$Text) -replace '[^A-Za-z0-9._-]', '-'
+    if ($t.Length -gt 80) { $t = $t.Substring(0, 80) }
+    if (-not $t) { $t = 'x' }
+    return $t
+}
+
+function Get-LamInstrumentRunPath {
+    param(
+        [string]$MissionRoot,
+        [string]$InstrumentPath,
+        [string]$RunKey = '',
+        [string]$Goal = ''
+    )
+    # RunKey wins, Goal is the fallback, and 'run' is the floor -- so a caller that passes neither
+    # still gets a stable name rather than a crash or an empty one.
+    $key = [string]$RunKey
+    if (-not $key) { $key = [string]$Goal }
+    if (-not $key) { $key = 'run' }
+    $leaf = ''
+    try { $leaf = [System.IO.Path]::GetFileNameWithoutExtension([string]$InstrumentPath) } catch { $leaf = '' }
+    if (-not $leaf) { $leaf = 'instrument' }
+    $base = (ConvertTo-LamRunToken $key) + '.' + (ConvertTo-LamRunToken $leaf)
+    $dir  = Join-Path ([string]$MissionRoot) '.mission-runtime\lam\instrument-runs'
+    return [pscustomobject]@{
+        dir    = $dir
+        base   = $base
+        stdout = (Join-Path $dir ($base + '.stdout.txt'))
+        tally  = (Join-Path $dir ($base + '.tally.txt'))
+    }
+}
+
+# ------------------------------------------------------------------------------------------------
+# THE TALLY GRAMMAR, READ AND NOT GUESSED. tests/lam/instrument-ARC-L2-1.ps1:250 emits exactly one
+# line of the form:
+#   TALLY passed=1901 failed=0 skipped=11 deselected=6 runnable=1912 stored_floor=1732 \
+#         collection_error=False pytest_exit=0 elapsed_seconds=454
+# The parser is GENERIC over key=value pairs rather than positional, because the row's whole point
+# is that whatever the instrument chose to measure is what should survive -- a positional reader
+# would silently drop the next field someone adds.
+#
+# EVERY MATCH IS COUNTED AND THE FIRST 64 ARE KEPT (contract (h) 1), but fields and line stay the
+# FIRST match's: an instrument that prints a second TALLY does not get to move the figures a
+# caller already banks from the first.
+# ------------------------------------------------------------------------------------------------
+function ConvertTo-LamBoundedTallyLine {
+    # A KEPT LINE CUT TO ITS BOUND, AND SAYING SO ON THE SAME LINE (contract (h) 1). The note has
+    # no '=' in it, so a key=value reader of the kept line picks up no pair from the note; what it
+    # can pick up is a pair cut short at the bound, which is why the note states the true length
+    # and where the whole line is.
+    param([string]$Line, [int]$Max)
+    if ($Line.Length -le $Max) { return $Line }
+    $cut = $Max
+    # Never between the two halves of a surrogate pair: UTF-8 would write the lone half as a
+    # replacement character, which is a byte the instrument never printed.
+    if ([char]::IsHighSurrogate($Line[$cut - 1])) { $cut = $cut - 1 }
+    return ($Line.Substring(0, $cut) + ' [TRUNCATED by lam-instrument-run: this TALLY line is ' +
+            [string]$Line.Length + ' characters and only the first ' + [string]$cut +
+            ' are kept here; the whole line is in the stdout file''s verbatim body]')
+}
+
+function ConvertFrom-LamInstrumentTally {
+    param([string]$Text)
+    $res = [pscustomobject]@{
+        found  = $false
+        line   = ''
+        fields = [ordered]@{}
+        lines  = [string[]]@()
+        count  = 0
+    }
+    if (-not $Text) { return $res }
+    # ANCHORED AT COLUMN 0, MULTILINE. Without (?m) the anchor means start-of-STRING and the line
+    # is never found in a transcript; without the anchor, a line that merely MENTIONS a tally --
+    # a comment, a quoted example, an echoed command -- is read as the measurement itself.
+    $all = [regex]::Matches($Text, '(?m)^TALLY[ \t]+(.+?)[ \t\r]*$')
+    if ($all.Count -eq 0) { return $res }
+    $res.count = $all.Count
+    $kept = New-Object System.Collections.Generic.List[string]
+    $lamTallyLineMax = 2048
+    foreach ($tm in $all) {
+        # BOUNDED, for the same reason the pairs below are: a transcript must not be able to grow
+        # the tally file without limit. The count above is still the TRUE count. The bound is on
+        # BOTH axes: at most 64 lines, and each kept line at most $lamTallyLineMax characters plus
+        # the note that says it was cut -- a line count alone would let one line be a megabyte.
+        if ($kept.Count -ge 64) { break }
+        $keptLine = 'TALLY ' + $tm.Groups[1].Value
+        if ($keptLine.Length -gt $lamTallyLineMax) { $keptLine = ConvertTo-LamBoundedTallyLine -Line $keptLine -Max $lamTallyLineMax }
+        [void]$kept.Add($keptLine)
+    }
+    $res.lines = $kept.ToArray()
+    $m = $all[0]
+    $res.found = $true
+    $res.line  = 'TALLY ' + $m.Groups[1].Value
+    $pairs = @(($m.Groups[1].Value -split '\s+') | Where-Object { $_ })
+    $taken = 0
+    foreach ($pair in $pairs) {
+        # BOUNDED: a garbled or hostile instrument printing a thousand pairs must not be able to
+        # grow an artifact without limit. Twenty-four is four more than the grammar above carries.
+        if ($taken -ge 24) { break }
+        $eq = $pair.IndexOf('=')
+        if ($eq -lt 1) { continue }
+        $tkey = $pair.Substring(0, $eq)
+        $tval = $pair.Substring($eq + 1)
+        # A KEY IS AN IDENTIFIER OR IT IS NOT A KEY. Anything else is how a transcript gets to
+        # choose what an artifact's YAML says.
+        if ($tkey -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { continue }
+        if ($res.fields.Contains($tkey)) { continue }
+        $res.fields[$tkey] = $tval
+        $taken++
+    }
+    return $res
+}
+
+# ------------------------------------------------------------------------------------------------
+# ONE LINE OR IT IS NOT A HEADER VALUE (contract (h) 2). RunKey and Goal are token-sanitised only
+# for the FILENAME; what goes INTO the file is the caller's text, and a Goal carrying a newline and
+# 'TALLY passed=999' would otherwise put a forged column-0 TALLY line in the capture. Every control
+# character, and the three Unicode line separators a reader might split on, becomes a space.
+# ------------------------------------------------------------------------------------------------
+function ConvertTo-LamCaptureHeaderValue {
+    param([string]$Text)
+    # The three separators are built from their code points so this file stays pure ASCII: PS 5.1
+    # reads a BOM-less script as CP1252, and a literal U+2028 here would not survive that read.
+    $lamLineSeps = [string][char]0x0085 + [string][char]0x2028 + [string][char]0x2029
+    return (([string]$Text) -replace ('[\x00-\x1F\x7F' + $lamLineSeps + ']'), ' ')
+}
+
+# ------------------------------------------------------------------------------------------------
+# THE DETECTOR ORDINAL, DERIVED AND LABELLED SO (contract (h) 2). Amendment 38's provenance
+# guarantee has every capture restate its own ordinal, and this helper takes no ordinal parameter:
+# the one caller that has ordinals, mission-goal-check.ps1's instrument_exit0 detector, folds the
+# ordinal into RunKey instead. THE FOLD, as that file builds it (read there, not re-decided here):
+# one mission-goal-check.ps1 run evaluates one goal; a script-scope counter advances once for each
+# RunKey = the goal when the counter is 1, and the goal + '.' + the counter when it is 2 or more.
+# So the ordinal is read back from exactly those two shapes, compared ordinally and case-sensitively,
+# as the fold builds them. ANY OTHER run_key IS NOT DERIVABLE AND SAYS SO: no goal, an empty
+# run_key, goal.1, goal.02, goal.x, a trailing space or newline, a case variant of the goal, or a
+# key that does not start with the goal. Nothing is guessed. The returned text is always one line
+# of ASCII, so it needs no scrubbing on its way into the header.
+# ------------------------------------------------------------------------------------------------
+function Get-LamCaptureDetectorOrdinal {
+    param([string]$RunKey = '', [string]$Goal = '')
+    $lamFold = 'mission-goal-check.ps1''s RunKey fold'
+    $rk = [string]$RunKey
+    $gl = [string]$Goal
+    if ($gl.Length -eq 0) {
+        return ('not derivable (no goal was passed, and ' + $lamFold + ' is defined over a goal; no ordinal is guessed)')
+    }
+    if ([string]::Equals($rk, $gl, [System.StringComparison]::Ordinal)) {
+        return ('1 (DERIVED from run_key, not passed by the caller: run_key equals goal, which is the key ' + $lamFold + ' gives its first instrument_exit0 detector)')
+    }
+    $lamStem = $gl + '.'
+    if ($rk.StartsWith($lamStem, [System.StringComparison]::Ordinal)) {
+        $lamN = $rk.Substring($lamStem.Length)
+        # \z, not $: in .NET a $ also matches before a final newline, and 'goal.2' + LF is not a key
+        # the fold writes.
+        if (($lamN -cmatch '\A[1-9][0-9]*\z') -and ($lamN -cne '1')) {
+            return ($lamN + ' (DERIVED from run_key, not passed by the caller: run_key is goal + .' + $lamN + ', which is the key ' + $lamFold + ' gives its instrument_exit0 detector number ' + $lamN + ')')
+        }
+    }
+    return ('not derivable (run_key is neither goal nor goal.<n> for an n of 2 or more, the only two keys ' + $lamFold + ' writes; no ordinal is guessed)')
+}
+
+function Get-LamCaptureSha256 {
+    param([byte[]]$Bytes)
+    if ($null -eq $Bytes) { $Bytes = [byte[]]@() }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try { return ([System.BitConverter]::ToString($sha.ComputeHash($Bytes)) -replace '-', '').ToLowerInvariant() }
+    finally { $sha.Dispose() }
+}
+
+# ------------------------------------------------------------------------------------------------
+# THE ONE ENTRY POINT.
+# ------------------------------------------------------------------------------------------------
+function Save-LamInstrumentRun {
+    param(
+        [Parameter(Mandatory = $true)][string]$InstrumentPath,
+        [Parameter(Mandatory = $true)][string]$MissionRoot,
+        [string]$RunKey = '',
+        [string]$Goal = ''
+    )
+
+    $res = [pscustomobject]@{
+        exit_code     = 1
+        ran           = $false
+        stdout        = ''
+        tally_found   = $false
+        tally_line    = ''
+        fields        = [ordered]@{}
+        failed_ids    = @()
+        persisted     = $false
+        persist_note  = ''
+        stdout_path   = ''
+        tally_path    = ''
+        stdout_sha256 = ''
+        stdout_bytes  = 0
+        body_sha256   = ''
+        body_bytes    = 0
+        tally_lines   = [string[]]@()
+        tally_count   = 0
+    }
+
+    # PS 5.1: under ErrorActionPreference 'Stop' a native exe's stderr is a FATAL
+    # the parameter $P of some caller that dot-sourced this.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $raw  = @()
+    $code = 1
+    try {
+        $raw  = & powershell -NoProfile -ExecutionPolicy Bypass -File $InstrumentPath 2>&1
+        $code = $LASTEXITCODE
+        $res.ran = $true
+    } catch {
+        # (b) NEVER A THROW. The caller asked for an exit code; a failure to launch IS a non-zero
+        # one, and it is reported in the transcript rather than raised past the caller's catch.
+        $raw  = @("instrument invocation threw: $($_.Exception.Message)")
+        $code = 1
+    } finally { $ErrorActionPreference = $prevEap }
+    if ($null -eq $code) { $code = 1 }
+    $res.exit_code = $code
+
+    # (c) FLATTEN BEFORE ANYTHING READS IT.
+    $flat = ''
+    try { $flat = ((@($raw) | ForEach-Object { "$_" }) -join "`n") } catch { $flat = '' }
+    $res.stdout = $flat
+    # HOW MANY ITEMS CAME BACK, counted before the flatten can hide it (contract (h) 3). A silent
+    # instrument returns no item at all; one that printed exactly one empty line returns ONE item
+    # that renders as no text. Both flatten to '', and only this count tells them apart.
+    $rawItemCount = 0
+    try { $rawItemCount = @($raw).Count } catch { $rawItemCount = 0 }
+
+    # (d) ONE READING OF ONE RUN.
+    try {
+        $tally = ConvertFrom-LamInstrumentTally -Text $flat
+        $res.tally_found = $tally.found
+        $res.tally_line  = $tally.line
+        $res.fields      = $tally.fields
+        $res.tally_lines = [string[]]@($tally.lines)
+        $res.tally_count = [int]$tally.count
+    } catch { $res.tally_found = $false; $res.tally_line = ''; $res.tally_lines = [string[]]@(); $res.tally_count = 0 }
+
+    # EXACTLY the runner's pattern (mission-dispatch.ps1, the expected_failures_matched site), over
+    # the same flattened text that is about to be persisted.
+    try {
+        $ids = New-Object System.Collections.Generic.List[string]
+        foreach ($idLine in ($flat -split '\r?\n')) {
+            if ($idLine -match '^FAILED\s+(\S+)') { [void]$ids.Add($Matches[1]) }
+        }
+        $res.failed_ids = @($ids.ToArray())
+    } catch { $res.failed_ids = @() }
+
+    # THE BODY'S OWN MEASURE, taken before and apart from persistence, so a run whose files could
+    # not be written still reports what the instrument said.
+    $enc = New-Object System.Text.UTF8Encoding($false)
+    try {
+        $bodyBytes = $enc.GetBytes($flat)
+        $res.body_bytes  = $bodyBytes.Length
+        $res.body_sha256 = Get-LamCaptureSha256 -Bytes $bodyBytes
+    } catch { $res.body_bytes = 0; $res.body_sha256 = '' }
+
+    # (b) AGAIN, AND THIS IS THE CLAUSE THAT MATTERS MOST: everything from here to the return is a
+    # SIDE EFFECT. An unwritable directory, a locked file, a full disk -- each of them degrades to
+    # persisted = false with the reason recorded, and NONE of them changes exit_code.
+    try {
+        $paths = Get-LamInstrumentRunPath -MissionRoot $MissionRoot -InstrumentPath $InstrumentPath -RunKey $RunKey -Goal $Goal
+        $res.stdout_path = $paths.stdout
+        $res.tally_path  = $paths.tally
+        if (-not (Test-Path -LiteralPath $paths.dir)) {
+            $null = New-Item -ItemType Directory -Path $paths.dir -Force -ErrorAction Stop
+        }
+        # ONE captured_at FOR BOTH FILES, from .NET: no cmdlet here can non-terminate under a
+        # caller's 'Stop', and the shared value is what pairs the two files of one run.
+        $capturedAt = [DateTime]::UtcNow.ToString('o')
+        $cwdNow = ''
+        try { $cwdNow = [string]$ExecutionContext.SessionState.Path.CurrentFileSystemLocation.ProviderPath } catch { $cwdNow = '' }
+
+        # (h) 2 -- THE PROVENANCE HEADER. One key per line; every value scrubbed to one line.
+        $header = New-Object System.Collections.Generic.List[string]
+        [void]$header.Add('# lam-instrument-run capture. The instrument''s own output is between the two --- lines below, verbatim.')
+        [void]$header.Add('writer: tools/lam/lam-instrument-run.ps1 Save-LamInstrumentRun')
+        [void]$header.Add('capture_format: 1')
+        [void]$header.Add('run_key: ' + (ConvertTo-LamCaptureHeaderValue $RunKey))
+        [void]$header.Add('goal: ' + (ConvertTo-LamCaptureHeaderValue $Goal))
+        [void]$header.Add('detector_ordinal: ' + (Get-LamCaptureDetectorOrdinal -RunKey $RunKey -Goal $Goal))
+        [void]$header.Add('instrument: ' + (ConvertTo-LamCaptureHeaderValue $InstrumentPath))
+        [void]$header.Add('cwd: ' + (ConvertTo-LamCaptureHeaderValue $cwdNow))
+        [void]$header.Add('captured_at: ' + $capturedAt)
+        [void]$header.Add('ran: ' + [string]$res.ran)
+        [void]$header.Add('exit_code: ' + [string]$code)
+        [void]$header.Add('tally_count: ' + [string]$res.tally_count)
+        [void]$header.Add('body_bytes: ' + [string]$res.body_bytes)
+        [void]$header.Add('body_sha256: ' + [string]$res.body_sha256)
+        $headerText = ($header -join "`n") + "`n"
+
+        # (h) 3 -- NEVER A ZERO-BYTE BODY. The sentence is the record of the silence.
+        $silentStatement = '(THE INSTRUMENT PRINTED NOTHING on stdout or stderr. It was run and it said nothing; this sentence is the record of that silence, not the absence of a record, and body_bytes: 0 above says the same as a number.)'
+        if (-not $res.ran) { $silentStatement = '(NOTHING CAME BACK AND THE INSTRUMENT DID NOT RUN TO COMPLETION: ran is False above, and body_bytes: 0 says no text was returned.)' }
+        # ONE EMPTY LINE IS NOT SILENCE. The empty body then gets a sentence that says what was
+        # printed, and never the silence sentence.
+        $emptyLineStatement = '(THE INSTRUMENT PRINTED ONE EMPTY LINE AND NOTHING ELSE on stdout or stderr. It was run and its whole output is that one empty line, which flattens to no text, so body_bytes: 0 above counts no text; this sentence is the record of that empty line, and it is not a record of silence.)'
+        if ($res.ran -and ($rawItemCount -gt 0)) { $silentStatement = $emptyLineStatement }
+        $bodyInner = $flat
+        if ($flat.Length -eq 0) { $bodyInner = $silentStatement }
+        $bodyBlock = "--- instrument stdout and stderr, verbatim ---`n" + $bodyInner + "`n--- end of instrument output ---`n"
+        $stdoutText = $headerText + $bodyBlock
+
+        # (h) 1 and 4 -- THE TALLY FILE. Line 1 is exactly what it always was; every further TALLY
+        # line follows in order; the EXIT line always ends the file.
+        $tallyOut = New-Object System.Collections.Generic.List[string]
+        $tallyKept = @($res.tally_lines)
+        # Line 1 is the first KEPT line, so the length bound reaches it too; for any TALLY line
+        # inside the bound that is byte-for-byte the first TALLY line, as it always was.
+        $tallyFirst = $res.tally_line
+        if (-not $res.tally_found) { $tallyFirst = "NO-TALLY exit_code=$code" }
+        elseif ($tallyKept.Count -gt 0) { $tallyFirst = [string]$tallyKept[0] }
+        [void]$tallyOut.Add($tallyFirst)
+        for ($tallyAt = 1; $tallyAt -lt $tallyKept.Count; $tallyAt++) { [void]$tallyOut.Add([string]$tallyKept[$tallyAt]) }
+        if ($res.tally_count -gt $tallyKept.Count) {
+            [void]$tallyOut.Add("BOUND tally_lines_kept=$($tallyKept.Count) tally_count=$($res.tally_count) -- the column-0 TALLY lines past the bound are in the stdout file's verbatim body and are not repeated here")
+        }
+        [void]$tallyOut.Add("EXIT exit_code=$code ran=$($res.ran) tally_count=$($res.tally_count) captured_at=$capturedAt")
+        $tallyText = ($tallyOut -join "`n") + "`n"
+
+        # (f) OVERWRITE IN PLACE. WriteAllText truncates; nothing here appends.
+        [System.IO.File]::WriteAllText($paths.stdout, $stdoutText, $enc)
+        [System.IO.File]::WriteAllText($paths.tally, $tallyText, $enc)
+        $res.persisted = $true
+        # Hashed from the BYTES THAT WERE WRITTEN, not by re-reading the file: a re-read would
+        # measure whatever is on disk now, which is the thing a later reader wants to check
+        # against this figure rather than have derived from it. These are the FILE's bytes, header
+        # included; the instrument's own bytes are body_sha256 / body_bytes.
+        $bytes = $enc.GetBytes($stdoutText)
+        $res.stdout_bytes  = $bytes.Length
+        $res.stdout_sha256 = Get-LamCaptureSha256 -Bytes $bytes
+    } catch {
+        $res.persisted    = $false
+        $res.persist_note = "not persisted: $($_.Exception.Message)"
+    }
+
+    # (a) THE LAST WORD, AND NOTHING NATIVE AFTER IT. mission-goal-check.ps1's detector reads
+    # $LASTEXITCODE on the line after this call returns; this assignment makes that value the
+    # instrument's own, whatever the persistence branch above did or did not do.
+    $global:LASTEXITCODE = $code
+    return $res
+}

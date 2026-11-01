@@ -1,0 +1,1320 @@
+#!/usr/bin/env python3
+"""THE SEATING HELPER.
+
+BATCH-5 WP-O (register row 413; the charter is mission ledger entry 1596, section A). A seat that takes over an arc
+does the same five things before its first act, and until this file each seat did them with scratch scripts of its
+own, opened on its own session id and its own absolute root: it copied the evaluator's verdict before anything could
+overwrite it, said what that verdict was, compared the predecessor's keep-table with the operator's copy, replaced
+the HANDOFF head on STATUS.md, and counted the arc's stops by column. This file is those five, tracked, in the form
+of the two composers beside it. It imports no sibling: each tool under tools/lam runs alone, so the clock and the one
+read below are written here and again, byte for byte, in gen_brief.py.
+
+WHAT IT READS, AND HOW. Every file by ONE short open -- read to the end, close -- with no handle kept. The evaluator
+holds the admissions record, its own verdict and the live instrument capture with NO SHARING for an instant each
+(tools/lam/mission-goal-check.ps1), and a reader's handle met at that instant costs that evaluation its HANDOFF head,
+its reuse or -- met at the append -- the stop itself (the hook blocks until the next stop); it can never yield an
+admission. So a read is short, and this tool's own open, where it meets such a hold, is tried five times 200 ms
+apart and then REFUSED by name -- never read as "absent"; a kept capture that stands and is not opened is said
+COULD NOT BE OPENED, a finding, and a folder where a file is looked for is said to be a folder. A LIVE VERDICT IS
+READ TWICE: the write is not atomic, so two whole reads must be byte-equal, end in a line end, hold exactly one
+column-0 `goal:`, one `evaluated_at:` and one `verdict:`, each with its value on its line, one `detectors:`, as
+many `  - type:` entries as `detector_count:` says, and under each entry its `ok:` and its `detail:` line. Keys are
+read by exact name and colon and every other line is passed over, so a key the evaluator adds later changes nothing
+here.
+
+WHAT A VERDICT IS, BY ITS BYTES. THE COLUMN is read from the OPENING of each `instrument_exit0` detail, never by a
+search of the whole of it (a declined reuse quotes capture names and header values, so a search can be fed):
+  REUSED          `<leaf> exited <n> (require 0). REUSED A FRESH READING, `
+  FRESH           `<leaf> exited <n> (require 0). Instrument output `
+  NOT_EVALUATED   `NOT EVALUATED -- hook-mode short-circuit`
+  NOT_RUN         `instrument_exit0 has no 'path'`, `instrument not on disk: `, `detector 'instrument_exit0' THREW and
+                  is recorded as FAILED, not skipped: `, or `<leaf> NOT RUN: engine down -- `
+  NONE            the verdict holds no such entry;  UNREAD  an entry whose detail opens as none of these;
+  MIXED           two or more entries that do not share one column.
+`<leaf>` is the instrument's file name -- a text that holds no path separator, no ` -- ` and no `: ` -- standing
+before the first ` exited <n> (require 0). ` that one of the two sentences follows, or before ` NOT RUN: engine down
+-- `. A detail in which a text that is NO leaf -- one that holds a path separator, ` -- ` or `: ` -- stands before
+a whole opening does not OPEN with it and is UNREAD. PLAIN WORDS that hold none of the three, standing before
+` exited <n> (require 0). ` and one of the two sentences, or before ` NOT RUN: engine down -- `, ARE that opening,
+the words its leaf: a sentence so worded is read FRESH, REUSED or NOT RUN. A leaf that itself spelled one of the
+openings would be read by it, and an instrument whose own file name held ` -- ` would read UNREAD; no instrument
+is named either way.
+THE ARM that admitted the stop is the `verdict:` word and nothing else: HALT, AWAITING_AMENDMENT_GATE,
+AWAITING_DISPATCH_GATE, HANDOFF_ADMITTED, or none (MET, NOT_MET), or GOAL_ABSENT. The lists of a lower arm are still
+written under a higher verdict, and under an open HALT an eligible HANDOFF head reads `ELIGIBLE, NOT SPENT`: the
+record is then expected to hold no line for that brief, and this tool says so, or names the line that does.
+
+SUBCOMMANDS
+  copy --root R --goal G --close-folder NAME [--verdict FILE] [--hand-tee LABEL] [--make-folder]
+      THE SEATING COPY. Reads the verdict of G -- the first of R/.mission/goals/G.verdict.yaml and
+      R/.mission-runtime/lam/goals/G.verdict.yaml that stands; both standing is REFUSED unless --verdict names one --
+      and writes, by exclusive create under R/.mission-runtime/lam/close/NAME/, the very bytes read, named by what
+      the bytes are: G.verdict.<evaluated_at without - and :>.<VERDICT>.instrument-<COLUMN>.yaml (with --hand-tee,
+      `hand-tee-<LABEL>.` stands before the stamp), and beside it <copy>.seated, ONE line, this tool's clock at the
+      write. The statement `read` prints is read BEFORE the first write and printed after it; the pair is written
+      whole or not at all (what this run created is taken back where a create fails, and the line says so; a copy
+      ANOTHER run wrote between this run's look and its write is refused as a copy that stands, and nothing of that
+      run's is touched). --make-folder first makes the ONE folder close/NAME where it is absent. REFUSED: a name
+      that begins HALT- in any letter case once its dots and blanks are dropped (the evaluator's HALT scan is by
+      name, and by the 8.3 name too) -- the copy's, and the close folder's NAME too, which the scan of files does
+      not list and this tool neither makes nor writes into; a goal id that holds `hand-tee-` (the census tells a
+      hand tee by the copy's name holding it, and a copy's name opens with its goal); a verdict whose own `goal:`
+      line names another goal than G (the name is composed from the bytes, the goal among them); --hand-tee where
+      the verdict's own short_circuited is above 0
+      (the bytes show a hook stop, and the name is the one record of hook or hand); a copy, or a stamp without its
+      copy, already standing.
+  read --root R (--goal G | --verdict FILE)
+      THE STATEMENT, writing nothing: the verdict word and its stamp; one COLUMN line per instrument entry (for a
+      REUSED one the kept capture's path and sha256, and whether it is ON DISK under R at that digest -- read by its
+      tail beyond the verdict's own mission_root, never by its absolute spelling, and not at all where that tail
+      would leave R); the ARM with what stands behind it; and the HANDOFF head's reading where the goal declares
+      the arm. Exit 1 where a finding stands -- among them a detail that names another kept path than the list's.
+  keep --brief B --copy DIR [--exclude NAME]...
+      THE OPERATOR's COMPARE, in his words: the keep-table rows of B (`| name | bytes | sha256 |`, found as his own
+      line finds them: B read as UTF-32 or UTF-16 where it opens on that mark and as UTF-8 otherwise, a leading mark
+      set aside, a line ended by CR LF, by LF or by a lone CR, the pattern without regard to letter case) against the
+      files of DIR; `MISMATCH <name>` per failing row with a `why:` line beneath; then `<ok> of <rows>, <bad>
+      mismatches`. A `.` part of a name is passed over; a name with a drive, a leading separator or a `..` part
+      does not stay inside the copy and is a MISMATCH -- THERE THE VERB IS STRICTER THAN HIS LINE, which follows
+      such a name where it leads. A file of the copy the system marks HIDDEN is a MISMATCH, as it is to his line,
+      whose Get-Item does not see it. An --exclude is the bare name of ONE top-level folder of DIR, and one that names
+      none is REFUSED.
+  head --root R --line-file F (--replace-handoff | --place-handoff) [--predecessor-brief B] [--expect-sha256 S]
+      THE STATUS HEAD. Prepends the lines of F to R/.mission-runtime/lam/STATUS.md and leaves every prior byte
+      beneath them. The lines are the caller's bytes but for THREE tokens this tool fills from its own clock at the
+      write: {CLOCKMS}, and {SEAM_FROM_FIRST} and {SEAM_FROM_END} -- the spans from the two stamps of the line
+      `SEAM BASES first <stamp> end <stamp>` in the brief --predecessor-brief names. --replace-handoff is the
+      successor's: line 1 must begin HANDOFF, the head found is SAID (in the form or out of it; its brief re-hashed,
+      or why it is no file) and replaced either way, and the new line 1 may begin neither HANDOFF nor AWAITING.
+      --place-handoff is the outgoing seat's: the new line 1 must be a HANDOFF head in the evaluator's own form,
+      holding no token, whose two digests are the brief's, re-hashed -- the brief a FILE: a device's name, which
+      reads as no bytes, is REFUSED. The write is ONE temporary file of one fixed
+      name beside STATUS.md and ONE replace; the admissions record is opened for reading alone. Exit 3 where the
+      replace was made and STATUS.md could not then be re-read and proved. TWO LIMITS of "as the evaluator reads
+      it": line 1 is read as UTF-8 (a UTF-8 mark passed over), so a STATUS.md that opens with a UTF-16 mark, which
+      the evaluator decodes, is here no HANDOFF head and is REFUSED; and a record line is compared key by key only
+      where it parses as JSON here with the two keys in their own letter case, and searched as text otherwise --
+      a line PowerShell parses and Python does not can read SPENT here and unspent there.
+  census --root R --prefix P [--machine]
+      THE STOPS BY COLUMN: every *.verdict*.yaml directly inside each folder of R/.mission-runtime/lam/close whose
+      name starts with P (as spelled: the match is by letter case), classed by its bytes; A STOP IS ONE VERDICT's
+      BYTES -- the same bytes met again, one verdict copied into two folders, are counted ONCE under the first copy
+      met and the other is named (`THE SAME VERDICT AGAIN, counted once: ...`); hook stop or hand tee by the file
+      name holding `hand-tee-` (it is recorded nowhere else) -- and where the copies of ONE verdict are named both
+      ways, that is a FINDING: the stop is counted as its first copy says and its seconds leave the sum; the
+      table, the count line, and the seconds the REUSED hook stops saved -- the first
+      elapsed_seconds on the first column-0 TALLY line of each kept capture a REUSED hook stop cites, every one of
+      a stop whose instrument entries are ALL reused; a stop whose entries differ is counted MIXED and not summed,
+      and a stop with a FINDING -- its capture absent, differing, held, without such a line, or named otherwise by
+      its own detail -- is counted and its seconds are left out.
+
+REFUSALS are one column-0 line, "REFUSED: <reasons> -- nothing was written", exit 2, before a byte is written. Four
+end on their own words in place of those: copy's two -- where the pair could not both be written (what it created
+is removed, or named as standing), and where another run wrote the copy between this run's look and its write
+(`this run wrote no file`, and a folder this run made is said to stand) -- and head's two after its temporary file
+was written -- STATUS.md moved, or could not be replaced -- which say STATUS.md was not touched and whether the
+temporary file was removed.
+FINDINGS (a mismatch, a kept capture absent, differing or not opened, a detail that names another kept path than the
+list's, a record line where none is expected, one verdict's bytes named a hook stop here and a hand tee there) are
+printed and exit 1. No flag carries a time, and no verb takes or holds a session's id. It runs no git and starts no
+process.
+"""
+import argparse
+import datetime
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+
+STATUS_PARTS = (".mission-runtime", "lam", "STATUS.md")
+RECORD_PARTS = (".mission-runtime", "lam", "handoff-admissions.jsonl")
+CLOSE_PARTS = (".mission-runtime", "lam", "close")
+VERDICT_PLACES = ((".mission", "goals"), (".mission-runtime", "lam", "goals"))
+TEMP_NAME = "STATUS.md.seat.tmp"
+# The evaluator's own pattern, as its source spells it (.NET); compiled after the two substitutions Python's
+# dialect needs: `(?<` to `(?P<`, and `\z` to `\Z`.
+HANDOFF_HEAD_PATTERN = r"\AHANDOFF AT (?<ctx>0|[1-9][0-9]?|100)% (?<lf>[0-9A-Fa-f]{64}); (?<raw>[0-9A-Fa-f]{64}) (?<path>\S.*)\z"
+HANDOFF_HEAD_RX = re.compile(HANDOFF_HEAD_PATTERN.replace("(?<", "(?P<").replace("\\z", "\\Z"))
+TOKEN_RX = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+STAMP_RX = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z\Z")
+VERDICT_WORD_RX = re.compile(r"\A[A-Z][A-Z_]*\Z")
+KEY_RX = re.compile(r"\A([A-Za-z_][A-Za-z0-9_]*):(.*)\Z")
+KEEP_ROW_RX = re.compile(r"^\| (\S.*?) \| (\d+) \| ([0-9a-f]{64}) \|$", re.IGNORECASE)
+LINE_TOKEN_RX = re.compile(r"\{([A-Z][A-Z0-9_]*)\}")
+CLOCK_TOKENS = ("CLOCKMS", "SEAM_FROM_FIRST", "SEAM_FROM_END")
+SEAM_BASES_RX = re.compile(r"\ASEAM BASES first (\S+) end (\S+)\Z")
+EXITED_RX = re.compile(r"\A exited (-?[0-9]+) \(require 0\)\. (REUSED A FRESH READING, |Instrument output )")
+NOT_EVALUATED_OPEN = "NOT EVALUATED -- hook-mode short-circuit"
+ENGINE_DOWN = " NOT RUN: engine down -- "
+NO_LEAF_RX = re.compile(r"[\\/]| -- |: ")
+NOT_RUN_OPENS = ("instrument_exit0 has no 'path'", "instrument not on disk: ",
+                 "detector 'instrument_exit0' THREW and is recorded as FAILED, not skipped: ")
+KEPT_AT_RX = re.compile(r" THE CAPTURE CITED IS KEPT at (.+?) \((?:written now|already kept, the same bytes)")
+KEPT_ITEM_RX = re.compile(r"\A(.+) sha256 ([0-9a-f]{64})\Z")
+ADMITTED_LINE_RX = re.compile(r"HANDOFF ADMITTED (?:0|[1-9][0-9]?|100)% ([0-9a-f]{64}); ([0-9a-f]{64}) ")
+RECORDED_AT_RX = re.compile(r" -- recorded at (.+) line ([0-9]+); the same brief never admits again")
+ELAPSED_RX = re.compile(r"elapsed_seconds=([0-9]+)")
+CENSUS_HEADER = ("| evaluated_at | goal | verdict | column | what | copy (folder under close/ : name, bytes, sha256) | "
+                 "kept capture where REUSED |")
+CENSUS_RULE = "|---|---|---|---|---|---|---|"
+COLUMN_SHOWN = {"REUSED": "REUSED", "FRESH": "FRESH", "NOT_EVALUATED": "NOT EVALUATED", "NOT_RUN": "NOT RUN",
+                "NONE": "NONE", "UNREAD": "UNREAD", "MIXED": "MIXED"}
+
+
+HELD = ("could not be opened in five tries 200 ms apart (PermissionError: another process holds it without sharing, or "
+        "it is not a file this process may open); it is not read as absent")
+
+
+class Refused(Exception):
+    """A refusal: its reasons, and the tail its one line ends on -- "nothing was written" unless the verb says other."""
+
+    def __init__(self, reasons, tail=None):
+        Exception.__init__(self, "; ".join(reasons))
+        self.reasons = list(reasons)
+        self.tail = tail
+
+
+def emit(text):
+    """One line on stdout, ASCII whatever the console's code page: anything else is backslash-escaped."""
+    sys.stdout.write(text.encode("ascii", "backslashreplace").decode("ascii") + "\n")
+    sys.stdout.flush()
+
+
+def clock_now():
+    """The clock at the call, UTC, YYYY-MM-DDTHH:MM:SS.mmmZ: the form of the evaluator's evaluated_at."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return now.strftime("%Y-%m-%dT%H:%M:%S.") + "%03dZ" % (now.microsecond // 1000)
+
+
+def read_whole(path):
+    """Every byte of one file by ONE short open: read to the end, close. An open another process refuses is tried
+    five times 200 ms apart and then raised; no handle outlives the call."""
+    last = None
+    for attempt in range(5):
+        if attempt:
+            time.sleep(0.2)
+        try:
+            with open(path, "rb") as handle:
+                return handle.read()
+        except PermissionError as exc:
+            last = exc
+    raise last
+
+
+def sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def stamp_ms(stamp):
+    """Milliseconds since the epoch of a stamp in the clock's form, or None where it is not one."""
+    if not STAMP_RX.match(stamp):
+        return None
+    try:
+        whole = datetime.datetime.strptime(stamp[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+    return int(whole.timestamp()) * 1000 + int(stamp[20:23])
+
+
+def span_text(from_ms, to_ms):
+    """A span between two stamps AS PRINTED, in the seats' form: `2 min 29.795 s (149.795 s)`."""
+    milli = to_ms - from_ms
+    minutes = milli // 60000
+    rest = milli - minutes * 60000
+    return "%d min %d.%03d s (%d.%03d s)" % (minutes, rest // 1000, rest % 1000, milli // 1000, milli % 1000)
+
+
+def lf_blob_sha256(data):
+    """The evaluator's LF/blob digest (Get-PlacementLfBlobSha256): bytes git's own text test calls binary -- a NUL,
+    a lone CR, more non-printable than printable >> 7 -- or bytes with no CR LF pair hash AS THEY ARE; otherwise
+    every CR LF is folded to LF and the rest is hashed."""
+    nul = lone_cr = crlf = printable = non_printable = 0
+    index, count = 0, len(data)
+    while index < count:
+        byte = data[index]
+        if byte == 13:
+            if index + 1 < count and data[index + 1] == 10:
+                crlf += 1
+                index += 2
+            else:
+                lone_cr += 1
+                index += 1
+            continue
+        index += 1
+        if byte == 10:
+            continue
+        if byte == 127:
+            non_printable += 1
+        elif byte < 32:
+            if byte in (8, 9, 27, 12):
+                printable += 1
+            else:
+                if byte == 0:
+                    nul += 1
+                non_printable += 1
+        else:
+            printable += 1
+    if count >= 1 and data[count - 1] == 26:
+        non_printable -= 1
+    binary = lone_cr > 0 or nul > 0 or (printable >> 7) < non_printable
+    if binary or crlf == 0:
+        return sha256(data)
+    return sha256(data.replace(b"\r\n", b"\n"))
+
+
+def text_lines(data):
+    """The lines of a file: bytes split on LF, one trailing CR dropped from each; the piece after a final LF is
+    not a line."""
+    pieces = data.decode("utf-8", "replace").split("\n")
+    if pieces and pieces[-1] == "":
+        pieces.pop()
+    return [piece[:-1] if piece.endswith("\r") else piece for piece in pieces]
+
+
+def brief_lines(data):
+    """The lines of a brief AS THE OPERATOR's COMPARE LINE READS THEM (Select-String): UTF-32 or UTF-16 where the
+    file opens on that mark (the UTF-32 marks looked for first: the little-endian one begins as UTF-16's does),
+    else UTF-8 with a leading mark set aside; and a line ends at CR LF, at LF, and at a lone CR."""
+    if data[:4] in (b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff"):
+        text = data.decode("utf-32", "replace")
+    elif data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        text = data.decode("utf-16", "replace")
+    else:
+        text = data.decode("utf-8-sig", "replace")
+    return re.split(r"\r\n|\n|\r", text)
+
+
+def unquote(value):
+    """A verdict's scalar as written: a single-quoted one unquoted (a doubled quote is one), a bare one as it is."""
+    value = value.strip()
+    if len(value) >= 2 and value.startswith("'") and value.endswith("'"):
+        return value[1:-1].replace("''", "'")
+    return value
+
+
+def cut(text, most=300):
+    return text if len(text) <= most else text[:most] + " ...[cut; %d characters]" % len(text)
+
+
+def id_fault(label, value):
+    """Why an id may not be composed into a path, or ''."""
+    if not TOKEN_RX.match(value):
+        return label + " " + ascii(value) + " is not one token [A-Za-z0-9][A-Za-z0-9._-]*"
+    return ""
+
+
+def halt_named(name):
+    """True where the evaluator's HALT scan would list a file of this name. The scan is by NAME, without regard to
+    case; and on a volume that keeps 8.3 names it matches the SHORT name too, which the file system builds from the
+    long one with its dots and blanks removed -- so `HA.LT-x.verdict...yaml` is listed as `HALT-X~1.YAM`."""
+    return re.sub(r"[ .]", "", name).upper().startswith("HALT-")
+
+
+def parse_verdict(data):
+    """A verdict artifact by its lines: column-0 scalars and lists by exact key, and the detector entries. A key met
+    twice keeps its FIRST reading and is counted."""
+    lines = text_lines(data)
+    verdict = {"scalars": {}, "lists": {}, "counts": {}, "detectors": []}
+    index, count = 0, len(lines)
+    while index < count:
+        line = lines[index]
+        if line.startswith("  - type: "):
+            entry = {"type": line[10:].strip(), "ok": "", "detail": None}
+            index += 1
+            while index < count and lines[index].startswith("    "):
+                if lines[index].startswith("    ok: "):
+                    entry["ok"] = lines[index][8:].strip()
+                elif lines[index].startswith("    detail: ") and entry["detail"] is None:
+                    entry["detail"] = unquote(lines[index][12:])
+                index += 1
+            verdict["detectors"].append(entry)
+            continue
+        found = KEY_RX.match(line)
+        index += 1
+        if not found:
+            continue
+        key, rest = found.group(1), found.group(2).strip()
+        verdict["counts"][key] = verdict["counts"].get(key, 0) + 1
+        if rest == "" or rest.startswith("#"):
+            items = []
+            while index < count and lines[index].startswith("  - ") and not lines[index].startswith("  - type: "):
+                items.append(unquote(lines[index][4:]))
+                index += 1
+            verdict["lists"].setdefault(key, items)
+        elif rest == "[]" or rest.startswith("[] "):
+            verdict["lists"].setdefault(key, [])
+        else:
+            verdict["scalars"].setdefault(key, rest)
+    return verdict
+
+
+def verdict_faults(data, verdict):
+    """Why these bytes are not ONE whole verdict artifact a copy can be named from."""
+    faults = []
+    if not data.endswith(b"\n"):
+        faults.append("it does not end in a line end (a half file: the evaluator's write is not atomic)")
+    scalars = verdict["scalars"]
+    # `goal:` with them: every writer of the artifact writes it, and a copy's name is composed from it.
+    for key in ("goal", "evaluated_at", "verdict"):
+        if verdict["counts"].get(key, 0) != 1:
+            faults.append("it holds %d column-0 `%s:` line(s), not one" % (verdict["counts"].get(key, 0), key))
+        elif key not in scalars:
+            # The line stands and carries nothing after its colon (or a list): it is no goal, no stamp, no word.
+            faults.append("its `%s:` line carries no value" % key)
+    if "evaluated_at" in scalars and not STAMP_RX.match(scalars["evaluated_at"]):
+        faults.append("its evaluated_at " + ascii(scalars["evaluated_at"]) + " is not YYYY-MM-DDTHH:MM:SS.mmmZ")
+    if "verdict" in scalars and not VERDICT_WORD_RX.match(scalars["verdict"]):
+        faults.append("its verdict " + ascii(scalars["verdict"]) + " is not one word of capitals")
+    declared = scalars.get("detector_count", "")
+    if not re.match(r"\A[0-9]+\Z", declared):
+        faults.append("it holds no `detector_count:` that is a number")
+    elif int(declared) != len(verdict["detectors"]):
+        faults.append("it holds %d `  - type:` entr%s where detector_count says %s (a half file)"
+                      % (len(verdict["detectors"]), "y" if len(verdict["detectors"]) == 1 else "ies", declared))
+    # `detectors:` is the last key every writer of the artifact writes, and an entry is three lines: a file cut
+    # short at a line end before either is whole is a half file too.
+    if verdict["counts"].get("detectors", 0) != 1:
+        faults.append("it holds %d column-0 `detectors:` line(s), not one (a half file)" % verdict["counts"].get("detectors", 0))
+    half = [entry["type"] for entry in verdict["detectors"] if entry["ok"] == "" or entry["detail"] is None]
+    if half:
+        faults.append("its entry `" + half[0] + "` lacks its `ok:` or its `detail:` line (a half file)")
+    return faults
+
+
+def read_verdict(path, twice):
+    """(bytes, parsed). REFUSED where the file is absent, held, read twice with two results, or not a whole verdict."""
+    if os.path.isdir(path):
+        raise Refused(["a folder stands at " + path + " where a verdict is looked for"])
+    try:
+        data = read_whole(path)
+        again = read_whole(path) if twice else data
+    except FileNotFoundError:
+        raise Refused(["no verdict stands at " + path])
+    except PermissionError:
+        raise Refused(["the verdict at " + path + " " + HELD])
+    except (OSError, ValueError) as exc:
+        raise Refused(["the verdict at " + path + " cannot be read (" + exc.__class__.__name__ + ")"])
+    if again != data:
+        raise Refused(["the verdict at " + path + " read twice gave two results (%d B, then %d B): an evaluation is "
+                       "writing it" % (len(data), len(again))])
+    verdict = parse_verdict(data)
+    faults = verdict_faults(data, verdict)
+    if faults:
+        raise Refused(["the file at " + path + " is not one whole verdict: " + "; ".join(faults)])
+    return data, verdict
+
+
+def read_optional(path, what):
+    """The bytes of a file that may be absent (None then). A folder at the path, and an open that is refused past the
+    five tries, are REFUSED by name: neither is read as absent."""
+    if os.path.isdir(path):
+        raise Refused(["a folder stands at " + path + " where the " + what + " is looked for"])
+    try:
+        return read_whole(path)
+    except FileNotFoundError:
+        return None
+    except PermissionError:
+        raise Refused(["the " + what + " at " + path + " " + HELD])
+    except (OSError, ValueError) as exc:
+        raise Refused(["the " + what + " at " + path + " cannot be read (" + exc.__class__.__name__ + ")"])
+
+
+def hidden(path):
+    """True where the system marks the file hidden (Windows' attribute); False where it keeps no mark."""
+    try:
+        return bool(getattr(os.stat(path), "st_file_attributes", 0) & 2)
+    except OSError:
+        return False
+
+
+def read_file(path, what):
+    """The bytes of a file that must stand: its absence is REFUSED by name, as a hold is."""
+    data = read_optional(path, what)
+    if data is None:
+        raise Refused(["no " + what + " at " + path])
+    return data
+
+
+def classify(detail):
+    """(column, exit or None) of ONE instrument_exit0 detail, by its opening."""
+    if detail is None:
+        return "UNREAD", None
+    if detail.startswith(NOT_EVALUATED_OPEN):
+        return "NOT_EVALUATED", None
+    for opening in NOT_RUN_OPENS:
+        if detail.startswith(opening):
+            return "NOT_RUN", None
+    # AN OPENING BEGINS WITH A LEAF: a text that holds no path separator, no ` -- ` and no `: `. The leaf is what
+    # stands before ` NOT RUN: engine down -- ` where that comes before any ` exited `; else before the FIRST
+    # ` exited ` that the whole opening follows -- ` exited <n> (require 0). ` and one of the two sentences. Where
+    # what stands before is no leaf, the detail OPENS otherwise and is UNREAD: a whole opening quoted further on in
+    # another sentence is not the detail's opening.
+    at = detail.find(" exited ")
+    down = detail.find(ENGINE_DOWN)
+    if down > 0 and (at < 0 or down < at) and not NO_LEAF_RX.search(detail[:down]):
+        return "NOT_RUN", None
+    while at > 0 and not NO_LEAF_RX.search(detail[:at]):
+        found = EXITED_RX.match(detail[at:])
+        if found:
+            return ("REUSED" if found.group(2).startswith("REUSED") else "FRESH"), int(found.group(1))
+        at = detail.find(" exited ", at + 1)
+    return "UNREAD", None
+
+
+def instrument_entries(verdict):
+    """One reading per instrument_exit0 entry: its column, exit, detail and -- where REUSED -- the kept copy the
+    verdict names for it (the path and sha256 from `instrument_captures_kept`, matched to the detail's own path)."""
+    kept = []
+    for item in verdict["lists"].get("instrument_captures_kept", []):
+        found = KEPT_ITEM_RX.match(item)
+        if found:
+            kept.append((found.group(1), found.group(2)))
+    readings = []
+    reused = [entry for entry in verdict["detectors"] if entry["type"] == "instrument_exit0"
+              and classify(entry["detail"])[0] == "REUSED"]
+    for entry in verdict["detectors"]:
+        if entry["type"] != "instrument_exit0":
+            continue
+        column, code = classify(entry["detail"])
+        reading = {"column": column, "exit": code, "detail": entry["detail"] or "", "kept_path": None,
+                   "kept_sha": None, "kept_note": "", "kept_said": None}
+        if column == "REUSED":
+            said = KEPT_AT_RX.search(reading["detail"])
+            # The path the detail names: what stands between `KEPT at ` and the parenthesis -- less a digest, where
+            # a wording of the evaluator's writes ` sha256 <64 hex>` after the path, so that a detail which names
+            # the list's own path is never read as naming another.
+            said_path = None if said is None else re.sub(r" sha256 [0-9a-f]{64}\Z", "", said.group(1))
+            chosen = None
+            if said_path is not None:
+                for path, digest in kept:
+                    if os.path.normcase(path) == os.path.normcase(said_path):
+                        chosen = (path, digest)
+                        break
+            if chosen is None and len(kept) == 1 and len(reused) == 1:
+                # ONE reused entry and ONE item: the item is taken. Where the entry's own detail names ANOTHER path
+                # the verdict contradicts itself about which capture was kept, and that is a finding.
+                chosen = kept[0]
+                if said_path is not None:
+                    reading["kept_said"] = said_path
+                    reading["kept_note"] = " -- BUT THE DETAIL NAMES ANOTHER PATH, " + said_path + ": a finding"
+            if chosen is not None:
+                reading["kept_path"], reading["kept_sha"] = chosen
+        readings.append(reading)
+    return readings
+
+
+def column_word(readings):
+    """The column a copy is NAMED by."""
+    if not readings:
+        return "NONE"
+    words = sorted({reading["column"] for reading in readings})
+    return words[0] if len(words) == 1 else "MIXED"
+
+
+def kept_on_disk(root, verdict, kept_path, kept_sha):
+    """(word, local path or '', bytes or None) -- EQUAL, ABSENT, DIFFERS, COULD NOT BE OPENED, NOT A FILE, or NOT
+    UNDER mission_root. The kept copy is read under --root by its tail beyond the verdict's own mission_root, never
+    by its absolute spelling; a tail that climbs out by `..`, or holds a colon (a drive, a stream), is not read at
+    all. COULD NOT BE OPENED is said of ONE thing: a file that stands and that five tries did not open (a hold).
+    A folder at the path, and a path the system refuses for any other reason (a name no file can bear), are NOT A
+    FILE, with the reason; none of the three is read as absent."""
+    base = verdict["scalars"].get("mission_root", "")
+    norm_base = os.path.normcase(base.rstrip("\\/"))
+    norm_path = os.path.normcase(kept_path)
+    if not norm_base or not (norm_path.startswith(norm_base + "\\") or norm_path.startswith(norm_base + "/")):
+        return "NOT UNDER mission_root", "", None
+    parts = [part for part in re.split(r"[\\/]", kept_path[len(base.rstrip("\\/")) + 1:]) if part]
+    if not parts or any(part in (".", "..") or ":" in part for part in parts):
+        return "NOT UNDER mission_root", "", None
+    local = os.path.join(root, *parts)
+    if not os.path.normcase(os.path.abspath(local)).startswith(os.path.normcase(os.path.abspath(root)).rstrip("\\/") + os.sep):
+        return "NOT UNDER mission_root", "", None
+    if os.path.isdir(local):
+        return "NOT A FILE (a folder stands there)", local, None
+    try:
+        data = read_whole(local)
+    except FileNotFoundError:
+        return "ABSENT", local, None
+    except PermissionError:
+        return "COULD NOT BE OPENED", local, None
+    except (OSError, ValueError) as exc:
+        return "NOT A FILE (" + exc.__class__.__name__ + ": the system refuses that path)", local, None
+    return ("EQUAL" if sha256(data) == kept_sha else "DIFFERS"), local, data
+
+
+def record_find(record, lf_digest, raw_digest):
+    """(digest found, line number) by the evaluator's own rule, or (None, 0): a line that parses and holds the two
+    keys is compared key by key; any other line is searched as text."""
+    for number, line in enumerate(record.decode("utf-8", "replace").split("\n"), start=1):
+        if not line.strip():
+            continue
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            obj = None
+        if isinstance(obj, dict) and "brief_lf_sha256" in obj and "brief_working_sha256" in obj:
+            for value in (str(obj["brief_lf_sha256"]).lower(), str(obj["brief_working_sha256"]).lower()):
+                if value and value in (lf_digest, raw_digest):
+                    return value, number
+        else:
+            low = line.lower()
+            for value in (lf_digest, raw_digest):
+                if value and value in low:
+                    return value, number
+    return None, 0
+
+
+def record_lines(record):
+    return len([line for line in record.split(b"\n") if line.strip()])
+
+
+def statement(verdict, root):
+    """(lines, findings): what a verdict is, by its bytes. `root` is where the runtime plane it names is read."""
+    scalars = verdict["scalars"]
+    word = scalars["verdict"]
+    out = ["VERDICT " + word + " evaluated_at " + scalars["evaluated_at"],
+           "goal_file: " + scalars.get("goal_file", "(the verdict carries none)")]
+    findings = 0
+    readings = instrument_entries(verdict)
+    if not readings:
+        out.append("COLUMN NONE (the verdict holds no instrument_exit0 entry)")
+    for reading in readings:
+        column = reading["column"]
+        if column == "REUSED":
+            if reading["kept_path"] is None:
+                out.append("COLUMN REUSED exit %d kept: THE VERDICT NAMES NO KEPT COPY for it under "
+                           "instrument_captures_kept -- a finding" % reading["exit"])
+                findings += 1
+                continue
+            state, _, _ = kept_on_disk(root, verdict, reading["kept_path"], reading["kept_sha"])
+            if state == "COULD NOT BE OPENED":
+                state += " (it stands, and five tries 200 ms apart did not open it: it is not read as absent)"
+            out.append("COLUMN REUSED exit %d kept %s sha256 %s on disk: %s%s" % (
+                reading["exit"], reading["kept_path"], reading["kept_sha"], state, reading["kept_note"]))
+            if state != "EQUAL" or reading["kept_note"]:
+                findings += 1
+        elif column == "FRESH":
+            out.append("COLUMN FRESH exit %d" % reading["exit"])
+        elif column == "NOT_EVALUATED":
+            out.append("COLUMN NOT EVALUATED (" + cut(reading["detail"][len(NOT_EVALUATED_OPEN):].lstrip(": ")) + ")")
+        elif column == "NOT_RUN":
+            out.append("COLUMN NOT RUN (" + cut(reading["detail"]) + ")")
+        else:
+            out.append("COLUMN UNREAD (" + cut(reading["detail"]) + ")")
+    handoff = [entry for entry in verdict["detectors"] if entry["type"] == "handoff_brief_present"]
+    handoff_detail = (handoff[0]["detail"] or "") if handoff else ""
+    record_path = os.path.join(root, *RECORD_PARTS)
+    if word == "HALT":
+        out.append("ARM HALT open_halts: " + (", ".join(verdict["lists"].get("open_halts", [])) or "(none named)"))
+    elif word in ("AWAITING_AMENDMENT_GATE", "AWAITING_DISPATCH_GATE"):
+        lines = verdict["lists"].get(word.lower(), [])
+        out.append("ARM %s %d line(s): %s" % (word, len(lines), " ; ".join(lines) or "(none named)"))
+    elif word == "HANDOFF_ADMITTED":
+        recorded = RECORDED_AT_RX.search(handoff_detail)
+        digests = ADMITTED_LINE_RX.search(" ".join(verdict["lists"].get("handoff_admitted", [])) or handoff_detail)
+        if handoff_detail.startswith("ADMITTED BY HAND, NOT RECORDED"):
+            out.append("ARM HANDOFF_ADMITTED BY HAND, NOT RECORDED")
+        elif recorded and digests:
+            number = int(recorded.group(2))
+            record = read_optional(record_path, "admissions record")
+            lines = [] if record is None else record.decode("utf-8", "replace").split("\n")
+            carried = 1 <= number <= len(lines) and any(value in lines[number - 1].lower() for value in digests.groups())
+            if carried:
+                out.append("ARM HANDOFF_ADMITTED recorded at line %d (the record re-read under --root: that line "
+                           "carries the brief's digests %s / %s)" % (number, digests.group(1)[:8], digests.group(2)[:8]))
+            else:
+                out.append("ARM HANDOFF_ADMITTED recorded at line %d -- BUT THE RECORD RE-READ UNDER --root %s: a finding"
+                           % (number, "IS ABSENT" if record is None else "HOLDS NO SUCH LINE CARRYING THE BRIEF's DIGESTS"))
+                findings += 1
+        else:
+            out.append("ARM HANDOFF_ADMITTED (how, the bytes do not say: " + cut(handoff_detail, 160) + ")")
+    elif word == "GOAL_ABSENT":
+        out.append("ARM GOAL_ABSENT")
+    elif word == "NOT_MET":
+        failing = [entry["type"] for entry in verdict["detectors"]
+                   if entry["ok"] == "false" and not (entry["detail"] or "").startswith(NOT_EVALUATED_OPEN)]
+        if "evaluator_error" in scalars:
+            maker = "evaluator_error: " + cut(unquote(scalars["evaluator_error"]), 200)
+        elif "goal_parse_error" in scalars:
+            maker = "goal_parse_error: " + cut(unquote(scalars["goal_parse_error"]), 200)
+        elif handoff_detail.startswith("NOT ADMITTED -- the admissions record"):
+            maker = "the admission's append failed"
+        elif failing:
+            maker = "failing: " + ", ".join(failing)
+        else:
+            maker = "no failing entry is named in the bytes"
+        out.append("ARM none: NOT_MET (" + maker + ")")
+    elif word == "MET":
+        out.append("ARM none: MET")
+    else:
+        out.append("ARM " + word + " (a verdict word this tool does not know)")
+    short = re.match(r"\A([0-9]+)", scalars.get("short_circuited", ""))
+    if short and int(short.group(1)) > 0:
+        out.append("A HOOK STOP (short_circuited %s)" % short.group(1))
+    else:
+        out.append("hook or hand: not in the bytes")
+    if handoff:
+        if handoff_detail.startswith("no HANDOFF head"):
+            out.append("no HANDOFF head")
+        elif handoff_detail.startswith("HANDOFF head NOT admitted -- "):
+            out.append("HANDOFF head REFUSED: " + cut(handoff_detail[len("HANDOFF head NOT admitted -- "):], 400))
+        elif handoff_detail.startswith("ELIGIBLE, NOT SPENT -- "):
+            digests = ADMITTED_LINE_RX.search(handoff_detail)
+            under = "HALT" if word == "HALT" else "an AWAITING line" if word.startswith("AWAITING") else word
+            record = read_optional(record_path, "admissions record")
+            if digests is None:
+                out.append("HANDOFF head ELIGIBLE, NOT SPENT; its digests are not in the detail, so the record was not searched")
+            else:
+                held = 0 if record is None else record_lines(record)
+                hit, number = (None, 0) if record is None else record_find(record, digests.group(1), digests.group(2))
+                if hit:
+                    out.append("HANDOFF head ELIGIBLE, NOT SPENT -- BUT THE ADMISSIONS RECORD CARRIES %s AT LINE %d of %d: "
+                               "a finding, none is expected under %s" % (hit[:8], number, held, under))
+                    findings += 1
+                else:
+                    out.append("HANDOFF head ELIGIBLE, NOT SPENT; the admissions record %s, none carrying %s or %s: as "
+                               "expected under %s" % ("is absent" if record is None else "holds %d line(s)" % held,
+                                                      digests.group(1)[:8], digests.group(2)[:8], under))
+        elif handoff_detail.startswith("ADMITTED ONE STOP") or handoff_detail.startswith("ADMITTED BY HAND"):
+            out.append("HANDOFF head ADMITTED")
+        else:
+            out.append("HANDOFF head: " + cut(handoff_detail, 300))
+    return out, findings
+
+
+def locate_verdict(root, goal, named):
+    """The verdict file of a goal: --verdict, else the first of the two places that stands; both standing REFUSED."""
+    if named:
+        return os.path.abspath(named)
+    places = [os.path.join(root, *(place + (goal + ".verdict.yaml",))) for place in VERDICT_PLACES]
+    # Whatever stands at a place is taken as standing there: a folder of that name is then SAID to be a folder by
+    # the read, as it is under --verdict, and is not told as "no verdict".
+    standing = [place for place in places if os.path.lexists(place)]
+    if not standing:
+        raise Refused(["no verdict of " + goal + " stands at " + places[0] + " or at " + places[1]])
+    if len(standing) > 1:
+        raise Refused(["a verdict of " + goal + " stands at BOTH " + places[0] + " and " + places[1] +
+                       ": name the one meant with --verdict"])
+    return standing[0]
+
+
+def run_copy(args):
+    root = os.path.abspath(args.root)
+    faults = [fault for fault in (id_fault("--goal", args.goal), id_fault("--close-folder", args.close_folder),
+                                  id_fault("--hand-tee", args.hand_tee) if args.hand_tee is not None else "") if fault]
+    if faults:
+        raise Refused(faults)
+    if halt_named(args.goal):
+        raise Refused(["--goal " + ascii(args.goal) + " begins HALT- once its dots are dropped, in any letter case: its copy would be named " +
+                       args.goal + ".verdict..., and a file whose name -- or whose 8.3 name -- begins HALT- under "
+                       ".mission-runtime/lam reads as an OPEN HALT to the evaluator's scan, which is by name"])
+    if "hand-tee-" in args.goal:
+        # THE CENSUS TELLS A HAND TEE BY THE COPY's NAME HOLDING `hand-tee-`, and a copy's name opens with its goal:
+        # every copy of such a goal, a hook stop's among them, would be counted a hand tee.
+        raise Refused(["--goal " + ascii(args.goal) + " holds `hand-tee-`: a copy's name opens with its goal, and the "
+                       "census tells a hand tee from a hook stop by the name holding `hand-tee-` -- every copy of this "
+                       "goal would be counted a hand tee"])
+    if halt_named(args.close_folder):
+        # The scan lists FILES, so a folder of such a name is not read as an open HALT; it is refused all the same:
+        # this tool makes and writes into no name under .mission-runtime/lam that begins HALT-, a folder's among them.
+        raise Refused(["--close-folder " + ascii(args.close_folder) + " begins HALT- once its dots are dropped, in any letter "
+                       "case: this tool makes no folder, and writes into none, whose name begins HALT- under "
+                       ".mission-runtime/lam"])
+    source = locate_verdict(root, args.goal, args.verdict)
+    data, verdict = read_verdict(source, twice=True)
+    # THE NAME IS COMPOSED FROM THE BYTES, the goal among them: a verdict whose own `goal:` line names another goal
+    # is not copied under this one's name (--verdict may name any file).
+    said_goal = verdict["scalars"].get("goal")
+    if said_goal is not None and unquote(said_goal) != args.goal:
+        raise Refused(["the verdict at " + source + " is goal " + ascii(unquote(said_goal)) + "'s by its own `goal:` line, "
+                       "not --goal " + ascii(args.goal) + "'s: a copy is named for the goal its bytes name"])
+    column = column_word(instrument_entries(verdict))
+    short = re.match(r"\A([0-9]+)", verdict["scalars"].get("short_circuited", ""))
+    if args.hand_tee is not None and short and int(short.group(1)) > 0:
+        raise Refused(["--hand-tee is given and the verdict's own bytes show A HOOK STOP (short_circuited " + short.group(1) +
+                       ", which only a Stop hook's evaluation writes above 0): a copy's name is the one record of hook or "
+                       "hand, and this one would say hand"])
+    compact = verdict["scalars"]["evaluated_at"].replace("-", "").replace(":", "")
+    name = (args.goal + ".verdict." + ("hand-tee-" + args.hand_tee + "." if args.hand_tee is not None else "") +
+            compact + "." + verdict["scalars"]["verdict"] + ".instrument-" + column + ".yaml")
+    if halt_named(name):
+        raise Refused(["the copy would be named " + name + ", and a file whose name -- or whose 8.3 name -- begins HALT- "
+                       "under .mission-runtime/lam reads as an OPEN HALT to the evaluator's scan, which is by name"])
+    if len(name) + len(".seated") > 255:
+        raise Refused(["the copy would be named " + name + ", which with its stamp's `.seated` is longer than 255 characters"])
+    close = os.path.join(root, *CLOSE_PARTS)
+    folder = os.path.join(close, args.close_folder)
+    target = os.path.join(folder, name)
+    seated = target + ".seated"
+    make = False
+    if not os.path.isdir(folder):
+        if not args.make_folder:
+            raise Refused(["the close folder " + folder + " is absent (--make-folder makes that one folder)"])
+        if os.path.exists(folder) or not os.path.isdir(close):
+            raise Refused(["--make-folder makes the ONE folder " + folder + ", and " +
+                           ("something that is not a folder stands there" if os.path.exists(folder)
+                            else "its parent " + close + " is absent")])
+        make = True
+    elif os.path.lexists(target):
+        there = read_optional(target, "copy")
+        raise Refused(["a file already stands at " + target + " (the copy there " +
+                       ("is BYTE-EQUAL to the verdict read" if there == data else "is NOT the bytes read") +
+                       "): a seating copy is never written over"])
+    elif os.path.lexists(seated):
+        raise Refused(["a stamp stands at " + seated + " and NO copy beside it (" + target + " is absent): a seating "
+                       "stamp is never written over"])
+    # THE STATEMENT IS READ BEFORE THE FIRST WRITE: it opens the admissions record, and an open that is refused there
+    # is refused while nothing is written. After the two creates nothing refuses.
+    lines, findings = statement(verdict, root)
+    wrote = []
+    try:
+        if make:
+            try:
+                os.mkdir(folder)
+                wrote.append(folder)
+            except FileExistsError:
+                # ANOTHER RUN made the folder between this run's look and its write: it stands, which is all
+                # --make-folder asks, and this run did not make it.
+                if not os.path.isdir(folder):
+                    raise
+                make = False
+        try:
+            handle = open(target, "xb")
+        except FileExistsError:
+            # ANOTHER RUN wrote the copy first. Nothing of this run's is taken back, for it wrote no file -- and what
+            # stands there is the other run's, so the line does not say that nothing stands.
+            raise Refused(["a file already stands at " + target + ": another run wrote it between this run's look and "
+                           "its write, and a seating copy is never written over"],
+                          tail="this run wrote no file" + (", and the folder it made stands, holding that copy" if wrote else ""))
+        with handle:
+            wrote.append(target)
+            handle.write(data)
+        stamp = clock_now()
+        with open(seated, "xb") as handle:
+            wrote.append(seated)
+            handle.write((stamp + "\n").encode("ascii"))
+    except OSError as exc:
+        # The pair is written whole or not at all: what THIS run created is taken back, the newest first.
+        left = []
+        for made in reversed(wrote):
+            try:
+                if os.path.isdir(made):
+                    os.rmdir(made)
+                else:
+                    os.remove(made)
+            except OSError:
+                left.append(made)
+        raise Refused(["the copy and its stamp could not both be written (" + exc.__class__.__name__ + " at " +
+                       str(exc.filename or target) + ")"],
+                      tail=("what this run created was removed, and nothing stands" if not left
+                            else "AND THIS RUN's OWN FILE(S) COULD NOT BE REMOVED: " + ", ".join(left) + " STAND"))
+    if make:
+        emit("MADE the folder " + folder)
+    emit("COPIED " + source + " -> " + target)
+    emit("SEATED " + stamp + " -> " + seated)
+    try:
+        back = read_whole(target)
+    except OSError as exc:
+        back = None
+        emit("THE COPY %d B sha256 %s, CR LF kept; re-read: NOT READ (%s)" % (len(data), sha256(data), exc.__class__.__name__))
+    else:
+        emit("THE COPY %d B sha256 %s, CR LF kept; re-read: %s" % (len(data), sha256(data),
+                                                                  "BYTE-EQUAL" if back == data else "NOT EQUAL"))
+    try:
+        since = read_whole(source)
+    except FileNotFoundError:
+        emit("THE VERDICT FILE SINCE THE READ: GONE")
+    except OSError as exc:
+        emit("THE VERDICT FILE SINCE THE READ: NOT READ (" + exc.__class__.__name__ + ": it is held, or cannot be opened)")
+    else:
+        emit("THE VERDICT FILE SINCE THE READ: " + ("UNCHANGED" if since == data else "MOVED (another evaluation wrote it)"))
+    for line in lines:
+        emit(line)
+    if back != data:
+        emit("THE COPY WAS NOT READ BACK AS WRITTEN: it stands, with its stamp")
+        return 3
+    return 1 if findings else 0
+
+
+def run_read(args):
+    root = os.path.abspath(args.root)
+    if args.goal is not None:
+        fault = id_fault("--goal", args.goal)
+        if fault:
+            raise Refused([fault])
+    source = locate_verdict(root, args.goal, args.verdict)
+    _, verdict = read_verdict(source, twice=True)
+    emit("READ " + source)
+    lines, findings = statement(verdict, root)
+    for line in lines:
+        emit(line)
+    return 1 if findings else 0
+
+
+def run_keep(args):
+    brief = read_file(args.brief, "brief")
+    if not os.path.isdir(args.copy):
+        raise Refused(["no copy folder at " + args.copy])
+    rows = [found.groups() for found in (KEEP_ROW_RX.match(line) for line in brief_lines(brief)) if found]
+    if not rows:
+        raise Refused(["the brief at " + args.brief + " holds no keep-table row (`| name | bytes | sha256 |`)"])
+    try:
+        tops = {name.lower() for name in os.listdir(args.copy) if os.path.isdir(os.path.join(args.copy, name))}
+    except OSError as exc:
+        raise Refused(["the copy folder at " + args.copy + " cannot be listed (" + exc.__class__.__name__ + ")"])
+    stray = [given for given in (args.exclude or []) if given.lower() not in tops]
+    if stray:
+        raise Refused(["--exclude " + ", ".join(ascii(given) for given in stray) + " is not the bare name of a top-level "
+                       "folder of " + args.copy + ": nothing would be left out, and the line would say it was"])
+    excluded = {name.lower() for name in (args.exclude or [])}
+    named = set()
+    bad = 0
+    for name, size, digest in rows:
+        # A `.` part names the folder it stands in and leaves nothing: it is passed over, as his Join-Path passes it.
+        parts = [part for part in re.split(r"[\\/]", name) if part not in ("", ".")]
+        why = ""
+        # A row is his: an upper-case digest is a row to the operator's line (Select-String, no regard to case) and
+        # `sha256 differs` to his -cne. A name with a drive, a stream, a leading separator or `..` is no file of the
+        # copy, and it NAMES none: the file that stands where such a name would lead is counted as not named.
+        if not parts or name[0] in "\\/" or any(part == ".." or ":" in part for part in parts):
+            why = "the name does not stay inside the copy"
+        else:
+            path = os.path.join(args.copy, *parts)
+            # THE FILE a row leads to is the file it names, by the path the system opens: a name the system reads
+            # more loosely than it is spelled (a trailing blank, a short 8.3 name) names the file it opens.
+            named.add(os.path.normcase(os.path.realpath(path)))
+            if not os.path.isfile(path):
+                why = "absent"
+            elif hidden(path):
+                # His line's Get-Item does not see a file the system marks hidden: to it the row is a MISMATCH.
+                why = "hidden: the operator's line does not see a hidden file"
+            else:
+                data = read_file(path, "file of the copy")
+                if len(data) != int(size):
+                    why = "bytes %s against %d" % (size, len(data))
+                elif sha256(data) != digest:
+                    why = "sha256 differs"
+        if why:
+            bad += 1
+            emit("MISMATCH " + name)
+            emit("  why: " + why)
+    emit("%d of %d, %d mismatches" % (len(rows) - bad, len(rows), bad))
+    unnamed = 0
+    top = os.path.abspath(args.copy)
+    for folder, folders, files in os.walk(top):
+        if os.path.abspath(folder) == top:
+            folders[:] = [inner for inner in folders if inner.lower() not in excluded]
+        for name in files:
+            if os.path.normcase(os.path.realpath(os.path.join(folder, name))) not in named:
+                unnamed += 1
+    emit("files in the copy the table does not name: %d%s" % (
+        unnamed, (" (left out: " + ", ".join(sorted(excluded)) + ")") if excluded else ""))
+    return 1 if bad else 0
+
+
+def head_found(root, head, record):
+    """What line 1 is, as the evaluator reads it: IN THE FORM (and its brief, re-hashed; SPENT or UNSPENT) or OUT."""
+    found = HANDOFF_HEAD_RX.match(head)
+    if not found:
+        return ("LINE 1 FOUND: a HANDOFF head OUT OF THE FORM (the evaluator refuses it at every stop): " + cut(head, 200))
+    lf_slot, raw_slot = found.group("lf").lower(), found.group("raw").lower()
+    named = found.group("path")
+    local = named.replace("/", "\\")
+    # A head IN THE FORM is REPLACED whatever its path is: the evaluator reads a path that is no file as `no file`
+    # and refuses that head at every stop, so this verb says so and goes on. One thing alone refuses here -- a FILE
+    # that stands and that five tries do not open.
+    brief, hashed = None, ""
+    try:
+        path = os.path.abspath(local) if os.path.isabs(local) else os.path.abspath(os.path.join(root, local))
+        if os.path.isdir(path):
+            hashed = "its brief CANNOT BE READ AS A FILE at " + path + " (a folder stands there)"
+        elif os.path.exists(path) and not os.path.isfile(path):
+            hashed = "its brief CANNOT BE READ AS A FILE at " + path + " (what stands there is no file: a device's name)"
+        else:
+            brief = read_whole(path)
+    except FileNotFoundError:
+        hashed = "its brief is NOT ON DISK at " + path
+    except PermissionError:
+        raise Refused(["the brief at " + path + " " + HELD])
+    except (OSError, ValueError) as exc:
+        hashed = "its brief CANNOT BE READ AS A FILE at " + cut(named, 200) + " (" + exc.__class__.__name__ + ")"
+    if brief is None:
+        lf_now, raw_now = lf_slot, raw_slot
+    else:
+        lf_now, raw_now = lf_blob_sha256(brief), sha256(brief)
+        hashed = "its brief re-hashed: LF/blob %s, working %s -- %s" % (
+            lf_now[:8], raw_now[:8], "EITHER SLOT MATCHES" if (lf_slot == lf_now or raw_slot == raw_now) else "NEITHER SLOT MATCHES")
+    hit, number = (None, 0) if record is None else record_find(record, lf_now, raw_now)
+    spent = ("SPENT (the admissions record carries %s at line %d)" % (hit[:8], number)) if hit else (
+        "UNSPENT (the admissions record %s)" % ("is absent" if record is None else "holds %d line(s), none carrying it" % record_lines(record)))
+    return "LINE 1 FOUND: a HANDOFF head IN THE FORM -- ctx %s%%, %s; %s, path %s; %s; %s" % (
+        found.group("ctx"), lf_slot[:8], raw_slot[:8], named, hashed, spent)
+
+
+def run_head(args):
+    root = os.path.abspath(args.root)
+    status = os.path.join(root, *STATUS_PARTS)
+    temp = os.path.join(os.path.dirname(status), TEMP_NAME)
+    given = read_file(args.line_file, "line file")
+    faults = []
+    if args.expect_sha256 is not None and not re.match(r"\A[0-9A-Fa-f]{64}\Z", args.expect_sha256):
+        faults.append("--expect-sha256 " + ascii(args.expect_sha256) + " is not 64 hex digits (given empty, it would "
+                      "be the one check the caller asked for and did not get)")
+    if not given:
+        faults.append("the line file is empty")
+    else:
+        if b"\r" in given:
+            faults.append("the line file holds a CR")
+        odd = sorted({byte for byte in given if byte > 126 or (byte < 32 and byte not in (10, 13))})
+        if odd:
+            faults.append("the line file holds a control character or a non-ASCII byte (" +
+                          ", ".join(str(byte) for byte in odd) + ")")
+        if not given.endswith(b"\n"):
+            faults.append("the line file does not end in LF")
+        elif b"\n\n" in given or given.startswith(b"\n"):
+            faults.append("the line file holds an empty line")
+    if faults:
+        raise Refused(faults)
+    text = given.decode("ascii")
+    tokens = LINE_TOKEN_RX.findall(text)
+    other = sorted({token for token in tokens if token not in CLOCK_TOKENS})
+    if other:
+        raise Refused(["the line file holds " + ", ".join("{" + token + "}" for token in other) + ": this tool fills "
+                       "{CLOCKMS}, {SEAM_FROM_FIRST} and {SEAM_FROM_END} from its own clock and no other token"])
+    bases = None
+    if "SEAM_FROM_FIRST" in tokens or "SEAM_FROM_END" in tokens:
+        if not args.predecessor_brief:
+            raise Refused(["the line file asks a seam span and no --predecessor-brief is given to read the two bases from"])
+        brief_lines = text_lines(read_file(args.predecessor_brief, "brief"))
+        found = [made for made in (SEAM_BASES_RX.match(line) for line in brief_lines) if made]
+        if len(found) != 1:
+            raise Refused(["the line file asks a seam span and the brief at " + args.predecessor_brief + " holds %d "
+                           "line(s) `SEAM BASES first <stamp> end <stamp>`, not one" % len(found)])
+        bases = (stamp_ms(found[0].group(1)), stamp_ms(found[0].group(2)), found[0].group(1), found[0].group(2))
+        if bases[0] is None or bases[1] is None:
+            raise Refused(["the SEAM BASES line of " + args.predecessor_brief + " does not hold two stamps "
+                           "YYYY-MM-DDTHH:MM:SS.mmmZ"])
+    if not os.path.isfile(status):
+        raise Refused(["no STATUS.md at " + status])
+    old = read_file(status, "STATUS.md")
+    before = sha256(old)
+    if args.expect_sha256 is not None and args.expect_sha256.lower() != before:
+        raise Refused(["STATUS.md is sha256 " + before + ", not the --expect-sha256 given"])
+    record = read_optional(os.path.join(root, *RECORD_PARTS), "admissions record")
+    whole = old[3:] if old.startswith(b"\xef\xbb\xbf") else old
+    first_end = whole.find(b"\n")
+    head = (whole if first_end < 0 else whole[:first_end]).decode("utf-8", "replace").rstrip("\r \t")
+    new_first = text.split("\n")[0]
+    said = ""
+    if args.replace_handoff:
+        if not head.startswith("HANDOFF"):
+            raise Refused(["line 1 of STATUS.md does not begin HANDOFF, so there is no HANDOFF head to replace (it reads: " +
+                           cut(head, 120) + ")"])
+        if new_first.startswith("HANDOFF") or new_first.startswith("AWAITING"):
+            raise Refused(["the new line 1 begins " + ("HANDOFF" if new_first.startswith("HANDOFF") else "AWAITING") +
+                           ": --replace-handoff places a plain head, which the evaluator reads as no HANDOFF head"])
+        said = head_found(root, head, record)
+    else:
+        in_first = LINE_TOKEN_RX.findall(new_first)
+        if in_first:
+            raise Refused(["the new line 1 holds {" + in_first[0] + "}: a HANDOFF head is placed as given -- it is "
+                           "checked against its brief as it stands in the line file -- and the three tokens are filled "
+                           "on the lines beneath it"])
+        found = HANDOFF_HEAD_RX.match(new_first)
+        if not found:
+            raise Refused(['the new line 1 is not in the form "HANDOFF AT <0-100>% <sha256 LF/blob>; <sha256 working> '
+                           '<path of the brief>", which is the only line --place-handoff places'])
+        local = found.group("path").replace("/", "\\")
+        try:
+            path = os.path.abspath(local) if os.path.isabs(local) else os.path.abspath(os.path.join(root, local))
+        except (OSError, ValueError):
+            raise Refused(["the new line 1 names the brief " + cut(found.group("path"), 200) + ", which is no path of a file"])
+        if os.path.exists(path) and not os.path.isdir(path) and not os.path.isfile(path):
+            # A device's name (NUL) reads as no bytes, whose digest any line can carry: it is no brief.
+            raise Refused(["the new line 1 names the brief " + found.group("path") + ", and what stands at " + path +
+                           " is no file (a device's name): a HANDOFF head is placed over a brief that is a file"])
+        brief = read_optional(path, "brief")
+        if brief is None:
+            raise Refused(["the new line 1 names the brief " + found.group("path") + ", and no file stands at " + path])
+        lf_now, raw_now = lf_blob_sha256(brief), sha256(brief)
+        wrong = []
+        if found.group("lf").lower() != lf_now:
+            wrong.append("its LF/blob slot reads " + found.group("lf").lower()[:16] + "... and the brief's LF/blob digest is " + lf_now)
+        if found.group("raw").lower() != raw_now:
+            wrong.append("its working slot reads " + found.group("raw").lower()[:16] + "... and the brief's working digest is " + raw_now)
+        if wrong:
+            raise Refused(["the new line 1 does not carry the digests of the brief at " + path + ": " + "; ".join(wrong)])
+        said = "LINE 1 PLACED IS A HANDOFF head IN THE FORM over " + path + " (LF/blob %s, working %s, re-hashed)" % (lf_now[:8], raw_now[:8])
+    if os.path.lexists(temp):
+        raise Refused(["a file stands at " + temp + ": it is this tool's one temporary file and its lock, another "
+                       "`seat.py head` made it or left it, and it is LEFT AS FOUND"])
+    clock = clock_now()
+    now_ms = stamp_ms(clock)
+    filled = text.replace("{CLOCKMS}", clock)
+    spans = ""
+    if bases is not None:
+        if now_ms < bases[0] or now_ms < bases[1]:
+            raise Refused(["a base of the SEAM BASES line is later than the clock at the write (" + clock + ")"])
+        first_span, end_span = span_text(bases[0], now_ms), span_text(bases[1], now_ms)
+        filled = filled.replace("{SEAM_FROM_FIRST}", first_span).replace("{SEAM_FROM_END}", end_span)
+        spans = "; from the first base %s: %s; from the end base %s: %s" % (bases[2], first_span, bases[3], end_span)
+    placed = filled.encode("ascii")
+    try:
+        handle = open(temp, "xb")
+    except FileExistsError:
+        raise Refused(["a file stands at " + temp + ": it is this tool's one temporary file and its lock, another "
+                       "`seat.py head` made it or left it, and it is LEFT AS FOUND"])
+    except OSError as exc:
+        raise Refused(["the temporary file " + temp + " could not be made (" + exc.__class__.__name__ + ")"])
+    # FROM HERE THE TEMPORARY FILE STANDS. What fails before the replace is a LATE refusal: STATUS.md is not touched,
+    # the temporary file is removed, and the line says those two things -- not that nothing was written.
+    late, replaced = None, False
+    try:
+        with handle:
+            handle.write(placed + old)
+            handle.flush()
+            os.fsync(handle.fileno())
+        again = read_whole(status)
+        if sha256(again) != before:
+            late = "STATUS.md moved under this tool between its read and its write (it was sha256 " + before + ")"
+        else:
+            for attempt in range(5):
+                if attempt:
+                    time.sleep(0.2)
+                try:
+                    os.replace(temp, status)
+                    replaced = True
+                    break
+                except PermissionError:
+                    late = ("STATUS.md could not be replaced in five tries 200 ms apart (PermissionError: STATUS.md or "
+                            "the temporary file is held without sharing delete, or STATUS.md is read-only)")
+    except OSError as exc:
+        late = "the write did not reach its replace (" + exc.__class__.__name__ + " at " + str(exc.filename or temp) + ")"
+    if not replaced:
+        gone = False
+        for attempt in range(5):
+            if attempt:
+                time.sleep(0.2)
+            try:
+                os.remove(temp)
+                gone = True
+            except FileNotFoundError:
+                gone = True
+            except OSError:
+                continue
+            break
+        raise Refused([late], tail=(
+            "STATUS.md was not touched; the temporary file was written and is removed" if gone else
+            "STATUS.md was not touched, AND THE TEMPORARY FILE COULD NOT BE REMOVED in five tries: " + temp + " STANDS, "
+            "and every later `seat.py head` at this root is refused until a hand removes it"))
+    try:
+        new = read_whole(status)
+    except OSError as exc:
+        # The replace WAS made. The proof is not: said, exit 3 -- never the exit of a finding, never a traceback.
+        emit(said)
+        emit("PLACED %d line(s) at the head of %s: %d B sha256 %s -> THE REPLACE WAS MADE; new == placed + old: NOT PROVED "
+             "(%s: STATUS.md could not be re-read)" % (placed.count(b"\n"), status, len(old), before, exc.__class__.__name__))
+        emit("CLOCK " + clock + spans)
+        emit("THE ADMISSIONS RECORD: " + ("absent, and not made" if record is None
+                                          else "%d line(s), opened for reading alone" % record_lines(record)))
+        return 3
+    proved = new == placed + old
+    emit(said)
+    emit("PLACED %d line(s) at the head of %s: %d B sha256 %s -> %d B sha256 %s; new == placed + old: %s" % (
+        placed.count(b"\n"), status, len(old), before, len(new), sha256(new), proved))
+    emit("CLOCK " + clock + spans)
+    emit("THE ADMISSIONS RECORD: " + ("absent, and not made" if record is None
+                                      else "%d line(s), opened for reading alone" % record_lines(record)))
+    return 0 if proved else 3
+
+
+def census(root, prefix):
+    """The census of one arc's verdict copies, as a dict: every figure, and each table line AS RENDERED."""
+    close = os.path.join(root, *CLOSE_PARTS)
+    if not os.path.isdir(close):
+        raise Refused(["no close folder at " + close])
+    try:
+        folders = sorted(name for name in os.listdir(close)
+                         if name.startswith(prefix) and os.path.isdir(os.path.join(close, name)))
+        listed = [(folder, sorted(os.listdir(os.path.join(close, folder)))) for folder in folders]
+    except OSError as exc:
+        raise Refused(["the close folder at " + close + " cannot be listed (" + exc.__class__.__name__ + " at " +
+                       str(exc.filename or close) + ")"])
+    stops, strangers, findings, again, seen = [], [], [], [], {}
+    for folder, names in listed:
+        for name in names:
+            path = os.path.join(close, folder, name)
+            if not (os.path.isfile(path) and re.match(r"\A.*\.verdict.*\.yaml\Z", name)):
+                continue
+            data = read_file(path, "verdict copy")
+            verdict = parse_verdict(data)
+            scalars = verdict["scalars"]
+            if "evaluated_at" not in scalars or "verdict" not in scalars:
+                strangers.append(folder + "\\" + name)
+                continue
+            # A STOP IS ONE EVALUATION, AND ITS VERDICT's BYTES ARE ITS OWN: the same bytes met again -- one verdict
+            # copied into two folders of the prefix -- are that stop again. It is counted ONCE, under the first copy
+            # met in the order of folders and names, and the copy met again is named.
+            digest = sha256(data)
+            if digest in seen:
+                first = seen[digest]
+                again.append("%s\\%s (the bytes of %s)" % (folder, name, first["where"]))
+                if ("hand-tee-" in name) != first["hand"]:
+                    findings.append("%s\\%s: the same verdict is named a %s here and a %s in %s: one stop cannot be "
+                                    "both, and its seconds are not in the sum" % (
+                                        folder, name, "HAND TEE" if "hand-tee-" in name else "hook stop",
+                                        "HAND TEE" if first["hand"] else "hook stop", first["where"]))
+                    first["contradicted"] = True
+                continue
+            seen[digest] = {"where": folder + "\\" + name, "hand": "hand-tee-" in name, "contradicted": False}
+            readings = instrument_entries(verdict)
+            column = column_word(readings)
+            hand = "hand-tee-" in name
+            cells, saved = [], []
+            for reading in readings:
+                if reading["column"] != "REUSED":
+                    continue
+                if reading["kept_path"] is None:
+                    findings.append(folder + "\\" + name + ": REUSED, and the verdict names no kept copy for it")
+                    cells.append("-- NO KEPT COPY NAMED; ? s")
+                    saved.append(None)
+                    continue
+                # The kept capture is read ONCE: the bytes its digest was taken over are the bytes its seconds are
+                # read from.
+                state, _, kept_bytes = kept_on_disk(root, verdict, reading["kept_path"], reading["kept_sha"])
+                leaf = re.split(r"[\\/]", reading["kept_path"])[-1]
+                elapsed = None
+                if state == "EQUAL":
+                    for line in text_lines(kept_bytes):
+                        if line.startswith("TALLY "):
+                            found = ELAPSED_RX.search(line)
+                            elapsed = int(found.group(1)) if found else None
+                            break
+                    if elapsed is None:
+                        findings.append(folder + "\\" + name + ": the kept capture " + leaf + " holds no column-0 TALLY line "
+                                        "with elapsed_seconds=<n>")
+                elif state == "COULD NOT BE OPENED":
+                    findings.append(folder + "\\" + name + ": the kept capture " + reading["kept_path"] + " STANDS under "
+                                    "--root and COULD NOT BE OPENED in five tries 200 ms apart: it is not read as absent, "
+                                    "and its seconds are not in the sum")
+                else:
+                    findings.append(folder + "\\" + name + ": the kept capture " + reading["kept_path"] + " is " + state +
+                                    " under --root at sha256 " + reading["kept_sha"])
+                cells.append("`%s` sha256 `%s` -- %s; %s s" % (
+                    leaf, reading["kept_sha"],
+                    "ON DISK, EQUAL" if state == "EQUAL" else
+                    "COULD NOT BE OPENED" if state == "COULD NOT BE OPENED" else "NOT FOUND AT THAT DIGEST",
+                    "?" if elapsed is None else str(elapsed)))
+                if reading["kept_said"] is not None:
+                    # The verdict contradicts itself about WHICH capture was kept: the cell shows the item's capture
+                    # as it stands, and its seconds are in no sum -- a finding leaves its stop out, as every other does.
+                    findings.append(folder + "\\" + name + ": the detail names another kept path, " + reading["kept_said"] +
+                                    ", than the one item of instrument_captures_kept: its seconds are not in the sum")
+                    elapsed = None
+                saved.append(elapsed)
+            # A stop is summed where its COLUMN is REUSED -- every instrument entry reused -- and every capture it
+            # cites gave its seconds: then all of them. A stop of entries that differ is MIXED and is not summed.
+            seconds = sum(saved) if (column == "REUSED" and saved and None not in saved) else None
+            row = (scalars["evaluated_at"], scalars.get("goal", "?"), scalars["verdict"], COLUMN_SHOWN[column],
+                   "HAND TEE" if hand else "hook stop",
+                   "%s : `%s` %d B sha256 `%s`" % (folder, name, len(data), sha256(data)), " ; ".join(cells))
+            stops.append({"row": row, "column": column, "hand": hand, "seconds": seconds, "mark": seen[digest]})
+    for stop in stops:
+        if stop["mark"]["contradicted"]:
+            stop["seconds"] = None
+    stops.sort(key=lambda stop: stop["row"])
+    hook = [stop for stop in stops if not stop["hand"]]
+    tees = [stop for stop in stops if stop["hand"]]
+    counts = {word: len([stop for stop in hook if stop["column"] == word]) for word in COLUMN_SHOWN}
+    line = "HOOK STOPS REUSED %d / FRESH %d / NOT EVALUATED %d -- %d (unread %d); HAND TEES %d" % (
+        counts["REUSED"], counts["FRESH"], counts["NOT_EVALUATED"], len(hook), counts["UNREAD"], len(tees))
+    also = ["%s %d" % (COLUMN_SHOWN[word], counts[word]) for word in ("NOT_RUN", "NONE", "MIXED") if counts[word]]
+    if also:
+        line += " -- also " + ", ".join(also)
+    summed = [stop for stop in hook if stop["seconds"] is not None]
+    total = sum(stop["seconds"] for stop in summed)
+    return {"prefix": prefix, "folders": folders, "copies": len(stops), "hook_stops": len(hook), "hand_tees": len(tees),
+            "columns": {COLUMN_SHOWN[word]: counts[word] for word in COLUMN_SHOWN}, "header": CENSUS_HEADER,
+            "rule": CENSUS_RULE, "rows": ["| %s | %s | %s | **%s** | %s | %s | %s |" % stop["row"] for stop in stops],
+            "line": line, "seconds_saved": total, "reused_hook_stops_summed": len(summed),
+            "sum_line": "SECONDS SAVED %d s over %d REUSED hook stop(s)" % (total, len(summed)),
+            "not_verdicts": strangers, "same_again": again, "findings": findings}
+
+
+def run_census(args):
+    result = census(os.path.abspath(args.root), args.prefix)
+    if args.machine:
+        emit(json.dumps(result, ensure_ascii=True, sort_keys=True))
+        return 1 if result["findings"] else 0
+    emit("THE CENSUS of %d verdict cop%s in %d folder(s) of close/ whose name starts %s (hook stop or HAND TEE by the "
+         "file name holding `hand-tee-`: it is recorded nowhere else)" % (
+             result["copies"], "y" if result["copies"] == 1 else "ies", len(result["folders"]), ascii(args.prefix)))
+    emit(result["header"])
+    emit(result["rule"])
+    for row in result["rows"]:
+        emit(row)
+    emit(result["line"])
+    emit(result["sum_line"])
+    for name in result["same_again"]:
+        emit("THE SAME VERDICT AGAIN, counted once: " + name)
+    for name in result["not_verdicts"]:
+        emit("NOT A VERDICT, counted apart: " + name)
+    for finding in result["findings"]:
+        emit("FINDING: " + finding)
+    return 1 if result["findings"] else 0
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(prog="seat.py", description="The seating helper: the verdict copy and its "
+                                     "statement, the keep-table compare, the STATUS head, the stops by column.")
+    sub = parser.add_subparsers(dest="command")
+    p_copy = sub.add_parser("copy", help="copy the goal's verdict into one close folder, named by its bytes")
+    p_copy.add_argument("--root", required=True, help="the mission root")
+    p_copy.add_argument("--goal", required=True, help="the goal id")
+    p_copy.add_argument("--close-folder", required=True, help="the folder under .mission-runtime/lam/close")
+    p_copy.add_argument("--verdict", default=None, help="the verdict file, where both places hold one")
+    p_copy.add_argument("--hand-tee", default=None, help="a label: the copy is a hand tee's, and is named so")
+    p_copy.add_argument("--make-folder", action="store_true", help="make the one close folder where it is absent")
+    p_read = sub.add_parser("read", help="print what a verdict is, by its bytes; write nothing")
+    p_read.add_argument("--root", required=True, help="the mission root the verdict's runtime plane is read under")
+    which = p_read.add_mutually_exclusive_group(required=True)
+    which.add_argument("--goal", default=None, help="the goal id")
+    which.add_argument("--verdict", default=None, help="a verdict file or a copy of one")
+    p_keep = sub.add_parser("keep", help="compare a brief's keep-table with a copy folder")
+    p_keep.add_argument("--brief", required=True, help="the brief that holds the table")
+    p_keep.add_argument("--copy", required=True, help="the folder the table's files are looked for in")
+    p_keep.add_argument("--exclude", action="append", default=None, help="a top-level folder of the copy the table leaves out")
+    p_head = sub.add_parser("head", help="prepend a head to STATUS.md, every prior byte kept beneath it")
+    p_head.add_argument("--root", required=True, help="the mission root")
+    p_head.add_argument("--line-file", required=True, help="the head's lines: ASCII, LF, one or more")
+    mode = p_head.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--replace-handoff", action="store_true", help="line 1 is a HANDOFF head; place a plain one over it")
+    mode.add_argument("--place-handoff", action="store_true", help="place a HANDOFF head whose digests are the brief's")
+    p_head.add_argument("--predecessor-brief", default=None, help="the brief whose SEAM BASES line the spans are read from")
+    p_head.add_argument("--expect-sha256", default=None, help="the sha256 STATUS.md must have before the write")
+    p_census = sub.add_parser("census", help="the arc's verdict copies by column, and the seconds REUSED saved")
+    p_census.add_argument("--root", required=True, help="the mission root")
+    p_census.add_argument("--prefix", required=True, help="the close folders' prefix, e.g. arc-pb-5-")
+    p_census.add_argument("--machine", action="store_true", help="one JSON object: the fields and each line as rendered")
+    args = parser.parse_args(argv)
+    runs = {"copy": run_copy, "read": run_read, "keep": run_keep, "head": run_head, "census": run_census}
+    if args.command not in runs:
+        parser.print_usage(sys.stderr)
+        return 2
+    try:
+        return runs[args.command](args)
+    except Refused as exc:
+        emit("REFUSED: " + "; ".join(exc.reasons) + " -- " + (exc.tail or "nothing was written"))
+        return 2
+    except OSError as exc:
+        # No verb writes after an open it did not guard, so what reaches here was met at a read or a listing: it is
+        # said as a refusal, by name, and never as a traceback under the exit of a finding.
+        emit("REFUSED: " + exc.__class__.__name__ + " at " + str(exc.filename or "a path the system does not name") +
+             " -- this run stopped there, and wrote nothing after it")
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

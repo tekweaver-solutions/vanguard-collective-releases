@@ -1,0 +1,234 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vanguard-collective.local/framework/evidence-manifest.schema.json",
+  "title": "Evidence Manifest",
+  "description": "Per-dispatch manifest of hook-captured evidence. Artifact A1. Design authority: docs/framework/vanguard-collective-local-modes-v2.1.md SS4.1 (hook-captured evidence store, crash-before-finalize) and SS12.3 (new artifact -- Evidence Manifest). CITATION CONVENTION: LM2-ADR-0NN denotes a decision in the local-modes v2.1 design document; a bare ADR-0NN denotes the on-disk file under tools/mission-cli/config/. The two namespaces collide numerically and are not related. WRITTEN BY the Stop hook (tools/framework/hooks/evidence-stop-finalize.ps1), never by a model. Append-only during the session. A finalized manifest is never edited: a later Stop on a log that GREW BY VERIFIED APPEND retains the prior manifest as manifest.superseded-<k>.json and writes a successor sealing the grown log; a log whose sealed bytes changed is refused as TAMPERED.",
+
+  "type": "object",
+  "required": ["schema_version", "dispatch_id", "state", "entries", "entry_count", "log_sha256", "streams_committed", "hook_errors_present", "created_at"],
+  "additionalProperties": false,
+
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.3.0",
+      "description": "Version of this manifest schema. 1.0.0 -> 1.1.0: entries gained a declared _precompact variant; manifest gained streams_committed. 1.1.0 -> 1.2.0: manifest gained hook_errors_present and hook_errors_sha256, so a dispatch whose capture errored is distinguishable from a clean one ON THE FACE OF THE COMMITTED ARTIFACT. 1.2.0 -> 1.3.0: entries gained a declared _denied variant (a call the guard refused, recorded by the guard at deny time) and the manifest gained the call_completeness block, so a consumer can decide from the committed artifact whether the entry set accounts for every call the transcript resolved. An older manifest does not validate against this file, which is the point of the version field. The optional `reconciled` flag was added without a version bump (additive, optional, absent where not needed); `log_bytes_sealed` and `finalize_count` were added under the same precedent -- an earlier manifest without them remains valid and readable, with its sealed prefix DERIVED from entry_count + unparsable_lines."
+    },
+    "dispatch_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The dispatch this evidence belongs to. Resolved by the hook from MISSION_DISPATCH_ID, else the .mission-runtime/evidence/CURRENT_DISPATCH pointer, else session-<session_id>. The model has no input into this value."
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "description": "Harness session id, as supplied to the hook. May be empty when the harness does not provide one; the manifest is still valid, because dispatch_id is the identity that matters for consumption."
+    },
+    "state": {
+      "type": "string",
+      "enum": ["finalized"],
+      "description": "A manifest ON DISK only ever carries 'finalized' -- writing the manifest IS finalization. PARTIAL, GREW and TAMPERED are DERIVED states, never stored: see x-state-machine. This is deliberate. A stored 'PARTIAL' would be a claim by the very machinery whose failure defines PARTIAL, and a crashed session cannot write anything at all."
+    },
+    "entries": {
+      "type": "array",
+      "description": "One entry per captured event, in log order. THREE DECLARED VARIANTS: the design SS12.3 tool-call entry, the _precompact transcript-snapshot entry (an A1 addition, see x-deviations-from-design-12-3), and the _denied guard-refusal entry. A PreCompact event captures a transcript, not a command's streams, so it has no stdout/stderr to hash; a denied call never executed, so it has no streams and no exit code at all. Forcing either into the SS12.3 shape would make its fields mean two different things, which is the opposite of an anchor.",
+      "items": {
+        "oneOf": [
+          {
+            "title": "Tool-call entry -- design SS12.3 shape, exactly",
+            "type": "object",
+            "required": ["ts", "tool", "command", "exit_code", "stdout_sha256", "stderr_sha256", "path"],
+            "additionalProperties": false,
+            "properties": {
+              "ts":            { "type": "string", "description": "UTC ISO-8601 with milliseconds, e.g. 2026-08-09T17:36:22.481Z." },
+              "tool":          { "type": "string", "allOf": [ { "not": { "const": "_precompact" } }, { "not": { "const": "_denied" } } ], "description": "Tool name as reported by the harness. Synthetic events are underscore-prefixed and use the other variants." },
+              "command":       { "type": ["string", "null"], "description": "The anchor-bearing field: the command for shell tools, the target path for file tools, otherwise the serialised tool input. Never elided -- an entry with no command is an entry that cannot be checked against a report." },
+              "exit_code":     { "type": ["integer", "null"], "description": "Process exit code where the tool has one; null where it does not. Null is not success." },
+              "stdout_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 over the FULL stdout bytes, never over the inline excerpt. Hashing a truncated excerpt would make the anchor unverifiable while looking authoritative. Re-derivable from the committed stream body -- see x-stream-verification." },
+              "stderr_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 over the FULL stderr bytes. Same rule." },
+              "path":          { "type": "string", "description": "Path, relative to the dispatch evidence directory, of the file holding the full stdout/stderr bytes for this entry (streams/<seq>.json)." }
+            }
+          },
+          {
+            "title": "PreCompact transcript-snapshot entry -- A1 VARIANT, NOT named in design SS12.3",
+            "type": "object",
+            "required": ["ts", "tool", "command", "exit_code", "transcript_sha256", "captured", "path"],
+            "additionalProperties": false,
+            "properties": {
+              "ts":                { "type": "string", "description": "UTC ISO-8601 with milliseconds." },
+              "tool":              { "type": "string", "const": "_precompact", "description": "Synthetic event marker, underscore-prefixed so it can never collide with a harness tool name." },
+              "command":           { "type": ["string", "null"], "description": "PreCompact trigger and source transcript path, for audit." },
+              "exit_code":         { "type": ["integer", "null"], "description": "0 when the transcript was copied, 1 when it could not be." },
+              "transcript_sha256": { "type": ["string", "null"], "pattern": "^([0-9a-f]{64})?$", "description": "sha256 of the snapshot file. Null when capture failed -- which is why `captured` exists as a separate boolean rather than being inferred from a null hash." },
+              "captured":          { "type": "boolean", "description": "Whether the transcript was actually copied. A false here is a real evidence gap and must not be read as an absent event." },
+              "path":              { "type": "string", "description": "Path, relative to the dispatch evidence directory, of the transcript snapshot (transcripts/precompact-NNN.jsonl). Snapshots are numbered and never overwritten -- the Nth is not a replacement for the (N-1)th." }
+            }
+          },
+          {
+            "title": "Guard-refusal entry -- _denied VARIANT, NOT named in design SS12.3",
+            "type": "object",
+            "required": ["ts", "tool", "denied_tool", "command", "reason", "path"],
+            "additionalProperties": false,
+            "properties": {
+              "ts":          { "type": "string", "description": "UTC ISO-8601 with milliseconds -- the moment the guard refused." },
+              "tool":        { "type": "string", "const": "_denied", "description": "Synthetic event marker, underscore-prefixed so it can never collide with a harness tool name. Written by the PreToolUse guard at deny time -- the one component that witnesses every denial (denials occur only where the guard fires)." },
+              "denied_tool": { "type": ["string", "null"], "description": "The tool whose call was refused, as the harness named it. Null when the payload was unreadable (a fail-closed deny records what it can)." },
+              "command":     { "type": ["string", "null"], "description": "The anchor-bearing field, derived by the same three branches the PostToolUse hook uses: the command for shell tools, the target path for file tools, otherwise the serialised tool input. Null when the payload was unreadable." },
+              "reason":      { "type": "string", "description": "The guard's deny reason, VERBATIM -- the same text emitted to the harness as permissionDecisionReason. What was refused, and why, on the face of the committed artifact." },
+              "path":        { "type": "null", "description": "Always null: nothing executed, so no stream body exists and none was allocated. There is deliberately NO exit_code on this variant -- a process that never ran has no exit code, and a null one here would resurrect the constant-null confusion. The null path excludes this entry from stream identity and integrity checks by construction." }
+            }
+          }
+        ]
+      }
+    },
+    "entry_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of entries. Redundant with entries.length by construction, and deliberately so: a consumer that reads only the header can still detect truncation."
+    },
+    "unparsable_lines": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of log lines that would not parse as JSON and were therefore excluded from entries. Recorded rather than dropped silently -- a nonzero value is a capture defect the operator must see, not a rounding error."
+    },
+    "log_path":   { "type": "string", "description": "Path of the append-only log, relative to the dispatch evidence directory. Always 'log.jsonl'." },
+    "hook_errors_present": {
+      "type": "boolean",
+      "description": "Whether any hook recorded an error during this dispatch. Added after a defect silently dropped every tool call after the first and left NO mark on the committed artifact: the error went to a global log that the state machine did not read and the finalizer did not commit. A true here means the capture is suspect and entry_count may undercount reality -- read hook-errors.log in the same directory. A consumer must NOT treat a manifest with hook_errors_present=true as complete evidence merely because it is FINALIZED. This flag and its hash are recomputed at EVERY finalize -- supersessions and the no-op trail reconcile alike -- so an error recorded after one finalize is reflected by the next Stop (a registered finding's cure)."
+    },
+    "hook_errors_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^([0-9a-f]{64})?$",
+      "description": "sha256 of hook-errors.log at finalization, or null when no errors were recorded. Anchors the error trail the same way log_sha256 anchors the log."
+    },
+    "reconciled": {
+      "type": "boolean",
+      "description": "Present and true only when a reconcile pass corrected hook_errors_present/hook_errors_sha256 outside the ordinary phase-2 computation: the finalizer's own publish-phase reconcile, or the no-op trail reconcile (an error that arrived after the last finalize, with no log growth). Its presence means a manifest write was corrected; a consumer should read hook-errors.log. The log seal (log_sha256, log_bytes_sealed) is never changed by a reconcile."
+    },
+    "call_completeness": {
+      "type": "object",
+      "required": ["status", "basis", "reason"],
+      "additionalProperties": false,
+      "description": "The manifest's statement about CALL completeness, derived at finalize by reconciling the transcript the Stop payload names against the log's entries and the guard's _denied records. THE RATIFIED SEMANTICS: 'complete' is asserted IF AND ONLY IF reconciliation ran and unmatched is zero -- failed and denied calls are DISCLOSED BESIDE the status (failed_seen, denied_seen), never hidden behind it; 'incomplete' means the accounting positively failed (a call the transcript resolved is missing from the record, or the two denial recorders disagree); 'unreconciled' means the verdict could not be derived, stated rather than silent. SILENCE IS PROHIBITED: every current finalize writes this block; an earlier manifest is recognisable by its absence together with schema_version < 1.3.0. THE BLOCK IS CONTENT-FREE by operator ruling: counts, status, basis and a hash -- no transcript text, no command text, and never anything from the Stop payload's last_assistant_message. manifest completeness != call completeness REMAINS TRUE for every manifest whose block does not read status 'complete': the warning is resolved exactly to the extent this block states, and no further.",
+      "properties": {
+        "status":            { "type": "string", "enum": ["complete", "incomplete", "unreconciled"], "description": "'complete': reconciliation ran, zero unmatched. 'incomplete': the accounting positively failed -- entry_count undercounts reality and the counts say where. 'unreconciled': no verdict could be derived (no transcript_path, transcript absent/unreadable, undecidable records, unresolved calls); consumers must not read this as complete." },
+        "basis":             { "type": "string", "enum": ["payload-transcript-path", "none"], "description": "Where the transcript path came from. 'payload-transcript-path': the Stop payload's own transcript_path field (the only permitted mechanism; the session_id-derived fallback was retired). 'none': the payload carried no transcript_path." },
+        "transcript_sha256": { "type": ["string", "null"], "pattern": "^([0-9a-f]{64})?$", "description": "sha256 over the transcript bytes the reconciliation read, or null when none were read. Anchors the verdict to the exact transcript state it was derived from -- the transcript keeps growing after Stop, so this hash is the only way to know which bytes the counts describe." },
+        "transcript_calls":  { "type": ["integer", "null"], "minimum": 0, "description": "Total non-sidechain tool_use blocks seen in the transcript (N). Null when unreconciled." },
+        "logged_entries":    { "type": ["integer", "null"], "minimum": 0, "description": "Tool-call entries in the log (M) -- the _precompact and _denied variants excluded. Expected to equal the transcript's succeeded count." },
+        "failed_seen":       { "type": ["integer", "null"], "minimum": 0, "description": "Calls the transcript resolved as FAILED (F) -- an error result without the guard signature. These calls have NO log entry (PostToolUse never fires for them); this count is their record." },
+        "denied_seen":       { "type": ["integer", "null"], "minimum": 0, "description": "Calls the transcript resolved as DENIED (D) -- an error result carrying the guard's own preamble. Cross-checked against denied_records; the two recorders must agree." },
+        "denied_records":    { "type": ["integer", "null"], "minimum": 0, "description": "_denied entries the guard wrote into the log. The second, independent recorder of denials; a mismatch with denied_seen in either direction reads 'incomplete'." },
+        "unmatched":         { "type": ["integer", "null"], "minimum": 0, "description": "The accounting failure count (U): |succeeded - logged_entries| + |denied_seen - denied_records|. Zero is required for 'complete'." },
+        "unresolved_calls":  { "type": ["integer", "null"], "minimum": 0, "description": "tool_use blocks with no result record in the transcript (e.g. an interrupted call). Nonzero degrades to 'unreconciled' -- the verdict cannot be derived, and is not guessed." },
+        "reason":            { "type": "string", "description": "One sentence saying why the status is what it is. Human-readable derivation, not session content." }
+      }
+    },
+    "streams_committed": {
+      "type": "boolean",
+      "description": "Whether stream bodies (streams/) and transcript snapshots (transcripts/) were copied to the committed plane at finalization. True by default. False means the untruncated output survives only in .mission-runtime/, which is ephemeral by ADR-003 -- so for any entry over the inline byte cap, the committed evidence holds a hash whose subject is gone. A consumer that sees false should treat over-cap entries as hash-only."
+    },
+    "log_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the append-only log AT FINALIZATION. This is the immutability anchor: re-hashing the log later and comparing is what makes design SS12.3's 'immutable after finalization' a detectable invariant rather than an assertion. The bytes this hash covers are the SEALED PREFIX; a longer log whose sealed prefix still re-derives is GREW, a log whose sealed prefix does not re-derive (or which is shorter) is TAMPERED."
+    },
+    "log_bytes_sealed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Additive-optional per the `reconciled` precedent. The byte length of log.jsonl that log_sha256 was computed over -- the SEALED PREFIX, made explicit. Written from the same byte buffer as log_sha256, so the two cannot disagree. Absent on earlier manifests, where the sealed prefix is DERIVED from entry_count + unparsable_lines (the log held exactly that many non-blank lines at finalization); a derivation that lands wrong fails the prefix hash and degrades to TAMPERED, the conservative direction."
+    },
+    "finalize_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Additive-optional. Which finalization this manifest is: 1 for the first, k+1 after k supersessions. DERIVED from the retained manifest.superseded-*.json chain at write time, never carried forward from a field. Absent on earlier manifests (all of which are finalize 1 -- the earlier finalizer refused to ever write a second)."
+    },
+    "created_at":   { "type": "string", "description": "UTC ISO-8601. When the manifest was computed." },
+    "finalized_at": { "type": "string", "description": "UTC ISO-8601. Presence of this field is what makes the manifest finalized. Its absence in a manifest found on disk means the finalizer was interrupted mid-write, which derives to PARTIAL." }
+  },
+
+  "x-state-machine": {
+    "description": "Design SS4.1 crash-before-finalize semantics, made decidable. State is DERIVED by a consumer from what is on disk -- it is not a field a writer asserts. Implemented at tools/framework/hooks/lib/evidence-common.ps1 :: Get-EvidenceState.",
+    "inputs": ["presence of log.jsonl", "presence of manifest.json", "presence of manifest.finalized_at", "sha256(log.jsonl) vs manifest.log_sha256", "sha256(sealed prefix of log.jsonl) vs manifest.log_sha256 -- prefix length from log_bytes_sealed, or derived from entry_count + unparsable_lines on earlier manifests"],
+    "states": {
+      "ABSENT": {
+        "when": "no log and no manifest",
+        "consumable": false,
+        "forensics": false,
+        "meaning": "Nothing was captured. For a mutation-bearing dispatch this is itself the finding: evidence-blind mutation is the fabrication precondition (design SS6)."
+      },
+      "PARTIAL": {
+        "when": "log present AND (manifest absent OR manifest unparsable OR finalized_at missing)",
+        "consumable": false,
+        "forensics": true,
+        "meaning": "The session died before Stop finalized, or the finalizer was interrupted. Report consumption is BLOCKED. Forensic re-ground is FULLY SUPPORTED: the log was written per tool call, not at exit, so every mutation that hit disk before the crash is in it. This is the state that decides replay-from-checkpoint vs respawn-from-handoff."
+      },
+      "FINALIZED": {
+        "when": "manifest present AND finalized_at present AND sha256(log.jsonl) == manifest.log_sha256",
+        "consumable": true,
+        "forensics": true,
+        "meaning": "The only state that permits report consumption. NOTE: FINALIZED speaks to the LOG's integrity; whether the entry set accounts for every CALL is the call_completeness block's statement, and a consumer deciding completeness reads it -- a FINALIZED manifest whose block is not 'complete' is intact evidence of a disclosed-incomplete capture."
+      },
+      "GREW": {
+        "when": "manifest finalized BUT the log is strictly longer AND its sealed prefix still hashes to manifest.log_sha256 (verified append-extension)",
+        "consumable": false,
+        "forensics": true,
+        "meaning": "The session continued working after a finalize -- Stop is per-turn on this harness, so this is the ORDINARY state of a live multi-turn dispatch between turns, not an integrity event. The manifest does not cover the log's tail, so consumption is blocked until the next Stop supersedes (retaining this manifest as manifest.superseded-<k>.json). Before GREW existed this state was misdiagnosed as TAMPERED: measured live at manifests frozen at entry_count 14/33/55 over logs grown to 52/183/177 lines, seventeen REFUSED entries, zero actual tampering."
+      },
+      "TAMPERED": {
+        "when": "manifest finalized BUT the sealed bytes cannot be re-derived: the sealed-prefix hash fails, or the log is shorter than the sealed prefix, or the prefix is underivable",
+        "consumable": false,
+        "forensics": true,
+        "meaning": "The append-only log's SEALED bytes changed after finalization. Blocks everything and is logged as an integrity event. GREW sharpened this state: growth by verified append derives GREW, so TAMPERED now means exactly what the word says -- mutation, truncation, or mutate-then-extend (growth cannot mask mutation; the verdict is taken over the sealed prefix, not over lengths). Every undecidable case degrades HERE, never to GREW. A1 ELABORATION, FLAGGED FOR A2: this state is not named in design SS12.3. It is the detector for SS12.3's stated invariant 'immutable after finalization' -- an invariant with no detector is an assertion, which is precisely what Principle 11 exists to stop. A2 aligns the vocabulary; until then, treat TAMPERED as A1-local."
+      }
+    },
+    "transitions": [
+      "ABSENT   -> PARTIAL   : first PostToolUse append",
+      "PARTIAL  -> FINALIZED : Stop hook writes manifest.json with finalized_at",
+      "FINALIZED-> GREW      : the log grows by append after a finalize -- the ordinary consequence of the session's next turn",
+      "GREW     -> FINALIZED : the next Stop SUPERSEDES: the prior manifest is retained as manifest.superseded-<k>.json in both planes, then the full grown log is re-sealed. Supersession requires the verified append-extension; a shorter or mutated log can never satisfy it, which is the earlier refusal rationale enforced by predicate instead of by blanket refusal",
+      "FINALIZED-> TAMPERED  : sealed log bytes mutated or truncated after finalization (detected on prefix re-hash, never announced by the mutator); Stop REFUSES to finalize a TAMPERED dispatch, exactly as before",
+      "FINALIZED-> FINALIZED : re-running Stop on an UNCHANGED log is a no-op -- except that the error-trail flags are reconciled by hash comparison if hook-errors.log changed since the seal (the no-op trail reconcile; the log seal is untouched). A Stop whose payload carries stop_hook_active=true is a NO-OP in its entirety, in every state -- the re-entry guard; the next non-re-entrant Stop carries the work"
+    ]
+  },
+
+  "x-deviations-from-design-12-3": {
+    "description": "Every way this schema differs from design SS12.3's stated shape, labelled. SS12.3 says: 'Per dispatch: {dispatch_id, session_id, entries: [{ts, tool, command, exit_code, stdout_sha256, stderr_sha256, path}], finalized_at}. Written by the Stop hook. Append-only during the session; immutable after finalization.' Added after a validator found that additions were described but not labelled as additions -- a reader could not tell design from elaboration without diffing.",
+    "fields_named_by_12_3_and_present": ["dispatch_id", "session_id", "entries", "entries[].ts", "entries[].tool", "entries[].command", "entries[].exit_code", "entries[].stdout_sha256", "entries[].stderr_sha256", "entries[].path", "finalized_at"],
+    "additions_not_named_by_12_3": {
+      "schema_version": "Version discipline. Not in SS12.3.",
+      "state": "Explicit 'finalized' marker. Redundant with finalized_at by construction; kept so a consumer reading only the header sees the state without inferring it.",
+      "entry_count": "Arguably design-sanctioned by SS4.1 ('computes a manifest (per-entry sha256, count)'), but SS12.3 does not name it. Lets a header-only consumer detect truncation.",
+      "unparsable_lines": "Count of log lines that would not parse and were excluded. Recorded rather than dropped silently -- a nonzero value is a capture defect an operator must see.",
+      "log_path": "Locates the append-only log the manifest summarises.",
+      "log_sha256": "The immutability anchor. Makes SS12.3's 'immutable after finalization' a DETECTABLE invariant instead of an assertion. Without it that sentence has no enforcement.",
+      "log_bytes_sealed / finalize_count": "Neither is in SS12.3, which also does not name the per-turn Stop this harness actually delivers. They make the sealed prefix and the supersession ordinal explicit on the face of the artifact.",
+      "streams_committed": "Records whether stream bodies reached the committed plane.",
+      "hook_errors_present / hook_errors_sha256": "Neither is in SS12.3. They exist because a capture defect must be visible ON the committed artifact; without them a dispatch that silently dropped evidence was byte-indistinguishable from a clean one.",
+      "created_at": "Distinguishes computation time from finalization time.",
+      "entries[]._precompact variant": "SS12.3 names one entry shape. SS4.1 mandates a PreCompact hook whose event has no stdout/stderr. The variant is declared rather than overloading stdout_sha256 to mean 'transcript hash'.",
+      "entries[]._denied variant": "SS12.3 assumed the hook stream sees every call; the live harness invokes PostToolUse only for successful, permitted calls, so what the guard refused existed nowhere. The guard now records its own refusals as this variant at deny time -- observation added to the tripwire charter, enforcement unchanged.",
+      "call_completeness": "SS12.3 has no notion of a call the plane never saw. This block is the manifest's own statement about whether its entries account for every call the transcript resolved, with 'complete' asserted only on zero unmatched and every underivable verdict stated as 'unreconciled' rather than silent.",
+      "manifest.superseded-<k>.json (beside this file, not a field)": "SS12.3 says 'immutable after finalization' and this harness Stops per turn; the reconciliation is that a finalized manifest is never edited -- it is RETAINED, immutable, and a successor seals the grown log. The retention chain is the audit record of every seal the dispatch ever had."
+    },
+    "required_list_deviations": {
+      "finalized_at": "NOT in this schema's top-level required list, although SS12.3 names it. Deliberate: its ABSENCE is what derives PARTIAL (see x-state-machine). Requiring it would make an interrupted finalizer's output fail validation instead of reading as the state it is.",
+      "session_id": "NOT required, although SS12.3 names it. The harness may not supply one; dispatch_id is the identity that governs consumption. The field is always present, typed string-or-null.",
+      "call_completeness": "NOT required, although every current finalizer writes it unconditionally. Deliberate: requiring it would invalidate every earlier manifest on disk, and those manifests are history, not defects. A consumer distinguishes eras by schema_version; within 1.3.0 the block is always present in practice, and its absence on a 1.3.0 manifest is itself a finding."
+    },
+    "resolution": "These deviations are A1-local and are A2's to ratify or overrule when it writes the SS12 schema deltas."
+  },
+
+  "x-stream-verification": {
+    "description": "How a stream body is checked against its recorded hash. Added after a validator finding.",
+    "procedure": "For each tool-call entry: read the file at entries[].path, take its `stdout` and `stderr` members verbatim, sha256 each over the full UTF-8 bytes, and compare to stdout_sha256 / stderr_sha256.",
+    "implemented_at": "tools/framework/hooks/lib/evidence-common.ps1 :: Test-EvidenceStreamIntegrity",
+    "honest_scope": "This DETECTS stream-body tampering only when something runs it. Nothing in A1 runs it automatically -- Get-EvidenceState is a cheap header check and does not hash stream bodies. Until A3's `mission verify` wires it into the dispatch gate, a mutated stream body with an untouched log.jsonl still reads FINALIZED from state alone. Stated here rather than left implied. _precompact and _denied entries carry no stream body and are excluded by their null or transcript-shaped paths."
+  },
+
+  "x-write-path": {
+    "description": "Who may write what. Design SS4.1 write-path enforcement.",
+    "hooks_may_write": ["log.jsonl (append only; tool-call entries by PostToolUse, _precompact entries by PreCompact, _denied entries by the PreToolUse guard at deny time)", "streams/*", "transcripts/*", "manifest.json (first finalize, then rewritten ONLY by append-verified supersession or a disclosed reconcile; a TAMPERED log is refused)", "manifest.superseded-<k>.json (write-once retention copies; never edited, never deleted)"],
+    "model_may_write": [],
+    "enforcement_on_this_host": "See docs/framework/evidence-write-path-threat-notes.md. Layer (a) mount exclusion is UNAVAILABLE for natively-run sessions; layer (b) holds; layer (c) PreToolUse deny carries nearly the whole load and is a heuristic, not a boundary."
+  }
+}

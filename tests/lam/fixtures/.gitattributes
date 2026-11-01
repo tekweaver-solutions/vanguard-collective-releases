@@ -1,0 +1,4 @@
+# The files under this folder are pinned by the sha256 of their exact bytes: the acceptance instruments read them
+# before any history. No line-ending conversion reaches them, whatever core.autocrlf says, so a checkout or a clone
+# of a project the framework is installed into holds the bytes the instruments pin.
+* -text

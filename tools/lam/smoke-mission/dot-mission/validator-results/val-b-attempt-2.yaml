@@ -1,0 +1,17 @@
+# Validator result -- written by build-smoke-mission.ps1 from its own checks; no validator agent ran.
+# The builder refuses to write this file unless every check below came out as recorded here.
+id: valresult-b-2
+validator_id: val-b
+validator_type: qa
+assertion_ids: [A-4, A-5]
+verdict: pass
+attempt_number: 2
+commit_sha: "{{COMMIT}}"
+evidence:
+  - type: test_output
+    content: "src/greeting.txt holds 2 lines; line 2: REWORKED"
+    description: "A-4 PASS: the rework added the second line exactly."
+  - type: test_output
+    content: "D-2.anchors.yaml worktree_tip_sha equals git rev-parse HEAD in the D-2 worktree; capture_gaps_count: 0"
+    description: "A-5 PASS: both halves hold."
+failure_summary: null

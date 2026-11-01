@@ -1,0 +1,16 @@
+# Isolation probe -- the validator-swarm precondition, recorded BEFORE the validators ran.
+#
+# In this built mission no validator agent ran. Each validation was build-smoke-mission.ps1's own
+# check of one assertion against the tree under judgement: the check is handed the assertion and the
+# tree, and nothing else exists for it to know. The probe records that, and records it as what it
+# is rather than as an agent's answer.
+
+probe_id: probe-attempt-1
+ran_at: {{DATE}}
+ran_before_validators: true
+question: "What does the validator know about the session that dispatched it?"
+
+reported_parent_knowledge: none
+verbatim_answer: "No parent session exists: the validator is a check in build-smoke-mission.ps1, given one assertion and the tree under judgement."
+
+residual: "No validator agent was spawned, so agent isolation is not what this probe shows; it shows that the validation inputs were the assertion and the tree alone."

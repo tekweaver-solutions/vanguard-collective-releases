@@ -1,0 +1,81 @@
+{
+  "_purpose": "Smoke-mission settings. The next-gen evidence hooks and the goal-check Stop hook are registered HERE, for any Claude session whose project is this repository. Every command names its script under $CLAUDE_PROJECT_DIR, so none of them points outside the session's own tree.",
+  "_note": "Built by tools/lam/build-smoke-mission.ps1. The hook scripts themselves are the framework's (tools/evidence-hooks-next/hooks, tools/lam); the builder drove those of the checkout it ran from against this mission to leave its evidence, and copied into this tree only the files its ceremony runs. A session opened here therefore runs only the hooks whose scripts it finds under its project directory.",
+
+  "permissions": {
+    "defaultMode": "auto",
+    "deny": [
+      "Edit(.mission/gates/**)",
+      "Bash(git push*)", "PowerShell(git push*)"
+    ]
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-guard-pretooluse.ps1\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-post-tool-use.ps1\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-stop-finalize.ps1\"",
+            "timeout": 60
+          },
+          {
+            "_why": "The goal-check Stop hook, registered at the smoke site. It evaluates .mission/goals/SMOKE-MISSION.yaml, which is committed beside it: a hook pointed at a goal that does not exist is a registration in name only.",
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/lam/mission-goal-check.ps1\" -Goal SMOKE-MISSION -MissionRoot \"$CLAUDE_PROJECT_DIR\" -AsStopHook",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-pre-compact.ps1\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/lam/record-operator-prompt.ps1\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+# Validation Contract Assertion.
+id: A-1
+feature_id: F-001
+statement: "src/greeting.txt exists and its first line is exactly: hello from the smoke worker"
+kind: file
+verification: "Read src/greeting.txt in the tree under judgement; compare line 1 byte for byte."
+planted: false

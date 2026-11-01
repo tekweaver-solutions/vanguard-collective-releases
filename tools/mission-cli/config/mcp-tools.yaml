@@ -1,0 +1,135 @@
+# MCP tools -- FRAMEWORK-SCOPED proposal (NOT a <project> product feature)
+# Schema/lifecycle: ADR-015 in local-orchestrator-mode.md.
+#
+# ============================================================================
+# SCOPE CLARIFICATION (framework tooling, not product features)
+# ============================================================================
+# MCP server development is OUT of scope for the <project> product. The
+# <org> team will develop MCP servers separately if they are needed
+# for downstream integrations. The <project> LivingSpec and contract MUST
+# NOT include MCP-server features or assertions, and the spec should state
+# this explicitly.
+#
+# This file is preserved because the MCP tool recommendations remain valid
+# for the **framework that BUILDS <project>** -- i.e., the workers,
+# validators, and orchestrator-thinking-partner agents dispatched during the
+# execution phase of THIS mission (per local-orchestrator-mode.md). It is
+# NOT a list of services that ship with the <project> product to end users.
+#
+# Activation: per ADR-015, the operator moves this file from proposals/ to
+# tools/mission-cli/config/mcp-tools.yaml and installs each server manually
+# per its `install_hint`. There is no formal `accept` ceremony for tools;
+# the commit of the file IS acceptance. The recommendations apply only to
+# the framework runtime, not to the product source tree under src/.
+#
+# Isolation values follow ADR-016:
+#   - direct:    parent worker invokes tool inline; output sits in parent context.
+#   - subagent:  tool is invoked via Task() and only a structured summary
+#                returns to the parent. Required for context-heavy tools.
+# ============================================================================
+
+# Framework-scoped tools -- consumed by workers/validators/orchestrator
+# during execution phase of THIS mission. Not <project> product features.
+framework_mcp_tools:
+
+  - name: github
+    purpose: "Issue and PR management for the <project> product repo. Used by the orchestrator-thinking-partner (creating issues, reading PR state) and by workers in the rework loop."
+    server: "@github/github-mcp"
+    install_hint: "Install per https://github.com/github/github-mcp-server (Docker image preferred). Pre-configure `gh auth status` so the server inherits the operator's GitHub token."
+    isolation: direct
+    scope: [orchestrator-thinking-partner, worker]
+    auth: gh-cli
+    rationale: >
+      The <project> deliverables include code that lives in a GitHub repo
+      (and possibly spec folders in a GitHub template repo). Framework
+      workers that implement repo-facing features benefit from
+      in-context issue/PR access; the orchestrator-thinking-partner uses it
+      when drafting amendments that reference upstream issues. Direct
+      isolation is fine: GitHub API responses are small and structured.
+
+  - name: playwright
+    purpose: "Browser automation for QA validator screenshot capture (per ADR-013), used when QA validators dispatched during execution need to exercise the <project> product UI."
+    server: "@playwright/mcp"
+    install_hint: "Install per Microsoft's Playwright MCP server docs (https://github.com/microsoft/playwright-mcp). Typical invocation: `npx @playwright/mcp@latest`. First run installs browser binaries (Chromium + Firefox + WebKit); the sandbox base image (ADR-018) ships them pre-installed when available."
+    isolation: subagent
+    scope: [qa-validator, worker]
+    rationale: >
+      Per ADR-013, QA validation in local-mode uses Playwright in-sandbox to
+      capture screenshots that Claude Code headless then evaluates via @path
+      references. When a product ships a UI (a chat UI, for example), the
+      QA validators exercise it to confirm its user flows render
+      correctly. Per ADR-016, Playwright is the canonical "must run in a
+      subagent" case -- DOM dumps and screenshot batches are voluminous and
+      pollute the parent context if returned directly.
+
+  - name: docling
+    purpose: "Runtime document parsing for workers that need to read externally supplied documents during the execution phase of this mission (distinct from the design-time, one-shot CLI use covered by ADR-019)."
+    server: "docling-mcp (https://github.com/docling-project/docling-mcp)"
+    install_hint: "pip install docling-mcp, then register the server with the MCP transport. Inherits the same Python interpreter and model cache as the design-time CLI (no double model-weight download)."
+    isolation: subagent
+    scope: [qa-validator, worker]
+    rationale: >
+      A framework worker validating a generated PDF, or one
+      reading a customer-supplied API spec mid-task while implementing a
+      product feature, should not have to leave its context to do so.
+      Per ADR-016 this is subagent isolation: rendered markdown for large
+      PDFs can be tens of thousands of tokens, which belongs in a sub-context.
+    notes: >
+      This MCP routing is the *runtime* counterpart to ADR-019's *design-
+      time* Docling CLI use. Adding/removing this entry mid-mission would
+      be an amendment, since framework workers depend on the declaration.
+
+  - name: postman
+    purpose: "REST API testing for QA validators and workers exercising product endpoints. Used to drive request/response validation against generated API code without leaving the worker context."
+    server: "@postman/postman-mcp-server"
+    install_hint: >
+      pnpm install -g @postman/postman-mcp-server (the package's preinstall
+      uses `only-allow pnpm`, so npm install -g fails). On Windows with
+      corporate-proxy SSL interception, prefix with NODE_OPTIONS=--use-system-ca
+      so Node trusts the Windows certificate store (analog of
+      `git config --global http.sslBackend schannel`,
+      for git over HTTPS behind the same corporate proxy).
+      Requires the POSTMAN_API_KEY environment variable at runtime; obtain a
+      key at https://web.postman.co/settings/me/api-keys. Default invocation
+      mounts the full tool set (`--full`, ~100 tools across collections,
+      environments, monitors, runs); use `--minimal` or `--code` to scope
+      down if the surface is too large for a given worker.
+    isolation: direct
+    scope: [qa-validator, worker]
+    auth: postman-api-key
+    rationale: >
+      Workers implementing API-facing features and QA validators
+      verifying generated API clients need to issue REST calls,
+      inspect responses, and assert on shapes -- core Postman territory.
+      Response payloads are structured JSON of bounded size (single API
+      calls, not collection runs of hundreds of requests), so direct
+      isolation keeps the loop tight; if a worker ever drives a large
+      collection run the result handling can be moved into a subagent
+      via Task() per ADR-016.
+    notes: >
+      The framework declaration here is the project-scope intent per
+      ADR-015. On Windows the runtime storage of this server may
+      live in user-scope `~/.claude.json` rather than project-scope
+      `.mcp.json`, because Claude Code's interactive runtime fails to
+      load project-scope `.mcp.json` on Windows (issues #45195 / #4938;
+      a known upstream loader defect).
+      The POSTMAN_API_KEY secret is injected via `${POSTMAN_API_KEY}`
+      expansion in the runtime config so the key itself stays out of git.
+      When upstream fixes the project-scope loader, the storage location
+      should migrate back to `.mcp.json` per ADR-015 intent; this YAML
+      declaration does not need to change.
+
+# ----------------------------------------------------------------------------
+# Not included:
+#   - `filesystem` MCP server. It is a soft
+#     pick, left out while the tool gateway is not yet implemented
+#     (Section 12.4 deferred) and worker file IO is adequately constrained
+#     by shell-level scoping for the per-worker worktree subtree.
+#
+# Explicitly NOT included (product scope, not framework tooling):
+#   - Any MCP server treated as a <project> product feature. If <project>
+#     workers in the product runtime ever need to call out to an MCP server
+#     (e.g., to integrate with a chat service, or with a downstream
+#     PM system), that is a product design decision made under that future
+#     scope, NOT a framework-tooling decision recorded here.
+# ----------------------------------------------------------------------------

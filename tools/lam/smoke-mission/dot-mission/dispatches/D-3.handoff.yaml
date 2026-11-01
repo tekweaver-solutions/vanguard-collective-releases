@@ -1,0 +1,14 @@
+# Handoff -- dispatch D-3 (close), mission smoke. Written by build-smoke-mission.ps1, which ran the
+# ceremony itself at the mission root; no CLI worker ran. No runner_anchors block.
+id: handoff-D-3
+from_worker: w-smoke-3
+dispatch_id: D-3
+feature_id: F-001
+spec_version: 1
+completed_assertions: []
+unfinished: []
+commits: ["{{COMMIT}}"]
+commands_run: ["powershell -NoProfile -ExecutionPolicy Bypass -File tools/mission-ceremony-record.ps1 -CeremonyId ledger-ceremony-smoke-001 -- exit 0, both clean-tree gates passed, ledger appended, atomic commit", "git log -1 --format=%H at the mission root"]
+issues_observed: []
+procedure_adherence: confirmed
+terminated_reason: completed

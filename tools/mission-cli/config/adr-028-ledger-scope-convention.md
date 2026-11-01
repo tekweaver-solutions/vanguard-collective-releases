@@ -1,0 +1,15 @@
+# ADR-028 — Ledger scope is a SUBJECT axis (framework vs product), not granularity
+
+> **Status:** Accepted — operator-ruled framework doctrine. This standalone file is the canonical copy of the decision per ADR-033 (standalone-canonical); there is no fold-into-`local-orchestrator-mode.md` step.
+>
+> **Drafted during:** a feature closure, reconciling the §7 Memory Ledger Entry schema's `scope` and `type` enums to the live ledger convention via a schema amendment. A grounding read of a live ledger found most entries carrying scope values outside the §7 enum, with `framework` and `product` as the two highest-frequency values and the §7 values `milestone`/`feature` unused. The amendment formalizes the reconciliation; this ADR is the convention companion that names the resulting axis and the rejected alternative.
+
+---
+
+**Decision.** Ledger `scope` is a SUBJECT axis carrying three operative values — `global`, `framework`, `product` — plus the designed-for granularity values `milestone` and `feature` (retained as valid but unused when this was written). `framework` denotes a learning about the framework runtime, harness, tooling, or cross-mission infrastructure (worker-runner, tool-gateway, worktree-manager, mission-cli config, hook contracts, schema-vocabulary gaps). `product` denotes a learning about the deliverable being built under the current mission (validators, evidence harness, fixtures, the product's domain schema). `global` denotes a learning that applies independent of subject (cross-cutting reusable knowledge; also the fold-target for the legacy `mission` value the amendment retired). Formalized by the approved scope/type amendment and its ledger reconciliation entry.
+
+**Alternative considered.** Introduce a separate `domain: {framework, product}` field and keep `scope` purely for granularity (`global`/`milestone`/`feature`). Rejected — the existing ledger corpus at the grounding read carried no granularity signal to populate a second axis (`milestone` and `feature` had zero use across the full history); adding the field would orphan the existing entries' structure for a distinction the live ledger never needed, and it would force every future write to populate two coupled fields whose values are derivable from each other in practice.
+
+**Tradeoff accepted.** `scope` is semantically overloaded (subject + granularity on one field); we lose the ability to cleanly express constructs like "a framework-level learning that applies feature-locally," which would otherwise require both axes. Accepted because (a) such constructs had not appeared in the ledger's organic use, (b) it matches the convention the live ledger established, and (c) it avoids a bulk rewrite of immutable history. If a future mission surfaces the need for a second axis, that is a new amendment moment, not a structural failure of this decision.
+
+**Reference.** The approved scope/type amendment and its ledger reconciliation entry; in-repo §7 schema fragment at `tools/mission-cli/config/expanded-schemas-section-7-memory-ledger-entry.md` whose "In-repo reconciliation" section this ADR formalizes.

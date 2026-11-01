@@ -1,0 +1,59 @@
+{
+  "note": "the synthetic releases the upgrade falsifiers build from the checkout's installer-owned set; every path named here is installer-owned there but retire.path, the file 0.2.0 installed that case u10 sees an upgrade retire, and every version is synthetic but census.tag and census.lock, the real 0.2.0 that case u10 installs from the repository's tag and upgrades with the real release the checkout builds",
+  "from": "0.1.1",
+  "from_0_1_0": "0.1.0",
+  "release": "0.1.2",
+  "changed": [
+    { "path": "docs/framework/LAM-INSTALL.md", "append": "\nsynthetic upgrade marker\n" },
+    { "path": "tools/lam/mission-gate.ps1", "append": "\n# synthetic upgrade marker\n" },
+    { "path": "tools/worker-runner/test_hook_config.py", "append": "# synthetic upgrade marker\r\n" }
+  ],
+  "new": { "path": "tools/lam/upgrade-probe.txt", "class": "MOVE", "content": "a file new in the synthetic release\n" },
+  "crlf_written": "tools/worker-runner/test_hook_config.py",
+  "lf_now_crlf": "docs/framework/LAM-INSTALL.md",
+  "hardlinked": "tools/lam/mission-gate.ps1",
+  "edited_changed": "docs/framework/LAM-INSTALL.md",
+  "edited_unchanged": "docs/framework/LAM-AUTHORING-NOTES.md",
+  "unlisted": "tools/lam/mission-gate.ps1",
+  "held": "tools/worker-runner/test_hook_config.py",
+  "downgrade_lock": "0.3.0",
+  "versions": { "low": "0.9.0", "high": "0.10.0", "prerelease_lock": "0.2.0-rc1", "prerelease_release": "0.1.2-rc1" },
+  "next": {
+    "release": "0.1.3",
+    "retired": "tools/lam/upgrade-probe.txt",
+    "upstream_template": { "path": ".worktreeinclude", "append": "# synthetic upstream change\n" },
+    "host_template": { "path": "model-routing.yaml", "append": "# a host edit\n" },
+    "host_config_absent": "tools/tests/cli/test_prune_worktrees.py",
+    "case_renamed": { "from": "docs/framework/LAM-SUCCESSOR.md", "to": "docs/framework/lam-successor.md", "append": "\nsynthetic upgrade marker\n" }
+  },
+  "kind_change": {
+    "release": "0.1.3",
+    "unedited": "tools/tests/cli/test_close_milestone_lam_roster.py",
+    "edited": "tools/tests/cli/test_prune_worktrees.py",
+    "reverse": "docs/framework/LAM-SUCCESSOR.md",
+    "append": "\n# synthetic kind-change marker\n",
+    "host_append": "# a host edit\n"
+  },
+  "census": {
+    "tag": "v0.2.0",
+    "lock": "0.2.0",
+    "path": "tools/lam/legacy-halt-census.txt",
+    "exporter": "tools/lam/export-legacy-census.ps1",
+    "count": 89,
+    "census_sha256": "67f0ce480b106335d75ae059fa8f8786080bd9346e5f6f2974de8e8084191d20"
+  },
+  "retire": {
+    "path": "docs/framework/LAM-ACCEPT.md",
+    "sha256": "d38a1993b56724489e9925901a912080c1af233b703b2292320245facf186dc7",
+    "bytes": 2910945
+  },
+  "guard": {
+    "escape": "..\\escape.txt",
+    "junction": "docs",
+    "bound_exact": "docs/framework/v35-38-SUCCESSOR-BRIEF.md",
+    "bound_over": "docs/framework/LAM-RESIDUALS.md",
+    "verify_bound": "tests/lam/instrument-WP-2.ps1",
+    "read_bound": 67108864,
+    "path_limit": 260
+  }
+}

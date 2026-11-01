@@ -1,0 +1,52 @@
+# .worktreeinclude -- what a worker worktree needs that git does not carry.
+# LAM-ACCEPT WP-5 K-2. ADR-026: native worktrees for fan-out isolation.
+#
+# `git worktree add` gives a worker every TRACKED file and nothing else. Anything gitignored --
+# which is where local configuration and the evidence machinery's runtime state live -- is absent
+# unless it is named here. Each entry below says why it is needed; anything not needed is not
+# listed, because a worktree that carries the whole working directory is not an isolation
+# boundary, it is a copy.
+#
+# DERIVED FROM THIS REPOSITORY, not from a template: the ignored set was read with
+# `git status --porcelain --ignored=matching` and each candidate was judged on whether a worker
+# can do its job without it.
+
+# --- required -----------------------------------------------------------------------------------
+
+# The hook registration and the guard. WITHOUT THIS THE WORKER HAS NO EVIDENCE PLANE: its tool
+# calls are never captured, its denials are never recorded, and the manifest the runner later
+# anchors would describe a session that produced no evidence. This is the one entry whose absence
+# silently invalidates the entire dispatch, so it is first.
+.claude/
+
+# --- deliberately NOT included --------------------------------------------------------------------
+# These are listed as comments rather than omitted silently, so a reader can see that each was
+# considered and refused rather than forgotten (design SS4.5 law 4: state the reach and the gap).
+#
+#   .mission/contract/
+#       TRACKED, so `git worktree add` already places it in every worktree: the contract the worker
+#       is held to is there without this file. Naming it here only copied the checkout's files over
+#       the worktree's own -- redundant, and it unsettles git's stat cache -- and carried the
+#       contract tree's ignored residue (__pycache__) along with them.
+#
+#   src/.venv, src/.venv-live, tools/.venv
+#       EXCLUDED BY THE CONTRACT (K-2: "product .venv paths excluded"). They are large,
+#       platform-specific, and re-creatable; copying them per worktree would dominate fan-out cost
+#       for no gain. A worker needing a Python environment builds one or is given one.
+#
+#   docker/secrets/
+#       Credentials. A worker gets the least authority that lets it do its job, and no dispatch in
+#       this framework requires secrets to satisfy an assertion. Withheld deliberately.
+#
+#   .mission-runtime/
+#       Regenerated per session by construction -- copying a previous session's runtime state into
+#       a fresh worktree would hand the worker another dispatch's evidence store.
+#
+#   .mission/evidence/, .mission/validation/
+#       The committed evidence plane and prior validation records. A worker producing evidence
+#       must not start holding other dispatches' evidence: that is the pen-on-its-own-evidence
+#       problem one level removed.
+#
+#   .pytest_cache/, src/__pycache__/, src/.import_linter_cache
+#       Build residue. Stale caches in a fresh worktree cause exactly the class of "passes here,
+#       fails there" that worktree isolation exists to eliminate.

@@ -1,0 +1,1638 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  The ONE shared definition of PASS-DIB and of ledger provenance binding.
+  (as LAM-ACCEPT and the session law define them)
+
+.DESCRIPTION
+  THIS FILE EXISTS SO THERE IS EXACTLY ONE COPY OF EACH ADMISSION CONSTANT. It is dot-sourced by both
+  tools/lam/mission-dispatch.ps1 and tools/lam/mission-goal-check.ps1. Nothing else may restate
+  either set.
+
+  WHY THAT IS A REQUIREMENT AND NOT A PREFERENCE. The admitted-subject set below records a
+  TEMPORARY property of another program -- that mission-verify's suite arm is unimplemented. When
+  verify's increment 2 lands and the arm starts deriving, those three members must begin BINDING
+  everywhere at once. A second copy would mean one consumer kept admitting a subject the other had
+  started enforcing, and the gap between them would be invisible: both would look correct in
+  isolation. One literal, one place, one moment of change.
+
+  PASS-DIB -- "PASS-with-disclosed-increment-boundary", LAM-ACCEPT R-1 as amended:
+    a verify run whose refusing subjects are exactly a subset of
+    {suite.passed, suite.failed, suite.skipped}, each with outcome ABSENT and verify's own
+    increment-boundary residual, and every other subject MATCHED or NOT_APPLICABLE.
+    Any other refusing subject, any DIVERGED, or any crash is still a refusal.
+
+  ONE FURTHER CLASS, NAMED SEPARATELY AND SCOPED TO ONE SUBJECT: the declared-repair
+  admission, ADMITTED-BY-DECLARED-REPAIR. It admits `suite.expected_failures_matched` -- and nothing
+  else, ever -- when the dispatch names the failing test ids it is being sent to repair and the
+  basis's unexpected-failure set equals those ids exactly. It does not touch the sentence above:
+  a DIVERGED TALLY SUBJECT IS NEVER ADMITTED BY IT, by any route.
+
+  IT IS A TRANSITIONAL VERDICT CLASS AND IT DISSOLVES. The real cure is verify increment 2 (suite
+  execution), registered as follow-on work outside this build. When it lands, `Get-LamVerifyVerdict`
+  stops returning PASS-DIB on its own -- the subjects will report MATCHED and take the PASS branch --
+  with no edit here. Nothing needs to remember to remove it.
+#>
+
+# ---------------------------------------------------------------------------------------------
+# ONE DEPENDENCY, AND IT IS A PREDICATE THIS FILE REFUSES TO RESTATE.
+# ---------------------------------------------------------------------------------------------
+# The origin-attestation admission below has to ask whether a gate is REVOKED. That predicate
+# already exists exactly once, in tools/lam/lam-gate-class.ps1's Test-LamGateFieldSet, and it
+# carries the (?!null\b) whose ABSENCE is this codebase's single most-repeated defect: FOUR
+# recorded instances, each a hand-copied restatement that read the normal unrevoked state
+# `revoked_at: null` as a revocation and therefore authorised nothing, silently. A fifth copy
+# here would be that mistake again with this file's name on it, in the one file whose own header
+# forbids restating another component's predicate.
+#
+# BOTH REAL CONSUMERS ALREADY DOT-SOURCE BOTH FILES, in opposite orders -- mission-goal-check.ps1
+# at :105 then :109, mission-dispatch.ps1 at :1000 then :1867 -- and the order does not matter,
+# because PowerShell resolves a function name at CALL time and both files are loaded before any
+# detector runs. What this guard buys is the THIRD kind of consumer: an instrument or a fixture
+# that dot-sources THIS file alone. Without it that caller fails at the call site with "term not
+# recognized" -- fail-closed, but saying nothing about what is missing. Re-sourcing is idempotent,
+# so the guard is a no-op wherever the class file arrived first.
+if (-not (Get-Command -Name 'Test-LamGateFieldSet' -CommandType Function -ErrorAction SilentlyContinue)) {
+    # LOADED WHEN IT IS THERE; ITS ABSENCE IS ANSWERED AT THE CALL, NOT AT LOAD. An
+    # UNCONDITIONAL dot-source here is a HARD LOAD-TIME dependency, and several consumers copy
+    # THIS FILE ALONE beside a gate -- tests/lam/instrument-WP-1.ps1:1528 does exactly that to
+    # build the derived clean-tree gate H-3 and H-16 drive. With no sibling on disk the
+    # dot-source raises CommandNotFoundException, and under those callers'
+    # ErrorActionPreference 'Stop' it takes this whole library down and the gate with it.
+    # DRIVEN: H-3 and H-16 read RED exactly that way, on a tree whose clean-tree functions are
+    # byte-identical to the ones that read GREEN before.
+    #
+    # PowerShell resolves a function NAME at CALL time, which is what this file's own header
+    # already relied on, so nothing that avoids the origin-attestation path notices either way.
+    if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'lam-gate-class.ps1')) {
+        . (Join-Path $PSScriptRoot 'lam-gate-class.ps1')
+    }
+}
+
+# =============================================================================================
+# THE ADMITTED SET -- the literal constant. One copy. Do not restate it anywhere else.
+# =============================================================================================
+$script:LamDibAdmittedSubjects = @('suite.passed', 'suite.failed', 'suite.skipped')
+
+# The marker in verify's own residual text that identifies an admitted absence as the disclosed
+# increment boundary rather than some other absence. Matching on verify's OWN words is deliberate:
+# it means an absence for any other reason -- a missing file, an unreadable artifact -- does NOT
+# qualify, even on one of the three named subjects.
+# THAT CLAIM IS NOW TRUE, AND FOR MOST OF THIS BUILD IT WAS NOT. The marker was tested as one
+# GLOBAL substring over the whole report, so the sentence appearing anywhere -- attached to a
+# different subject entirely -- satisfied it for every named subject at once. It is now matched
+# against EACH refusing subject's OWN residual (Get-LamVerifyArmEntries), which is what makes the
+# sentence above a measurement rather than an intention. V-1 round 1, WP-2.
+$script:LamDibResidualMarker = 'Suite EXECUTION is not implemented'
+
+function Get-LamDibAdmittedSubjects { return $script:LamDibAdmittedSubjects }
+
+# =============================================================================================
+# THE DECLARED-REPAIR CLASS. A SECOND CONSTANT, NEVER THE SET.
+# =============================================================================================
+# THIS IS NOT A MEMBER OF THE ADMITTED SET ABOVE AND MUST NEVER BE MOVED INTO IT. The set above
+# records that verify cannot DERIVE a tally at all; this records that the basis carries a suite
+# failure the mission has NAMED IN ADVANCE and is dispatching a worker to repair. They are
+# different facts, so they are different constants -- merging them would let the tally subjects be
+# admitted on a declaration, which is the DIVERGED hole the per-subject test below exists to close.
+#
+# THE DEFECT IT ANSWERS. Every dispatch verifies against the NEWEST anchors on disk.
+# `suite.expected_failures_matched` reads DIVERGED -- recorded false, derived true -- whenever those
+# anchors carry an unexpected suite failure (mission-verify.ps1:1222-1224 derives `true` from any
+# non-empty manifest; the runner records `false` from the run that actually failed). The subject is
+# in no admitted set, so it lands in `$other` and refuses EVERY subsequent dispatch, including the
+# one that would repair the failure. The basis cannot be cured because the cure cannot be dispatched.
+#
+# WHAT IT MUST NEVER BECOME. Not a way to proceed on a red suite: the declaration is a DEBT, not a
+# waiver. It is granted only when the mission named the failing ids BEFORE the run, and the dispatch
+# is REJECTED at its end if the worker did not actually make them pass (mission-dispatch.ps1,
+# DECLARED-REPAIR-NOT-DELIVERED). It admits ONE subject, which is not a tally subject, and it never
+# admits a DIVERGED tally subject -- suite.passed, suite.failed and suite.skipped keep refusing on
+# any outcome but ABSENT, at the per-subject test below, untouched by this class.
+$script:LamDeclaredRepairSubject = 'suite.expected_failures_matched'
+
+function Get-LamDeclaredRepairSubject { return $script:LamDeclaredRepairSubject }
+
+# =============================================================================================
+# THE ORIGIN-ATTESTATION CLASS. A FOURTH CONSTANT, NEVER THE SET.
+# =============================================================================================
+# THIS IS NOT A MEMBER OF ANY SET ABOVE AND MUST NEVER BE MOVED INTO ONE. It takes the shape
+# the declared-repair class established -- "A SECOND CONSTANT, NEVER THE SET" --
+# for the same reason: it records a DIFFERENT FACT, so it is a different constant with its own
+# bucket and its own per-subject test.
+#
+# THE DEFECT IT ANSWERS. A goal whose verify basis carries an ORIGIN
+# CLAIM is falsified by the arc's OWN SIGNOFF PUSH. The runner records runner_anchors.origin_tip
+# from evidence at build time; the arc evaluates its goal, closes, and then PUBLISHES; and from
+# that instant both origin channels derive the NEW tip while the artifact still claims the old
+# one. The ORIGIN-ATTESTATION arm reports the stale-claim case it exists for -- correctly -- and
+# `verify_pass_or_dib` refuses with "refusing subject(s) outside every admitted set:
+# ORIGIN-ATTESTATION/origin_git, ORIGIN-ATTESTATION/origin_api, ORIGIN-ATTESTATION/origin_tip".
+# The order is not wrong: evaluate, close, then publish is the right order, and publishing first
+# would be worse. THE SEQUENCE ITSELF CANNOT BE SATISFIED, and it recurs on every arc from here,
+# because every future arc's anchors carry origin_tip and every future arc pushes at its close.
+#
+# WHY THE CURE IS NOT A WIDENING OF THE ADVANCE SET. The advance
+# set says of itself, at its own definition below, "SCOPE IS EXACTLY TWO SUBJECTS. head_sha and
+# porcelain, and nothing else." Widening it would break a stated scope and silently broaden an
+# admission built for ancestry-plus-provenance, which has nothing to say about origin.
+#
+# WHAT IT REQUIRES, AND WHY THAT KEEPS THE DETECTOR ALIVE. The admission is bound to an
+# OPERATOR-MINTED AUTHORIZATION: a gate under <MissionRoot>/.mission/gates that declares
+# `kind: push` AT COLUMN 0, authorizes EXACTLY the tip origin now carries, for the ref this run
+# actually asked about, at the origin URL this run's remote resolves to, and carries no
+# revoked_at. An origin that moved to something NOBODY authorized still refuses. This is option
+# (a) and not option (c): the arm is not scoped away and no detector is retired.
+#
+# THREE FIELDS ARE DELIBERATELY NOT TESTED, AND NONE OF THEM IS AN OVERSIGHT:
+#   expires_at         -- ruling (i): expiry binds the PRE-PUSH DECIDER, which is asking whether
+#                         a publication MAY happen. This asks which publication DID happen, and
+#                         the authorized tip is unique to the gate, so an expired gate still
+#                         identifies it. Testing expiry here would un-admit a closed arc's goal
+#                         an hour after its own push.
+#   consumed_at        -- LOAD-BEARING. The sibling work package builds a `settle` verb whose
+#                         FIRST EXERCISE is stamping consumed_at onto the very close push gate
+#                         that admits the arc's goal. Filtering consumed gates out would send
+#                         the goal back to NOT_MET the instant the gate is settled, and the batch
+#                         would eat itself. DO NOT "TIGHTEN" THIS.
+#   witness_expired_at -- it disqualifies a gate for the DECIDER, whose question is again whether
+#                         a push may proceed. It is not tested here because this class's five
+#                         conditions are the closed list the ruling gave, and adding a sixth
+#                         would be this file deciding a question nobody put to it. DISCLOSED
+#                         rather than silently absent: it is the one condition in the decider's
+#                         family that this admission does not carry.
+$script:LamOriginAttestationSubjects = @('origin_git', 'origin_api', 'origin_tip')
+
+# THE OUTCOME THIS CLASS ANSWERS, AND IT IS A NARROWING RATHER THAN AN EXEMPTION -- the same move
+# the declared-repair test makes. The defect above produces exactly one shape: the channels AGREE
+# WITH EACH OTHER and DISAGREE WITH THE ARTIFACT'S CLAIM, which verify reports DIVERGED. An
+# UNREACHABLE reading means a channel did not answer, and SILENCE IS NOT CONSENT (spec:385-387,
+# 406-407); an ABSENT reading means origin carries no such ref, so nothing was published to
+# authorize; a MOVED reading is verify disclosing that the BASIS moved, which is a different fact
+# again. No gate speaks to any of those, and each of them keeps refusing exactly as today.
+$script:LamOriginAttestationOutcome = 'DIVERGED'
+
+function Get-LamOriginAttestationSubjects { return $script:LamOriginAttestationSubjects }
+function Get-LamOriginAttestationOutcome  { return $script:LamOriginAttestationOutcome }
+
+# =============================================================================================
+# THE VALIDATOR RESULT VERDICT PAIR. A THIRD CONSTANT, AND THE FIRST ONE THIS
+# FILE SHARES WITH THE GOAL EVALUATOR'S OWN PREDICATE RATHER THAN WITH VERIFY'S.
+# =============================================================================================
+# THE ROW. The validator-result template standing says the result's verdict line reads
+# `verdict: PASS` or `verdict: FAIL`. FAIL IS IN NO RESULT VOCABULARY THIS BUILD DEFINES. V-1's
+# pair is PASS / REFUTED: a package is COMPLETE on a fresh-identity PASS, or on a REFUTED whose
+# findings are registered residuals accepted by a `completion-acceptance` gate (LAM-ACCEPT
+# as amended, and the arm that implements it is mission-goal-check.ps1's `validator_pass_count`).
+# Driven over the seven validator results this build has actually produced: seven carry PASS or
+# REFUTED, ZERO carry FAIL. `verdict: FAIL` matches NEITHER pattern below, so a result spelling it
+# is not counted, not reported FOREIGN, and not reported at all -- the detector's `continue` fires
+# before its ledger-binding test and the goal reads one short with nothing naming the reason. That
+# is the INVISIBILITY the first-line standing was minted against, re-created by its own wording.
+#
+# WHY THE PAIR LIVES HERE. These two patterns ARE mission-goal-check.ps1's `validator_pass_count`
+# arm, character for character. A second copy written into the runner would be a restatement of
+# another program's predicate -- the exact shape this file's header forbids, and the exact shape
+# that killed `gate_present`, whose hand-copied consumed-gate test dropped the `(?!null)` the
+# original carried and was dead on arrival for it. This file is dot-sourced by the runner
+# (mission-dispatch.ps1) AND by the goal evaluator (mission-goal-check.ps1) already, so one literal
+# here is reachable by both. The detector still spells its two inline; pointing it at these names
+# is a two-line change in a file this row does not own, and it is registered rather than taken.
+#
+# COLUMN 0 IS LOAD-BEARING AND IS NOT STYLE. `^\s*verdict:` also matched the INDENTED per-member
+# `verdict: PASS` lines inside a `members:` block, so a REFUTED result whose individual members
+# mostly passed was counted a PASS -- with five REFUTED results on disk the detector reported
+# "6 of 6 ... carry verdict PASS". YAML top-level keys sit at column 0; member keys are indented.
+#
+# WHAT IS DELIBERATELY NOT ASSERTED: POSITION. The template says the verdict must be the result's
+# FIRST NON-COMMENT LINE. NOT ONE of the seven real results obeys that -- every one opens `id:` or
+# `workpackage:` and carries the verdict on line 2 to 5 -- and the detector has never required it,
+# because `(?m)` matches at any line start. A runner asserting the literal wording would therefore
+# reject every validator result this build has ever produced. The position is READ and REPORTED by
+# Get-LamValidatorVerdict below (`first_noncomment`), and it is not part of the verdict.
+$script:LamValidatorVerdictPassPattern    = '(?m)^verdict:[ \t]*PASS[ \t]*\r?$'
+$script:LamValidatorVerdictRefutedPattern = '(?m)^verdict:[ \t]*REFUTED[ \t]*\r?$'
+# The ENUMERATOR -- every TOP-LEVEL verdict line, whatever it says. It is `(?i)` because the two
+# patterns above are consumed by PowerShell's `-match`, which is case-INSENSITIVE by default: an
+# enumerator narrower than the predicate it feeds would hand back "no verdict line" for a file the
+# detector goes on to count. Wider is the only safe direction here.
+$script:LamValidatorVerdictLinePattern    = '(?im)^verdict:.*$'
+
+function Get-LamValidatorVerdictPassPattern    { return $script:LamValidatorVerdictPassPattern }
+function Get-LamValidatorVerdictRefutedPattern { return $script:LamValidatorVerdictRefutedPattern }
+
+<#
+.SYNOPSIS
+  Read a validator result's TOP-LEVEL verdict and classify it against the detector's own pair.
+  Returns a verdict object; `admitted` is true only for PASS or REFUTED at column 0.
+
+.DESCRIPTION
+  FIVE OUTCOMES, A CLOSED SET, AND NOT ONE OF THEM IS SILENCE:
+    PASS       -- exactly one top-level verdict line, matching the PASS pattern.
+    REFUTED    -- exactly one top-level verdict line, matching the REFUTED pattern.
+    foreign    -- exactly one top-level verdict line, matching NEITHER. `verdict: FAIL` lands here,
+                  and so does `verdict: PASS # done` or any other trailing text. The line is carried
+                  back VERBATIM so the refusal can print the bytes rather than paraphrase them.
+    absent     -- no top-level verdict line at all. `result: PASS` lands here, and so does a result
+                  whose only `verdict:` is indented inside a mapping -- the false-PASS shape.
+    ambiguous  -- MORE THAN ONE top-level verdict line. Neither this reader nor the detector may
+                  pick one: the detector tests REFUTED first and PASS second, so a file carrying
+                  both would be counted REFUTED while its author believed it said PASS. A result
+                  that answers twice has not answered.
+
+  THE COMMENT DEFINITION, STATED BECAUSE `first_noncomment` DEPENDS ON IT: a line is a COMMENT when
+  its first non-whitespace character is `#`; a line is BLANK when it is empty or whitespace only;
+  the FIRST NON-COMMENT LINE is the first line that is neither. YAML's own rule is wider -- a `#`
+  can open a comment mid-line -- but a line whose first non-space character is `#` is the only shape
+  the template permits above the verdict ("A comment block above it is fine") and the only shape
+  that cannot carry a key. This is a REPORTED reading, never a test; see the block above.
+
+  IT TAKES TEXT, NOT A PATH. Locating a validator's result is the caller's problem, a different
+  question with its own named outcomes; this function answers only "what does this say".
+#>
+function Get-LamValidatorVerdict {
+    param([string]$Text)
+    $t = [string]$Text
+    $lines = @([regex]::Matches($t, $script:LamValidatorVerdictLinePattern) |
+               ForEach-Object { ($_.Value).TrimEnd("`r") })
+    $first = ''
+    foreach ($ln in ($t -split "`r`n|`n|`r")) {
+        if ($ln -match '^\s*$') { continue }
+        if ($ln -match '^\s*#') { continue }
+        $first = $ln.TrimEnd("`r")
+        break
+    }
+    $outcome = 'absent'
+    $line    = ''
+    if ($lines.Count -gt 1) {
+        $outcome = 'ambiguous'
+        $line    = ($lines -join ' | ')
+    } elseif ($lines.Count -eq 1) {
+        $line = $lines[0]
+        if ($line -match $script:LamValidatorVerdictPassPattern)        { $outcome = 'PASS' }
+        elseif ($line -match $script:LamValidatorVerdictRefutedPattern) { $outcome = 'REFUTED' }
+        else                                                           { $outcome = 'foreign' }
+    }
+    return [pscustomobject]@{
+        outcome          = $outcome
+        admitted         = (($outcome -eq 'PASS') -or ($outcome -eq 'REFUTED'))
+        line             = $line
+        count            = $lines.Count
+        first_noncomment = $first
+        at_first_line    = (($lines.Count -eq 1) -and ($first -eq $lines[0]))
+    }
+}
+
+<#
+.SYNOPSIS
+  Does the mission's declaration account for the basis's unexpected failures EXACTLY? Returns a
+  verdict object; `admitted` is true only on exact set equality.
+
+.DESCRIPTION
+  THE PREDICATE IS EQUALITY, NOT CONTAINMENT, and that is the whole safety of the class. Two
+  directions have to be closed and each closes a different hole:
+
+    * an UNDECLARED unexpected failure -- something broke that nobody named. Containment
+      ("every declared id is failing") would admit it, and the class would then pass any basis
+      carrying one declared failure plus any number of surprises.
+    * a DECLARED id that is NOT failing -- a declaration written against a basis it does not
+      describe (stale, copied from another seam, or speculative). Admitting it would let a mission
+      pre-authorise repairs for failures it has not got, and the end-of-dispatch delivery check
+      would then be asserting something the basis never showed.
+
+  ORDINAL COMPARISON THROUGHOUT. A pytest node id is a case-sensitive identifier and PowerShell's
+  default string comparison is case-INSENSITIVE, so `-contains` and `Select-Object -Unique` would
+  both equate ids that the suite treats as different. The runner's own reader takes the same care
+  (`-cnotcontains`); a case-only difference is a real difference and refusing on it
+  is the direction that refuses.
+
+  AN EMPTY DECLARATION ADMITS NOTHING. Zero declared ids cannot equal a non-empty observed set, and
+  a caller that reached here with both empty has a subject refusing for some reason this class does
+  not describe -- so it is refused rather than waved through on a vacuous equality.
+#>
+function Test-LamDeclaredRepairAdmission {
+    param(
+        [AllowNull()][string[]]$DeclaredTestIds,
+        [AllowNull()][string[]]$BasisUnexpectedFailures
+    )
+    $dset = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($d in @($DeclaredTestIds))         { $s = "$d"; if ($s) { [void]$dset.Add($s) } }
+    $oset = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($o in @($BasisUnexpectedFailures)) { $s = "$o"; if ($s) { [void]$oset.Add($s) } }
+
+    $declared   = @($dset)
+    $observed   = @($oset)
+    $undeclared = @($observed | Where-Object { -not $dset.Contains($_) })
+    $notFailing = @($declared | Where-Object { -not $oset.Contains($_) })
+
+    $out = [pscustomobject]@{
+        admitted = $false; outcome = $null; declared = $declared; observed = $observed
+        undeclared = $undeclared; not_failing = $notFailing; reason = $null
+    }
+    if ($declared.Count -eq 0) {
+        $out.reason = "the dispatch declares no repair, so there is nothing for the basis's unexpected failure(s) to be accounted for by"
+        return $out
+    }
+    if ($undeclared.Count -gt 0) {
+        $out.reason = "UNDECLARED unexpected failure(s) in the basis: $($undeclared -join ' '). The class admits a basis whose unexpected failures the mission named IN ADVANCE, exactly; one it did not name is the mismatch ADR-022 exists to catch and is never admitted"
+        return $out
+    }
+    if ($notFailing.Count -gt 0) {
+        $out.reason = "declared repair(s) that the basis does not show failing: $($notFailing -join ' '). A declaration is a claim about THIS basis; one that names a test the basis does not report failing describes some other run, and admitting it would pre-authorise a repair for a failure this mission has not got"
+        return $out
+    }
+    $out.admitted = $true
+    $out.outcome  = 'ADMITTED-BY-DECLARED-REPAIR'
+    $out.reason   = "the basis's unexpected-failure set EQUALS the $($declared.Count) declared repair id(s) exactly ($($declared -join ' ')). The debt is named; the dispatch's end asserts it was paid"
+    return $out
+}
+
+<#
+.SYNOPSIS
+  Parse verify's `arms:` block into per-subject records. Returns @() when there is none to read.
+
+.DESCRIPTION
+  WHY THIS EXISTS (V-1 round 1, WP-2). R-1 defines PASS-DIB as suite subjects "EACH WITH OUTCOME
+  ABSENT and verify's own increment-boundary residual". The classifier below used to read neither:
+  its only per-subject input was the NAME in `refused_by`, and it tested the residual as ONE GLOBAL
+  SUBSTRING over the entire report. Both properties are PER SUBJECT in the contract, and verify
+  already emits them per subject -- so they are read per subject here.
+
+  Verify's emitted shape (mission-verify.ps1 Write-YamlNode) is fixed and machine-written:
+
+    arms:
+      - arm: ANCHOR
+        subject: suite.passed
+        outcome: ABSENT
+        ...
+        residual: '...'
+
+  Two indentations only, no nesting inside an entry, every value a single-line scalar. The parser
+  is written against that shape and stops at the first column-0 key, so the sibling `arms_not_run:`
+  block is never absorbed.
+
+  CALLING CONVENTION -- READ THIS BEFORE CALLING. The return is comma-wrapped so a 0- or 1-entry
+  result still arrives as an array. That wrap survives ASSIGNMENT and is destroyed by an enclosing
+  `@()`, which wraps it a second time: `@(Get-LamVerifyArmEntries ...)` yields ONE element that is
+  itself the array. Assign first, normalise second.
+#>
+function Get-LamVerifyArmEntries {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$VerifyOutput)
+
+    $entries = New-Object System.Collections.Generic.List[object]
+    $cur     = $null
+    $inArms  = $false
+    foreach ($raw in ($VerifyOutput -split "`r?`n")) {
+        $line = $raw -replace '^\s*verify\|\s?', ''    # tolerate the runner's echo prefix
+        if (-not $inArms) {
+            if ($line -match '^arms:\s*$') { $inArms = $true }
+            continue
+        }
+        # A column-0 key ends the block. `arms_not_run:` is a SIBLING list of the same shape, and
+        # absorbing it would invent outcomes for subjects that explicitly did not run.
+        if ($line -match '^\S') {
+            if ($cur) { [void]$entries.Add($cur); $cur = $null }
+            $inArms = $false
+            continue
+        }
+        if ($line -match '^\s{2}-\s+arm:\s*(.*?)\s*$') {
+            # CAPTURE IMMEDIATELY: $Matches is global and the next -match overwrites it.
+            $armVal = $Matches[1]
+            if ($cur) { [void]$entries.Add($cur) }
+            # THREE FIELDS ADDED -- recorded, derived and detector. Verify
+            # already emits all three per subject at the same 4-space indent; they were simply
+            # not read. The addition is PURELY ADDITIVE: every existing consumer reads arm,
+            # subject, outcome and residual, and every one of those is parsed exactly as before.
+            $cur = [pscustomobject]@{
+                arm = (Remove-LamYamlQuoting -Value $armVal); subject = ''; outcome = ''; residual = ''
+                recorded = ''; derived = ''; detector = ''
+            }
+            continue
+        }
+        if ($null -eq $cur) { continue }
+        if ($line -match '^\s{4}subject:\s*(.*?)\s*$')  { $cur.subject  = Remove-LamYamlQuoting -Value $Matches[1]; continue }
+        if ($line -match '^\s{4}outcome:\s*(.*?)\s*$')  { $cur.outcome  = Remove-LamYamlQuoting -Value $Matches[1]; continue }
+        if ($line -match '^\s{4}residual:\s*(.*?)\s*$') { $cur.residual = Remove-LamYamlQuoting -Value $Matches[1]; continue }
+        if ($line -match '^\s{4}recorded:\s*(.*?)\s*$') { $cur.recorded = Remove-LamYamlQuoting -Value $Matches[1]; continue }
+        if ($line -match '^\s{4}derived:\s*(.*?)\s*$')  { $cur.derived  = Remove-LamYamlQuoting -Value $Matches[1]; continue }
+        if ($line -match '^\s{4}detector:\s*(.*?)\s*$') { $cur.detector = Remove-LamYamlQuoting -Value $Matches[1]; continue }
+    }
+    if ($cur) { [void]$entries.Add($cur) }
+    return , $entries.ToArray()
+}
+
+function Remove-LamYamlQuoting {
+    <# Verify quotes a scalar only when it must, and single-quotes it, doubling any inner quote. #>
+    param([AllowEmptyString()][string]$Value)
+    $v = "$Value"
+    if ($v.Length -ge 2 -and $v.StartsWith("'") -and $v.EndsWith("'")) {
+        return ($v.Substring(1, $v.Length - 2) -replace "''", "'")
+    }
+    if ($v.Length -ge 2 -and $v.StartsWith('"') -and $v.EndsWith('"')) {
+        return $v.Substring(1, $v.Length - 2)
+    }
+    return $v
+}
+
+
+# =============================================================================================
+# THE ORIGIN-ATTESTATION ADMISSION'S THREE READERS
+# =============================================================================================
+
+<#
+.SYNOPSIS
+  The URL this run's `origin` remote resolves to, or a refusal. Never a guess.
+
+.DESCRIPTION
+  THE SPELLING IS MISSION-GATE'S OWN, AT MINT: `git -C <root> remote get-url --push origin`.
+  THE PUSH URL, NOT THE FETCH URL. `get-url` without `--push` returns remote.origin.url while
+  git PUSHES to remote.origin.pushurl when that is set, and a gate minted from one while a
+  consumer compared the other was an authorization incapable of authorizing anything (V-1 round
+  14, a WP-4 finding). `--push` falls back to `url` when no pushurl is set, so the ordinary case is
+  unchanged -- and using the same spelling as the mint is the whole point: the two sides of this
+  comparison must be asking git the same question in the same words.
+
+  THE RETURN CODE IS CHECKED, WHICH R-5 REQUIRES AND WHICH THIS FILE HAS BEEN BITTEN BY TWICE.
+  A failing `git status` once produced no output, the porcelain list read EMPTY, and the advance
+  admission reported "the tree is clean"; a failing `rev-list` once produced no shas and the same
+  admission reported "EVERY ONE OF THEM LEDGERED". Both FAILED OPEN, on the conditions whose job
+  was to notice. An unresolvable origin here is a REFUSAL, never an empty string compared equal
+  to an empty declaration.
+
+  $ErrorActionPreference IS SAVED AND RESTORED AROUND THE NATIVE CALL, and the saved value is
+  named $prevEap rather than $p: PS 5.1 FOLDS VARIABLE CASE, so a local $p would be the same name
+  as a parameter $P. Under 'Stop' any native exe writing to stderr raises a fatal
+  NativeCommandError and `2>$null` does not help; git writes advice to stderr routinely.
+#>
+function Get-LamOriginPushUrl {
+    param([Parameter(Mandatory = $true)][string]$MissionRoot)
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $u    = & git -C $MissionRoot remote get-url --push origin 2>&1
+        $code = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $prevEap }
+    if ($code -ne 0) {
+        return [pscustomobject]@{ ok = $false; url = $null
+            reason = "the origin remote of '$MissionRoot' could not be resolved (git remote get-url --push origin exited $code), so there is no origin for a gate's declaration to be compared against, and the admission refuses rather than comparing against nothing" }
+    }
+    $url = ("$u").Trim()
+    if (-not $url) {
+        return [pscustomobject]@{ ok = $false; url = $null
+            reason = "git remote get-url --push origin exited 0 for '$MissionRoot' but answered nothing, so this run's origin is unknown" }
+    }
+    return [pscustomobject]@{ ok = $true; url = $url; reason = $null }
+}
+
+<#
+.SYNOPSIS
+  The ref THIS RUN asked about, read off the arm entry's own detector string. Fails closed.
+
+.DESCRIPTION
+  MATCHING ON VERIFY'S OWN WORDS IS THE DISCIPLINE THIS FILE ALREADY APPLIES, at
+  $script:LamDibResidualMarker, and for the same reason: the question is not "what ref exists"
+  but "what ref did the program that produced THIS report actually ask origin about". Verify
+  emits that in the detector it records beside every entry --
+    origin_git  `git ls-remote origin refs/heads/<branch>`
+    origin_api  `the repository host's ref endpoint for heads/<branch>`
+    origin_tip  the two above, concatenated
+  -- so both spellings are read, and the concatenated form yields two matches which must AGREE.
+  A detector naming two different branches is AMBIGUOUS and refuses: this reader does not pick
+  one, for the same reason the arm does not pick a winner between disagreeing channels.
+
+  A detector this cannot be read out of is a REFUSAL, not a default. Falling back to the current
+  branch, or to refs/heads/main, would be answering a question the report never posed.
+#>
+function Get-LamOriginRemoteRefFromDetector {
+    param([AllowNull()][string]$Detector)
+    $d = "$Detector"
+    $m = [regex]::Matches($d, '(?:refs/)?heads/(\S+)')
+    if ($m.Count -eq 0) {
+        return [pscustomobject]@{ ok = $false; ref = $null
+            reason = "the arm entry's detector ('$d') names no heads/<branch>, so the ref this run asked origin about cannot be read off it" }
+    }
+    $branches = @($m | ForEach-Object { $_.Groups[1].Value })
+    $first = $branches[0]
+    foreach ($b in $branches) {
+        if ($b -cne $first) {
+            return [pscustomobject]@{ ok = $false; ref = $null
+                reason = "the arm entry's detector names more than one branch ($($branches -join ', ')), so which ref this run asked about is ambiguous and this reader does not pick one" }
+        }
+    }
+    return [pscustomobject]@{ ok = $true; ref = ('refs/heads/' + $first); reason = $null }
+}
+
+<#
+.SYNOPSIS
+  Is there a live push gate authorizing (origin url, ref, tip)? Returns the gate or a refusal
+  that NAMES WHAT IT FOUND.
+
+.DESCRIPTION
+  THE KIND IS READ FROM THE ARTIFACT, NEVER INFERRED FROM THE FILENAME. Get-EvidencePushGateForSha
+  records why (round 5 self-audit): a scan filtered to `push-*.yaml` let a gate of ANY kind merely
+  NAMED that way authorise a publication -- a `kind: dispatch` artifact, whose whole purpose is
+  authorising a SPAWN, could authorise one. Filenames are chosen by whoever writes the file.
+  mission-gate.ps1's own revoke block records the same lesson from the other side. So this scan
+  takes EVERY *.yaml in the directory and admits only what declares `kind: push` at column 0 --
+  YAML's top-level keys sit there, an indented key belongs to some nested mapping, and every
+  reader in this toolchain is anchored at column 0 for exactly that reason.
+
+  REVOCATION IS ASKED THROUGH Test-LamGateFieldSet AND NOT RESTATED HERE. See the dot-source at
+  the head of this file: the (?!null\b) is load-bearing and its absence is a silent kill.
+
+  THE COMPARISONS ARE ORDINAL (-cne), NOT PowerShell's DEFAULT CASE-FOLDING -eq/-ne. Git refs are
+  case-sensitive: refs/heads/Main is a different ref from refs/heads/main on every host, and a
+  case-folding comparison once let a gate binding one authorize the other (V-1 round 13, WP-1,
+  driven both ways). The same applies to a URL path on any case-sensitive server, and to a
+  40-hex sha, which is a case-sensitive identifier by convention here.
+
+  NO CANONICALISATION IS APPLIED TO THE URL, AND THAT IS A STATED BOUND RATHER THAN AN OMISSION.
+  The gate's origin_url was written by mission-gate at mint from `remote get-url --push origin`,
+  and the value compared against it is read here with the SAME command, so byte equality is the
+  natural test and any difference in spelling is a difference this reader cannot adjudicate.
+  The consequence leans the refusing way: a differently-spelled-but-equivalent URL REFUSES.
+
+  THE REFUSAL NAMES EVERY GATE IT EXAMINED AND WHY EACH ONE DID NOT MATCH, because a refusal an
+  operator cannot act on sends them to re-derive what this function already knew.
+
+  A THIRD RESIDUAL, MEASURED RATHER THAN SUSPECTED: THE GATES DIRECTORY IS THE ONE UNDER THE
+  MISSION ROOT IT WAS HANDED, AND IN A LINKED WORKTREE THAT IS NOT THE MAIN CHECKOUT'S.
+  <MissionRoot>/.mission/gates is the same spelling mission-goal-check.ps1's gate_present
+  detector already uses, and it is deliberate here -- tools/lam must not dot-source the hooks
+  library, whose Get-EvidenceGatesDir asks git for the main working tree when the directory is
+  ABSENT (and returns the local one when it is present, so it would not differ here anyway).
+  THE CONSEQUENCE IS REAL AND LEANS THE REFUSING WAY: gate artifacts are UNTRACKED in this
+  repository -- 79 of them sat as `??` porcelain entries -- so a linked worktree
+  carries only whatever gates are COMMITTED. Driven at this build: the worktree this cure was
+  written in holds exactly two tracked gates, and the close push gate that would admit
+  the arc's goal is not among them. Evaluated from such a worktree the admission REFUSES and names
+  what it found, which is the safe direction and is NOT the same thing as the goal being
+  unsatisfiable: evaluated where the gate actually lives, it admits.
+#>
+function Get-LamOriginAttestationGate {
+    param(
+        [Parameter(Mandatory = $true)][string]$MissionRoot,
+        [Parameter(Mandatory = $true)][string]$Tip,
+        [Parameter(Mandatory = $true)][string]$OriginUrl,
+        [Parameter(Mandatory = $true)][string]$RemoteRef
+    )
+    $gatesDir = Join-Path $MissionRoot '.mission\gates'
+    if (-not (Test-Path -LiteralPath $gatesDir)) {
+        return [pscustomobject]@{ ok = $false; id = $null; path = $null; examined = @()
+            reason = "no gates directory at $gatesDir -- a publication is authorized by an artifact a human creates, and none exists here" }
+    }
+    $seen = New-Object System.Collections.Generic.List[string]
+    # ONE AVAILABILITY GUARD FOR BOTH BORROWED READERS, HOISTED ABOVE THE SCAN. lam-gate-class.ps1
+    # is loaded only when it is beside this file, so the two predicates this function borrows from
+    # it -- the kind reader and the revocation test -- may be absent. Neither may be guessed at: a
+    # kind that cannot be read and a revocation that cannot be tested must both REFUSE, never
+    # default to 'push' or to 'not revoked'. The refusal names the library so an operator can put
+    # it back. It carries THIS function's shape, {ok; id; path; examined}, because the caller reads
+    # $g.examined before it tests $g.ok -- an early return in the verdict object's shape left both
+    # $null and THREW under StrictMode instead of refusing.
+    # Resolve-LamGateKind AND Get-LamGateKindRefusalReason JOIN THE LIST (an operator ruling).
+    # This scan now asks the shared reader for the CASE rule as well as for the kind and the
+    # revocation, and a library on disk that predates that rule must refuse here rather than take a
+    # CommandNotFoundException out of a conditional dot-source -- which is verbatim how WP-1 H-3 and
+    # H-16 read RED on byte-identical functions.
+    # Get-LamGateScalarField JOINS THE LIST (round 3, a review finding). This scan now asks the shared
+    # reader HOW MANY `authorized_tip_sha` keys an artifact carries as well as for its kind and its
+    # revocation, and a library on disk that predates that reader must refuse here rather than take a
+    # CommandNotFoundException out of a conditional dot-source -- which is verbatim how WP-1 H-3 and
+    # H-16 read RED on byte-identical functions.
+    foreach ($fn in @('Get-LamGateClassForArtifact', 'Test-LamGateFieldSet', 'Resolve-LamGateKind', 'Get-LamGateKindRefusalReason', 'Get-LamGateScalarField')) {
+        if (-not (Get-Command $fn -ErrorAction SilentlyContinue)) {
+            return [pscustomobject]@{ ok = $false; id = $null; path = $null; examined = @()
+                reason = "$fn is not loaded -- tools/lam/lam-gate-class.ps1 is not beside this library, so a candidate gate's kind and revocation cannot be decided. Refusing: a test that cannot run must never read as a pass" }
+        }
+    }
+    $files = @(Get-ChildItem -LiteralPath $gatesDir -File -Filter '*.yaml' -ErrorAction SilentlyContinue |
+               Sort-Object -Property Name)
+    foreach ($f in $files) {
+        # BOTH READS OF EVERY CANDIDATE ARE GUARDED, AND THE GUARD REFUSES RATHER THAN SKIPPING
+        # (round 2, a review finding). This scan reads each candidate TWICE -- the bare ReadAllText
+        # here, and a second one inside Get-LamGateClassForArtifact (lam-gate-class.ps1:419) --
+        # and NEITHER was guarded; this function contained no `try` at all. Driven at the old tip:
+        # a `*.yaml` held with FileShare.None and SORTING FIRST threw a
+        # System.Management.Automation.MethodInvocationException out of Get-LamVerifyVerdict, with
+        # the stack naming this read site, this scan and the caller. It did not refuse by name, and
+        # a decider that dies is not a decider that denied.
+        #
+        # THE REFUSAL CARRIES THIS FUNCTION'S OWN SHAPE, {ok; id; path; examined; reason}, and that
+        # is mandatory rather than tidy: the caller reads $g.examined BEFORE it tests $g.ok, so an
+        # early return in the VERDICT object's shape left both $null and THREW under StrictMode
+        # instead of refusing. A round-1 validator finding, in this same function.
+        #
+        # IT REFUSES; IT DOES NOT `continue` -- AND NOT FOR THE REASON THIS COMMENT USED TO GIVE
+        # (V-3 round 3, a review finding). It said a candidate that cannot be read "might be the
+        # REVOKED gate that should have blocked a match further down this sorted scan". THAT
+        # MECHANISM DOES NOT EXIST, and saying so was worse than saying nothing: it named a
+        # protection this scan does not provide. Every in-loop refusal here is a `continue` -- the
+        # revocation branch below is `[void]$seen.Add("... carries a revoked_at ...")` followed by
+        # `continue`, and so is every other one -- and the ONLY returns are the availability guard
+        # above, these two unreadable-candidate guards, the success and the fall-through. So NO
+        # candidate of any content blocks a match further down. Driven at this tip: a gate carrying
+        # a revoked_at at aaa-push.yaml does not stop a byte-identical unrevoked gate at
+        # zzz-push.yaml from being ADMITTED for the same triple, with the revoked one sitting in
+        # `examined` beside the admission; the control, that revoked gate ALONE, refuses.
+        #
+        # THE REASON THAT IS TRUE: THIS SCAN'S VERDICT IS A NEGATIVE EXISTENCE CLAIM. Its
+        # fall-through return says "no unrevoked push gate authorizes ($OriginUrl, $RemoteRef,
+        # $Tip)" and prints the candidates it examined -- a claim about EVERY artifact in that
+        # directory, and the only claim an admission may rest on. A candidate nobody could read
+        # makes that claim unprovable, so `continue` would have this function assert what it cannot
+        # establish while omitting the one file that made it unestablishable. Refusing is not the
+        # conservative choice here; it is the only honest one.
+        #
+        # AND THE SAME ANSWER KEEPS THE TWO READERS TOGETHER. evidence-common.ps1's
+        # Get-EvidencePushGateForSha carries this guard now as well (V-3 round 3, a review finding;
+        # WP-1 H-23) and returns for these same two reasons. A scan that continued while its twin
+        # returned would put the DECIDER and the ADMISSION on different answers over one directory,
+        # in the permissive direction -- the three review findings' / tip-comparison shape this pair
+        # has now recorded four times.
+        #
+        # The file is NAMED so an operator can act on it instead of re-deriving which candidate was
+        # unreadable. The sibling call site mission-goal-check.ps1:441 is guarded exactly this way
+        # and says why in its own words.
+        #
+        # WHAT IS NOT CHANGED HERE, AND IS NOT A CURE. Whether a REVOKED gate ought to block a
+        # later match at all is a question this finding exposed and does not answer. Revocation
+        # withdraws ONE artifact; a second, separately minted, unrevoked gate for the same triple
+        # is a second human act nobody withdrew, so admitting it is defensible. What is NOT
+        # defensible is that an operator who revokes a gate in order to STOP a publication is never
+        # told that another gate still authorizes it. That is a diagnosability gap at the REVOKE
+        # end, it is reported as a finding rather than patched, and changing this scan's behaviour
+        # would need its own member and its own ruling.
+        $t = $null
+        try { $t = [System.IO.File]::ReadAllText($f.FullName) }
+        catch {
+            return [pscustomobject]@{ ok = $false; id = $null; path = $null; examined = @($seen)
+                reason = "candidate gate '$($f.Name)' could not be READ at $($f.FullName) -- $($_.Exception.Message). REFUSING rather than skipping it: this scan's verdict is a NEGATIVE EXISTENCE claim over every artifact in that directory, and a candidate nobody can read makes that claim unprovable. No gate authorizes ($OriginUrl, $RemoteRef, $Tip) on this reading" }
+        }
+        # THE SHARED READER, NOT A FOURTH COPY OF IT. It captures the FIRST top-level kind and
+        # stops, which is what settle, revoke, list and gate_present each see. A local regex asking
+        # whether a `kind: push` line exists ANYWHERE admitted an artifact whose first kind was
+        # `dispatch` -- the same file every other reader called a dispatch gate.
+        # THE SECOND READ, GUARDED FOR THE FIRST ONE'S REASON (round 2, a review finding).
+        # Get-LamGateClassForArtifact does its own bare ReadAllText, and this scan is reached from
+        # the VERDICT path, which sits outside any per-subject try/catch -- so a candidate that
+        # became unreadable BETWEEN the two reads threw out of the verdict exactly as the first one
+        # did. Two reads of one file are two chances to die, and this cure closes both or neither.
+        $kindRead = $null
+        try { $kindRead = Get-LamGateClassForArtifact -Path $f.FullName }
+        catch {
+            return [pscustomobject]@{ ok = $false; id = $null; path = $null; examined = @($seen)
+                reason = "candidate gate '$($f.Name)' could not be CLASSIFIED at $($f.FullName) -- the shared class reader threw: $($_.Exception.Message). REFUSING rather than skipping it, for the reason the read above states: a candidate whose kind cannot be read leaves this scan's negative existence claim unprovable" }
+        }
+        # THE ONE CASE RULE, ASKED OF THE SHARED READER (an operator ruling). `-cne 'push'` was
+        # ALREADY ordinal, so `kind: PUSH` was already refused here -- what it could NOT do was say
+        # that the CASE was the reason, and that is not cosmetic: a mistyped case and a genuinely
+        # unknown kind need different actions from the human holding the artifact. The rule itself
+        # lives in lam-gate-class.ps1 and nowhere else; this site resolves the artifact's kind text
+        # to the map's canonical key and compares THAT, and borrows the sentence rather than
+        # composing a twelfth one.
+        $kindCanon = Resolve-LamGateKind -Kind $kindRead.kind
+        if ($kindCanon -cne 'push') {
+            $why = if ($kindCanon) {
+                "its FIRST top-level kind is '$($kindRead.kind)', not push, as the shared class reader sees it -- a file NAMED for a kind is not a gate of that kind"
+            } else {
+                "its FIRST top-level kind is '$($kindRead.kind)', which is not a gate kind at all -- $(Get-LamGateKindRefusalReason -Kind $kindRead.kind)"
+            }
+            [void]$seen.Add("$($f.BaseName): $why")
+            continue
+        }
+        # ONE SCALAR READER, AND IT COUNTS (round 3, a review finding). This was a first-match `-match`
+        # with no count -- the third of four copies of one regex literal -- so a gate carrying TWO
+        # column-0 `authorized_tip_sha` keys was ADMITTED on the first and the second was never seen.
+        # An admission is the permissive direction by construction, so an ambiguous artifact must land
+        # in `examined` with its reason and never in the return.
+        #
+        # THE SENTENCE IS Get-LamOriginRemoteRefFromDetector's OWN, borrowed rather than recomposed:
+        # that reader has refused an ambiguous detector BY NAME since it was written, listing the
+        # members and saying "this reader does not pick one". Same class of malformed input; this file
+        # was treating the two halves of it differently.
+        $authRead = Get-LamGateScalarField -Text $t -Field 'authorized_tip_sha'
+        if (-not $authRead.ok) {
+            [void]$seen.Add("$($f.BaseName): $($authRead.reason)")
+            continue
+        }
+        $auth = [string]$authRead.value
+        # ONE CANONICAL FORM FOR A SHA, FIXED AT THE MINT AND HONOURED IDENTICALLY BY EVERY READER
+        # (round 3, the THIRD decider-vs-admission divergence). This site was ORDINAL (`-cne`) and
+        # the installed pre-push decider's twin at evidence-common.ps1 was CASE-FOLDING (`-ne`), so
+        # an UPPERCASE gate sha against a lowercase origin tip AUTHORIZED at the decider and
+        # REFUSED here: permissive at the component that gates publication, which is verbatim the
+        # shape of two review findings on a third predicate.
+        #
+        # THE DIRECTION IS NORMALISE, AND IT IS THE OPPOSITE OF THE RULING'S ANSWER FOR A KIND, ON
+        # PURPOSE. A gate KIND is drawn from a CLOSED VOCABULARY, where `PUSH` and `push` are two
+        # tokens and telling a mistyped case from an unknown kind is the operator's next action --
+        # so the ruling made kind ordinal. A SHA is not a vocabulary: `git rev-parse` and `git ls-remote`
+        # both emit lowercase, hex case carries no meaning, and two spellings name ONE commit. And
+        # the toolchain's other two tip comparators ALREADY normalise -- mission-gate.ps1's settle
+        # compares $observed -cne $gateTip.ToLowerInvariant(), and record-origin-attestation.ps1
+        # does the same before refusing -- so keeping a raw ordinal test here would have replaced a
+        # two-way split with a three-way one.
+        #
+        # DIRECTION CHECK, because this WIDENS a guard rather than narrowing it: it can only begin
+        # admitting a gate whose sha names THE SAME COMMIT in another case, never one bound to a
+        # different commit. Measured before applying: all 10 push-*.yaml at the repository of record
+        # carry lowercase 40-hex, so no artifact on disk changes answer. The shape is now UNMINTABLE
+        # -- mission-gate.ps1 lower-cases at the source -- and reachable only by the hand-annotation
+        # route. WP-1's H-22 drives both readers and the mint over one corpus.
+        #
+        # THE REASON TEXT PRINTS THE RAW VALUES, not the normalised ones, so an operator holding a
+        # gate that differs only in case is shown that and is not told two identical shas disagree.
+        if (($auth.ToLowerInvariant()) -cne ($Tip.ToLowerInvariant())) {
+            [void]$seen.Add("$($f.BaseName): authorizes tip '$auth', and origin carries '$Tip'")
+            continue
+        }
+        $gateUrl = if ($t -match '(?m)^origin_url:[ \t]*(\S+)') { $Matches[1] } else { '' }
+        $gateRef = if ($t -match '(?m)^remote_ref:[ \t]*(\S+)') { $Matches[1] } else { '' }
+        if (-not $gateUrl -or -not $gateRef) {
+            [void]$seen.Add("$($f.BaseName): declares no origin_url/remote_ref at column 0, so it predates amendment 20 and cannot bind a publication")
+            continue
+        }
+        if ($gateUrl -cne $OriginUrl) {
+            [void]$seen.Add("$($f.BaseName): declares origin '$gateUrl', and this run's origin is '$OriginUrl'")
+            continue
+        }
+        if ($gateRef -cne $RemoteRef) {
+            [void]$seen.Add("$($f.BaseName): authorizes ref '$gateRef', and this run asked about '$RemoteRef'")
+            continue
+        }
+        if (Test-LamGateFieldSet -Text $t -Field 'revoked_at') {
+            [void]$seen.Add("$($f.BaseName): carries a revoked_at, so it is REVOKED and authorizes nothing")
+            continue
+        }
+        return [pscustomobject]@{ ok = $true; id = $f.BaseName; path = $f.FullName; examined = @($seen)
+            reason = "gate $($f.BaseName) declares kind: push, authorizes ($gateUrl, $gateRef, $Tip), and carries no revoked_at" }
+    }
+    $detail = if ($seen.Count -gt 0) { " Gates examined -- $($seen -join ' ; ')." } else { ' That directory holds no gate artifacts.' }
+    return [pscustomobject]@{ ok = $false; id = $null; path = $null; examined = @($seen)
+        reason = "no unrevoked push gate authorizes ($OriginUrl, $RemoteRef, $Tip).$detail" }
+}
+
+<#
+.SYNOPSIS
+  Is ONE refusing ORIGIN-ATTESTATION subject admissible? Returns a verdict object; `admitted` is
+  true only when a live push gate authorizes the tip origin actually carries.
+
+.DESCRIPTION
+  IT FAILS CLOSED IN EVERY DIRECTION, exactly as the DIB and declared-repair tests do:
+    * no arms entry for a subject named in refused_by -- its derived tip and its detector cannot
+      be read, so no gate can be matched to it;
+    * an outcome other than DIVERGED -- a different fact, which no gate speaks to;
+    * a derived value that is not a 40-hex sha -- an UNREACHABLE or ABSENT channel derives
+      nothing, and nothing is not a tip;
+    * a detector the ref cannot be read out of;
+    * no gates directory, no matching gate, or only a revoked match.
+  There is no partial admission: a single refusal here refuses the whole run, at the caller.
+
+  TWO RESIDUALS ARE STATED HERE RATHER THAN LEFT TO BE NOTICED. They are the honest cost of this
+  class and they belong on its face, not in a review.
+
+  RESIDUAL 1 -- THE ORIGIN READ IS A NARROWING, NOT A TRUST, AND IT NEVER LEARNS WHICH ORIGIN
+  VERIFY CONTACTED. The publication-binding rule forbids a CONSUMER re-reading remote.origin.url to decide
+  authorization, and this read is not that. What it does ask is narrower than the sentence this
+  paragraph used to carry, and that sentence was FALSE.
+
+  IT SAID a repointed remote "can only ever cause a REFUSAL here -- the gate's declared URL would
+  not match the decoy -- and never an admission". A repoint does not only subtract. DRIVEN
+  HERMETICALLY against two local bare origins, in both directions: with the remote repointed to a
+  DECOY and an operator-minted gate declaring that decoy url, that ref and that exact tip, the
+  same verify report returns PASS-DIB; the IDENTICAL gate bytes WITHOUT the repoint REFUSE,
+  because the url this process then reads is the real origin and no longer matches the gate.
+  REPOINTING ENABLED AN ADMISSION. The page's own copy of the claim lacked the parenthetical; this
+  copy was strictly worse than the page's.
+
+  WHAT A REPOINT ACTUALLY CHANGES IS WHICH GATE CAN MATCH. This admission takes the REF from
+  verify's own detector string and the URL from CURRENT CONFIG, through Get-LamOriginPushUrl; and
+  tools/mission-verify.ps1 records no origin URL anywhere -- its detector is the literal `git
+  ls-remote origin refs/heads/<branch>`, the remote NAME -- so nothing in the report says which
+  origin produced it. An admission still additionally requires an ARTIFACT A HUMAN MINTED binding
+  exactly (that url, that ref, that tip), unrevoked, and the tip must still be the one verify
+  derived. That is the whole of the bound: it raises the ATTACKER'S COST to an operator-minted
+  gate, and it is not the impossibility the old sentence asserted.
+
+  THE ALTERNATIVE, NAMED AND NOT TAKEN HERE: carry the origin URL THROUGH FROM VERIFY, so this
+  reader compares the gate against the origin the report was actually produced against rather
+  than against config. That is an amendment to tools/mission-verify.ps1 -- a component this
+  change does not touch -- and it is the only repair that would make the old sentence true.
+
+  RESIDUAL 2 -- THE ADMISSION IS OF THE TIP A GATE AUTHORIZED, NOT OF THE ACT THAT MOVED ORIGIN.
+  This arm detects DIVERGENCE, not authorization; verify's own ceiling text says so. Admitting a
+  tip a human authorized is therefore NOT evidence that the push itself was authorized, or that
+  it was performed by anyone in particular. What is established is narrower and should be quoted
+  narrowly: origin now carries a commit for which an operator minted a push gate, at the origin
+  and the ref this run asked about. Who ran the push, and whether they were entitled to, is
+  outside what any of this can see.
+#>
+function Test-LamOriginAttestationAdmission {
+    param(
+        [AllowNull()]$ArmEntry,
+        [Parameter(Mandatory = $true)][string]$RefusedKey,
+        [Parameter(Mandatory = $true)][string]$MissionRoot,
+        [Parameter(Mandatory = $true)][string]$OriginUrl
+    )
+    $out = [pscustomobject]@{
+        admitted = $false; outcome = $null; subject = $RefusedKey
+        derived_tip = $null; remote_ref = $null; origin_url = $OriginUrl
+        gate_id = $null; gate_path = $null; examined = @(); reason = $null
+    }
+    if ($null -eq $ArmEntry) {
+        $out.reason = "$RefusedKey is named in refused_by but has no entry in the arms block -- its derived tip and its detector cannot be read, so there is nothing for a gate to be matched against"
+        return $out
+    }
+    if ($ArmEntry.outcome -cne $script:LamOriginAttestationOutcome) {
+        $out.reason = "$RefusedKey refuses with outcome '$($ArmEntry.outcome)', not $($script:LamOriginAttestationOutcome). This class answers ONE shape -- the channels agreeing with each other and disagreeing with the artifact's claim, which is the arc's own publication having moved origin. An UNREACHABLE channel is silence and silence is not consent; an ABSENT ref means nothing was published; a MOVED basis is a different fact again. No push gate speaks to any of them"
+        return $out
+    }
+    $tip = "$($ArmEntry.derived)".Trim()
+    if ($tip -notmatch '^[0-9a-fA-F]{40}$') {
+        $out.reason = "$RefusedKey derives '$tip', which is not a 40-character sha, so there is no tip for a gate to have authorized"
+        return $out
+    }
+    $out.derived_tip = $tip
+    $refv = Get-LamOriginRemoteRefFromDetector -Detector $ArmEntry.detector
+    if (-not $refv.ok) {
+        $out.reason = "${RefusedKey}: $($refv.reason)"
+        return $out
+    }
+    $out.remote_ref = $refv.ref
+    $g = Get-LamOriginAttestationGate -MissionRoot $MissionRoot -Tip $tip -OriginUrl $OriginUrl -RemoteRef $refv.ref
+    # THE ok TEST COMES FIRST, AND THE PROPERTY READ AFTER IT. Reading $g.examined before
+    # knowing whether $g is a refusal is what turned a shape mismatch on one early return into a
+    # THROW under StrictMode instead of a refusal. Ordering it this way means a future return
+    # that forgets a field fails at the field, not at the caller. A round-1 validator finding.
+    if (-not $g.ok) {
+        $out.examined = @($g.examined)
+        $out.reason = "${RefusedKey}: $($g.reason)"
+        return $out
+    }
+    $out.examined  = @($g.examined)
+    $out.admitted  = $true
+    $out.outcome   = 'ADMITTED-BY-AUTHORIZED-PUBLICATION'
+    $out.gate_id   = $g.id
+    $out.gate_path = $g.path
+    $out.reason    = "${RefusedKey}: $($g.reason)"
+    return $out
+}
+
+<#
+.SYNOPSIS
+  Classify a verify run. Returns PASS | PASS-DIB | REFUSE with the subjects that decided it.
+#>
+function Get-LamVerifyVerdict {
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$VerifyOutput,
+        [Parameter(Mandatory = $true)][int]$ExitCode,
+        [string]$MissionRoot,
+        [string]$RecordedHeadSha,
+        # THE DECLARED-REPAIR INPUTS. Both are PASSED IN rather than read here, and deliberately: the declaration
+        # lives in the DISPATCH artifact and the observed set in the BASIS artifact, and the runner
+        # is the one component that already knows which files those are. A decider that went looking
+        # for them would have to re-derive the basis selection a second time, and two
+        # derivations of "which artifact is the basis" is exactly the drift the one-copy rule at the
+        # top of this file exists to forbid. Absent both, every branch below behaves as it did.
+        [AllowNull()][string[]]$DeclaredRepairTestIds,
+        [AllowNull()][string[]]$BasisUnexpectedFailures
+    )
+
+    # verify's exit contract: 0 = ran and PASSed, 1 = ran and REFUSED, 2 = did not complete.
+    # A CRASH IS NEVER ADMITTED. Exit 2 means no verdict exists at all, and admitting a run that
+    # produced no verdict would be admitting nothing at all.
+    if ($ExitCode -eq 0) {
+        return [pscustomobject]@{ verdict = 'PASS'; refusing = @(); admitted = @(); reason = 'verify gate PASS' }
+    }
+    if ($ExitCode -ne 1) {
+        return [pscustomobject]@{ verdict = 'REFUSE'; refusing = @(); admitted = @()
+                                  reason = "verify did not complete (exit $ExitCode) -- no verdict exists, so there is nothing to admit" }
+    }
+
+    # Parse the refused_by list. Entries are `- <ARM>/<subject>`; the subject is what R-1 names.
+    $refusing = New-Object System.Collections.Generic.List[string]
+    $inRefused = $false
+    foreach ($raw in ($VerifyOutput -split "`r?`n")) {
+        $line = $raw -replace '^\s*verify\|\s?', ''    # tolerate the runner's echo prefix
+        if ($line -match '^refused_by:\s*$') { $inRefused = $true; continue }
+        if ($inRefused) {
+            if ($line -match '^\s*-\s*(\S+)\s*$') { [void]$refusing.Add($Matches[1]); continue }
+            if ($line -match '^\S') { $inRefused = $false }
+        }
+    }
+
+    if ($refusing.Count -eq 0) {
+        return [pscustomobject]@{ verdict = 'REFUSE'; refusing = @(); admitted = @()
+                                  reason = 'verify refused but named no refusing subject -- unparsable, and an unparsable refusal is not an admissible one' }
+    }
+
+    # Sort every refusing subject into one of three buckets. Anything that lands in the third
+    # refuses the whole run -- there is no partial admission.
+    $dib      = New-Object System.Collections.Generic.List[string]
+    $advance  = New-Object System.Collections.Generic.List[string]
+    $repair   = New-Object System.Collections.Generic.List[string]
+    $origin   = New-Object System.Collections.Generic.List[string]
+    $other    = New-Object System.Collections.Generic.List[string]
+    # NO DECLARATION, NO FOURTH BUCKET. Without declared ids the repair subject falls to `$other`
+    # and refuses in the sentence it has always refused in -- the declaration is what creates the
+    # class, so a mission that declares nothing sees behaviour identical to before the class existed.
+    $hasDeclaration = (@($DeclaredRepairTestIds | Where-Object { "$_" }).Count -gt 0)
+    foreach ($r in $refusing) {
+        $subject = ($r -split '/')[-1]
+        if ($script:LamDibAdmittedSubjects -contains $subject)          { [void]$dib.Add($r) }
+        elseif ($script:LamAdvanceAdmittedSubjects -contains $subject)  { [void]$advance.Add($r) }
+        elseif ($hasDeclaration -and ($subject -eq $script:LamDeclaredRepairSubject)) { [void]$repair.Add($r) }
+        # THE FOURTH BUCKET. The four sets are DISJOINT, so this branch's
+        # position cannot change any other subject's bucket; it is last among the named ones
+        # because it is the newest class. Anything still unmatched falls to $other and refuses
+        # the whole run, exactly as today.
+        elseif ($script:LamOriginAttestationSubjects -contains $subject)             { [void]$origin.Add($r) }
+        else                                                            { [void]$other.Add($r) }
+    }
+
+    if ($other.Count -gt 0) {
+        return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null
+                                  reason = "refusing subject(s) outside every admitted set: $($other -join ', ')" }
+    }
+    # =========================================================================================
+    # THE PER-SUBJECT TEST. R-1's definition is per subject -- "each with outcome ABSENT and
+    # verify's own increment-boundary residual" -- and this is where that is actually measured.
+    #
+    # WHAT IT REPLACES, and why the replacement is not cosmetic. This used to be one global
+    # substring match over the whole report. Two shapes walked straight through it:
+    #   * a suite subject refusing with outcome DIVERGED -- recorded 12, derived 4, a genuine tally
+    #     mismatch and precisely what ADR-022 exists to catch -- admitted because its NAME was on
+    #     the admitted list and the boundary sentence appeared SOMEWHERE in the report;
+    #   * an absence for an unrelated reason (an unreadable artifact) on one of the three named
+    #     subjects, admitted for the same reason.
+    # The global check is DELETED rather than kept alongside: the per-subject test strictly
+    # subsumes it, and a redundant weaker check next to a stronger one is how a member comes to
+    # look tested while the property it names is not.
+    #
+    # IT FAILS CLOSED. If the arms block cannot be read at all, the run is REFUSED -- an
+    # unparsable report is not an admissible one, exactly as an unnamed refusing subject is not.
+    # =========================================================================================
+    if ($dib.Count -gt 0) {
+        # ASSIGN FIRST, NORMALISE SECOND -- never `@(Get-LamVerifyArmEntries ...)`. The helper
+        # returns `, $array` so that a 0- or 1-element result still arrives as an array, and that
+        # comma-wrap SURVIVES assignment but is DOUBLE-WRAPPED by an enclosing `@()`: the caller
+        # then holds one element which is itself the array, `.Count` reads 1, and `.arm` reads
+        # `System.Object[]` via member enumeration. It cost a debug cycle here on first run, and
+        # every symptom pointed at the parser rather than at the call.
+        $armEntries = Get-LamVerifyArmEntries -VerifyOutput $VerifyOutput
+        if ($null -eq $armEntries) { $armEntries = @() }
+        if ($armEntries.Count -eq 0) {
+            return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null
+                                      reason = "suite subjects refused, but verify's per-subject arms block could not be read -- PASS-DIB is defined per subject (outcome ABSENT, own residual) and an unreadable report cannot establish it" }
+        }
+        $byKey = @{}
+        foreach ($e in $armEntries) { if ($e.subject) { $byKey["$($e.arm)/$($e.subject)"] = $e } }
+
+        foreach ($r in $dib) {
+            $entry = $byKey[$r]
+            if ($null -eq $entry) {
+                return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null
+                                          reason = "$r is named in refused_by but has no entry in the arms block -- its outcome and residual cannot be read, so it is not admitted" }
+            }
+            if ($entry.outcome -ne 'ABSENT') {
+                return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null
+                                          reason = "$r refuses with outcome '$($entry.outcome)', not ABSENT. PASS-DIB admits an ABSENT tally at the disclosed increment boundary; a $($entry.outcome) tally is the mismatch ADR-022 exists to catch and is never admitted" }
+            }
+            if ($entry.residual -notlike "*$($script:LamDibResidualMarker)*") {
+                return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null
+                                          reason = "$r is ABSENT, but ITS OWN residual does not carry verify's increment-boundary marker -- an absence for some other reason is not the disclosed boundary, even on one of the three named subjects" }
+            }
+        }
+    }
+
+    # =========================================================================================
+    # THE DECLARED-REPAIR TEST. Same shape as the per-subject test above, and for
+    # the same reason: the class is defined per subject, so it is measured per subject.
+    #
+    # IT REQUIRES DIVERGED, WHICH IS NOT AN EXEMPTION FROM THE OUTCOME TEST BUT A NARROWING OF IT.
+    # The defect this class answers produces exactly one shape -- recorded false against derived
+    # true, which verify reports DIVERGED. An ABSENT or UNREACHABLE reading of this subject is a
+    # DIFFERENT fact (a missing manifest, a detector that could not be reached, the runner reader's
+    # `absent`), the declaration says nothing about it, and it refuses. The tally subjects are not
+    # in this branch at all: they are bucketed above and tested above, and no declaration reaches
+    # them.
+    #
+    # IT FAILS CLOSED, exactly as the DIB test does: an unreadable arms block cannot establish a
+    # per-subject outcome, so it cannot establish this admission either.
+    $rep = $null
+    if ($repair.Count -gt 0) {
+        # ASSIGN FIRST, NORMALISE SECOND -- see Get-LamVerifyArmEntries' calling convention. This
+        # parses a second time rather than sharing the DIB block's index, so that block is left
+        # exactly as the round-1 cure wrote it.
+        $repEntries = Get-LamVerifyArmEntries -VerifyOutput $VerifyOutput
+        if ($null -eq $repEntries) { $repEntries = @() }
+        if ($repEntries.Count -eq 0) {
+            return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null; declared_repair = $null
+                                      reason = "$($script:LamDeclaredRepairSubject) refused and this dispatch declares a repair, but verify's per-subject arms block could not be read -- the class is defined per subject (outcome DIVERGED over a named unexpected-failure set) and an unreadable report cannot establish it" }
+        }
+        $repByKey = @{}
+        foreach ($e in $repEntries) { if ($e.subject) { $repByKey["$($e.arm)/$($e.subject)"] = $e } }
+
+        foreach ($r in $repair) {
+            $entry = $repByKey[$r]
+            if ($null -eq $entry) {
+                return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null; declared_repair = $null
+                                          reason = "$r is named in refused_by but has no entry in the arms block -- its outcome cannot be read, so it is not admitted" }
+            }
+            if ($entry.outcome -ne 'DIVERGED') {
+                return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null; declared_repair = $null
+                                          reason = "$r refuses with outcome '$($entry.outcome)', not DIVERGED. The declared-repair class answers ONE shape -- a recorded false against a derived true, which is the basis carrying an unexpected suite failure. A '$($entry.outcome)' reading of this subject is a different fact and no declaration speaks to it" }
+            }
+        }
+        $rep = Test-LamDeclaredRepairAdmission -DeclaredTestIds $DeclaredRepairTestIds `
+                                               -BasisUnexpectedFailures $BasisUnexpectedFailures
+        if (-not $rep.admitted) {
+            return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null; declared_repair = $rep
+                                      reason = "declared-repair admission REFUSED: $($rep.reason)" }
+        }
+    }
+
+    # The advance admission is EARNED, never assumed: head_sha/porcelain are the two subjects that
+    # actually detect tampering, so admitting them requires ancestry, cleanliness AND ledger
+    # provenance to hold together. Without a mission root and a recorded sha to test against, they
+    # are simply not admitted.
+    $adv = $null
+    if ($advance.Count -gt 0) {
+        if ((-not $MissionRoot) -or (-not $RecordedHeadSha)) {
+            return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $null
+                                      reason = "head_sha/porcelain refused, but no mission root or recorded sha was supplied to test the advance admission against -- not admitted" }
+        }
+        $adv = Test-LamAdvanceAdmission -MissionRoot $MissionRoot -RecordedHeadSha $RecordedHeadSha
+        if (-not $adv.admitted) {
+            return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $adv
+                                      reason = "advance admission REFUSED: $($adv.reason)" }
+        }
+    }
+
+
+    # =========================================================================================
+    # THE ORIGIN-ATTESTATION TEST. Same shape as the two per-subject tests
+    # above, and for the same reason: the class is defined per subject, so it is measured per
+    # subject. Each of the three has its own derived tip and its own detector, and a gate is
+    # matched to each of them separately.
+    #
+    # IT FAILS CLOSED, exactly as the DIB and declared-repair tests do: an unreadable arms block
+    # cannot establish a per-subject property, so it cannot establish this admission either.
+    #
+    # A KNOWN BOUND, STATED WHERE IT BITES. mission-goal-check.ps1's verify_pass_or_dib detector
+    # passes -MissionRoot only on the branch where the anchors it verifies against carry an
+    # INDENTED head_sha (:1186); its else branch (:1187) passes neither MissionRoot nor
+    # RecordedHeadSha. On that branch this admission cannot be tested at all and refuses, which
+    # is the same bound the advance admission already carries and is recorded here rather than
+    # discovered by whoever meets it.
+    # =========================================================================================
+    $ori = $null
+    if ($origin.Count -gt 0) {
+        if (-not $MissionRoot) {
+            return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $adv; origin_attestation = $null
+                                      reason = "origin-attestation admission REFUSED: $($origin -join ', ') refused and no mission root was supplied, so neither the gates directory nor this run's origin remote can be located. The goal evaluator passes no mission root on the branch where the anchors carry no indented head_sha, and on that branch this admission is simply not available" }
+        }
+        # ASSIGN FIRST, NORMALISE SECOND -- see Get-LamVerifyArmEntries' calling convention. The
+        # helper returns `, $array`, which SURVIVES assignment and is DOUBLE-WRAPPED by an
+        # enclosing @(): the caller would then hold one element that is itself the array. This
+        # parses a third time rather than sharing either index above, so those blocks are left
+        # exactly as their own cures wrote them.
+        $oriEntries = Get-LamVerifyArmEntries -VerifyOutput $VerifyOutput
+        if ($null -eq $oriEntries) { $oriEntries = @() }
+        if ($oriEntries.Count -eq 0) {
+            return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $adv; origin_attestation = $null
+                                      reason = "origin-attestation admission REFUSED: $($origin -join ', ') refused, but verify's per-subject arms block could not be read -- the class is defined per subject (outcome DIVERGED, a derived tip, and the detector naming the ref) and an unreadable report cannot establish it" }
+        }
+        $oriByKey = @{}
+        foreach ($e in $oriEntries) { if ($e.subject) { $oriByKey["$($e.arm)/$($e.subject)"] = $e } }
+
+        $oriOrigin = Get-LamOriginPushUrl -MissionRoot $MissionRoot
+        if (-not $oriOrigin.ok) {
+            return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $adv; origin_attestation = $null
+                                      reason = "origin-attestation admission REFUSED: $($oriOrigin.reason)" }
+        }
+
+        $oriResults = New-Object System.Collections.Generic.List[object]
+        foreach ($r in $origin) {
+            $a = Test-LamOriginAttestationAdmission -ArmEntry $oriByKey[$r] -RefusedKey $r `
+                                                    -MissionRoot $MissionRoot -OriginUrl $oriOrigin.url
+            [void]$oriResults.Add($a)
+            if (-not $a.admitted) {
+                return [pscustomobject]@{ verdict = 'REFUSE'; refusing = $refusing.ToArray(); admitted = @(); advance = $adv; origin_attestation = $a
+                                          reason = "origin-attestation admission REFUSED: $($a.reason)" }
+            }
+        }
+        $ori = $oriResults.ToArray()
+    }
+
+    $all = @($dib) + @($advance) + @($repair) + @($origin)
+    $why = @()
+    if ($dib.Count -gt 0)     { $why += "suite subjects admitted as verify's disclosed increment boundary ($($dib -join ', '))" }
+    if ($advance.Count -gt 0) { $why += "head_sha/porcelain admitted as an ADVANCE ($($adv.reason))" }
+    if ($repair.Count -gt 0)  { $why += "$($repair -join ', ') ADMITTED-BY-DECLARED-REPAIR ($($rep.reason))" }
+    if ($origin.Count -gt 0)  { $why += "$($origin -join ', ') ADMITTED-BY-AUTHORIZED-PUBLICATION -- $((@($ori | ForEach-Object { "$($_.subject) is the tip gate $($_.gate_id) authorizes for $($_.remote_ref) at $($_.origin_url)" })) -join ' ; ')" }
+    return [pscustomobject]@{
+        verdict  = 'PASS-DIB'
+        refusing = $refusing.ToArray()
+        admitted = $all
+        advance  = $adv
+        # NAMED SEPARATELY, NOT FOLDED INTO `admitted`. The runner has to know whether THIS class
+        # granted anything, because a grant creates an obligation the other two do not: the
+        # end-of-dispatch delivery assertion. A caller that could only count admitted subjects
+        # would have to re-derive which class each came from, and re-derivation is how the two
+        # sides of an admission drift apart.
+        declared_repair = $rep
+        # A RECORD, NOT AN INPUT -- AND SINCE LAM-ACCEPT RATIFIED ITS OUTCOME IT HAS EXACTLY ONE READER,
+        # WHICH IS A DIFFERENT SENTENCE FROM THE ONE THAT STOOD HERE. What stood here before round 2
+        # asserted a consumer: it said this field carries the gate that granted the admission
+        # "so a consumer never has to re-scan", and that was false -- there was none, which is round
+        # 2's review finding. The honest cure was always a READER, and round 3 could not make it,
+        # because giving this class its own gate outcome is a RATIFICATION and not a patch.
+        # A later LAM-ACCEPT ratification made it, and this declaration is re-pointed rather than left standing.
+        #
+        # WHAT THE FIELD IS NOW. It is composed at five sites in this file and READ AT EXACTLY ONE
+        # SITE IN THE REPOSITORY -- mission-dispatch.ps1 reads it, once, behind a property test, and
+        # writes `authorizing_gate_ids` under the ratified outcome from the gate ids it carries. It
+        # is still a RECORD rather than an INPUT: nothing decided here depends on what a caller does
+        # with it, and the class would grant exactly what it grants if no one ever looked. What has
+        # changed is that it is no longer a record NOTHING reads, which is the thing E85 forbids -- a
+        # fact a record carries that nothing reads is a claim about a check that does not happen.
+        # Its two siblings are read by the same file: $vv.advance and $vv.declared_repair.
+        # tests/lam/instrument-WP-3.ps1's C-1v COUNTS the readers on every run rather than asserting
+        # there are none, so this declaration goes red the day it stops being true in EITHER
+        # direction: a reader lost, or a second one added without being accounted for here.
+        #
+        # ==================================== RATIFIED ======================================
+        # THE DISCLOSURE THAT STOOD HERE IS DISCHARGED, AND IT IS QUOTED RATHER THAN DELETED,
+        # because a cure that erases the record of what it cured leaves a later reader nothing to
+        # check it against. It read: "THE ANCHORS DO NOT DISTINGUISH THIS ADMISSION, AND THIS CHANGE
+        # DOES NOT FIX THAT. A dispatch that proceeded ONLY because an operator minted a push gate
+        # is recorded by the runner as `gate_outcome: verified-pass` -- the same words an ordinary
+        # passing verify writes."  THAT WAS TRUE WHEN WRITTEN AND IS FALSE NOW. The runner records
+        # `admitted-by-authorized-publication`, which that ratification added to the closed gate-outcome
+        # vocabulary, to the ruled-admission set, and to the anchor grammar, in that one act.
+        #
+        # WHY IT TOOK AN AMENDMENT, WHICH IS THE PART WORTH KEEPING. WP-2's R-16 guards the closure
+        # of that vocabulary, and its design statement is that an outcome joins it by being RATIFIED
+        # and never by being assigned. Round 3 applied the runner-side cure in memory and MEASURED
+        # R-16 going RED at two rows; editing R-16's enumeration would have been the very act it
+        # exists to refuse, so the ratification moved LAM-ACCEPT.md FIRST, in its own commit, and the
+        # code followed. ERRATUM, ROUND 2 (found in review): this ended "and why it read RED in between".
+        # IT READ GREEN in between -- the old arm matched BY PRESENCE and found its own quotation.
+        #
+        # AND THE SECOND FACT THAT MADE THE RATIFICATION LARGER THAN ONE OUTCOME NAME is discharged
+        # with it: LAM-ACCEPT's ruled-admission set did not name the origin-attestation admission at
+        # all, although an earlier amendment built the class. It names it now, as the member that amendment
+        # added and the later ratification confirmed.
+        #
+        # THIS BLOCK CITES NO LINE NUMBERS, DELIBERATELY. The form that stood here cited
+        # LAM-ACCEPT.md ':318', ':328' and ':333-:335' and mission-dispatch.ps1 ':1770, :1805,
+        # :1909, :1915' -- and the ratification moved every one of them. A clause cited by its words
+        # survives the edit that proves it; a clause cited by its line number is the staleness class
+        # this package was refuted on twice. Find these by name.
+        origin_attestation = $ori
+        reason   = ($why -join ' ; ')
+    }
+}
+
+# =============================================================================================
+# ADVANCE ADMISSION -- as LAM-ACCEPT defines it. Same file as PASS-DIB by requirement:
+# every verify-verdict admission in this toolchain is defined in exactly one place.
+# =============================================================================================
+# THE PROBLEM IT SOLVES. R-1 verifies the PRIOR anchor against the CURRENT tree. Between dispatches
+# the tree MUST advance -- the orchestrator commits validated work, authors the next dispatch,
+# the evidence plane grows -- so head_sha and porcelain diverge BY CONSTRUCTION. Driven: curing
+# porcelain by committing the tree immediately moved head_sha. Only a mission whose tree never
+# moves could pass, and that is not a mission.
+#
+# WHAT IT DISTINGUISHES, which is the whole point: `DIVERGED` conflates THE MISSION PROGRESSED with
+# THE PLANE DRIFTED. ADR-022 exists to catch the second. Ancestry plus ledger provenance separates
+# them; snapshot equality cannot.
+#
+# SCOPE IS EXACTLY TWO SUBJECTS. head_sha and porcelain, and nothing else. If PLANE-PARITY or any
+# other subject refuses, this admission does not touch it.
+$script:LamAdvanceAdmittedSubjects = @('head_sha', 'porcelain')
+
+function Get-LamAdvanceAdmittedSubjects { return $script:LamAdvanceAdmittedSubjects }
+
+# ---------------------------------------------------------------------------------------------
+# MISSION-DECLARED ADMITTED PORCELAIN -- as LAM-ACCEPT defines it
+# ---------------------------------------------------------------------------------------------
+# WHY THIS IS READ HERE AND NOT PASSED IN. The parameter this replaces was DEAD ON ARRIVAL: it
+# existed on this function, no caller ever supplied it, and so every mission was silently judged
+# against <project>'s residue shape. Adding a second parameter for a caller to remember would
+# reproduce the defect exactly. The admission therefore derives the declaration from the mission
+# root it was already given, and is live by construction for every consumer, present and future.
+#
+# FAIL-CLOSED ON A MALFORMED DECLARATION. A pattern that does not begin with the literal '?? ' is
+# refused rather than skipped: silently ignoring a declaration is the same class of bug as silently
+# inheriting another mission's.
+#
+# Declared patterns are matched as ANCHORED LITERAL PREFIXES ([regex]::Escape + '^'), not as raw
+# regex. Mission config is operator-authored data, and a '.' in a path should mean a dot.
+# =============================================================================================
+# THE DECLARED COMMIT LEDGER
+# =============================================================================================
+# The no-inheritance rule stands: absent a declaration, inheritance refuses. What this adds is that a mission may
+# say OUT LOUD where its commit records live, through the SAME mechanism the admitted-porcelain declaration established for
+# the porcelain contract -- declared data in .mission/mission.yaml. Two keys, both required together:
+#
+#   declared_commit_ledger: <path>            # relative to the mission root, or absolute
+#   declared_commit_ledger_repo_tag: <tag>    # the value the ledger line's "repo" field must carry
+#
+# ONE KEY WITHOUT THE OTHER IS AN ERROR, not a partial declaration. A path with no tag would read
+# every line in another repository's ledger -- which is the inheritance the no-inheritance rule abolished,
+# reached by declaring half of something. A tag with no path names a filter over a file nobody
+# identified.
+#
+# THE HASH IS OVER THE WHOLE CONFIG FILE, exactly as Get-LamDeclaredAdmittedPorcelain computes it.
+# Two declarations living in one file must hash the same way or a reader cannot tell which of them
+# an anchor is pinning. Whole-file is also the only form re-derivable by someone holding the file
+# and nothing else -- no canonicaliser, no agreement about whitespace, no code.
+#
+# PRESENT BUT UNREADABLE FAILS LOUD, for the reason the admitted-porcelain reader records: "I could not
+# read your declaration" and "you made no declaration" are different facts and must not share a
+# return value.
+function Get-LamDeclaredCommitLedger {
+    param([Parameter(Mandatory = $true)][string]$MissionRoot)
+
+    $cfg = Join-Path $MissionRoot '.mission\mission.yaml'
+    $out = [pscustomobject]@{
+        declared = $false; source = $null; source_sha256 = $null
+        path = $null; required_repo_tag = $null; error = $null
+    }
+    if (-not (Test-Path -LiteralPath $cfg)) { return $out }
+
+    $rawPath = $null; $rawTag = $null; $sawPath = $false; $sawTag = $false
+    foreach ($line in [System.IO.File]::ReadAllLines($cfg)) {
+        if ($line -match '^\s*#') { continue }
+        if ($line -match '^declared_commit_ledger:\s*(.*)$')          { $sawPath = $true; $rawPath = $Matches[1] }
+        elseif ($line -match '^declared_commit_ledger_repo_tag:\s*(.*)$') { $sawTag  = $true; $rawTag  = $Matches[1] }
+    }
+    if (-not $sawPath -and -not $sawTag) { return $out }   # genuinely undeclared -- the no-inheritance rule governs
+
+    $out.declared      = $true
+    $out.source        = $cfg
+    $out.source_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $cfg).Hash.ToLowerInvariant()
+
+    $strip = { param($v) if ($null -eq $v) { $null } else { ([string]$v).Trim().Trim('"').Trim("'").Trim() } }
+    $p = & $strip $rawPath
+    $t = & $strip $rawTag
+
+    if (-not $sawPath -or -not $p) {
+        $out.error = "INCOMPLETE declared ledger at ${cfg}: declared_commit_ledger_repo_tag is present but declared_commit_ledger is missing or empty. A tag names a filter over a file nobody identified. Amendment 18 requires both keys or neither"
+        return $out
+    }
+    if (-not $sawTag -or -not $t) {
+        $out.error = "INCOMPLETE declared ledger at ${cfg}: declared_commit_ledger is present but declared_commit_ledger_repo_tag is missing or empty. A path with no tag reads EVERY line in another repository's ledger, which is the inheritance amendment 16 abolished. Amendment 18 requires both keys or neither"
+        return $out
+    }
+    $out.path = if ([System.IO.Path]::IsPathRooted($p)) { $p } else { (Join-Path $MissionRoot $p) }
+    $out.required_repo_tag = $t
+    return $out
+}
+
+function Get-LamDeclaredAdmittedPorcelain {
+    param([Parameter(Mandatory = $true)][string]$MissionRoot)
+
+    $cfg = Join-Path $MissionRoot '.mission\mission.yaml'
+    $out = [pscustomobject]@{
+        declared = $false; source = $null; source_sha256 = $null
+        patterns = @(); regexes = @(); error = $null
+    }
+    if (-not (Test-Path -LiteralPath $cfg)) { return $out }
+
+    # BOTH YAML FORMS, and a key that is PRESENT but unreadable FAILS LOUD rather than reading as
+    # absent. The first implementation parsed only the inline `[a, b]` form, so a mission declaring
+    # the equally-valid BLOCK form was reported as declaring nothing and the shared code default
+    # applied silently -- which is precisely the silent inheritance the declaration rule exists to abolish,
+    # occurring inside that rule's own implementation. "I could not read your declaration" and
+    # "you made no declaration" are different facts and must not share a return value.
+    $lines   = [System.IO.File]::ReadAllLines($cfg)
+    $raw     = $null
+    $keySeen = $false
+    $vals    = @()
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        if ($line -match '^\s*#') { continue }
+        if ($line -match '^admitted_porcelain:\s*(.*)$') {
+            $keySeen = $true
+            $raw = $Matches[1].Trim()
+            if (-not $raw) {
+                # BLOCK form: consume the following `  - <item>` lines until the indentation ends.
+                for ($j = $i + 1; $j -lt $lines.Count; $j++) {
+                    $nxt = $lines[$j]
+                    if ($nxt -match '^\s*#') { continue }
+                    if ($nxt -match '^\s+-\s*(.+?)\s*$') { $vals += $Matches[1].Trim().Trim('"').Trim("'"); continue }
+                    if ($nxt -match '^\s*$') { continue }
+                    break
+                }
+            }
+            break
+        }
+    }
+    if (-not $keySeen) { return $out }   # genuinely undeclared -- the default applies, lawfully
+
+    if ($raw) {
+        if ($raw -match '^\[(.*)\]$') {
+            $inner = $Matches[1].Trim()
+            if ($inner) { $vals = @($inner -split ',' | ForEach-Object { $_.Trim().Trim('"').Trim("'") }) }
+        } else {
+            $vals = @($raw.Trim('"').Trim("'"))
+        }
+    }
+    $vals = @($vals | Where-Object { $_ })
+    if ($vals.Count -eq 0) {
+        $out.declared      = $true
+        $out.source        = $cfg
+        $out.source_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $cfg).Hash.ToLowerInvariant()
+        $out.error = "UNREADABLE admitted_porcelain declaration at ${cfg}: the key is present but no entry could be parsed from it. A declaration that cannot be read is NOT an absent declaration -- refusing rather than falling back to the shared default, which is the silent inheritance amendment 5 abolishes."
+        return $out
+    }
+
+    $bad = @($vals | Where-Object { -not $_.StartsWith('?? ') })
+    $out.declared      = $true
+    $out.source        = $cfg
+    $out.source_sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $cfg).Hash.ToLowerInvariant()
+    $out.patterns      = @($vals)
+    if ($bad.Count -gt 0) {
+        $out.error = "MALFORMED admitted_porcelain declaration: $($bad.Count) pattern(s) do not begin with '?? ' -- $($bad -join ' ; '). A declared set is honoured exactly or not at all."
+        return $out
+    }
+    $out.regexes = @($vals | ForEach-Object { '^' + [regex]::Escape($_) })
+    return $out
+}
+
+<#
+.SYNOPSIS
+  Is a head_sha/porcelain divergence an ADVANCE (admit) or a DRIFT (refuse)?
+.DESCRIPTION
+  All three conditions must hold, and each fails closed on its own:
+    (a) ancestry    -- current HEAD descends from the recorded sha
+    (b) cleanliness -- the tree is clean apart from the porcelain contract's admitted entries
+    (c) provenance  -- EVERY commit in <recorded>..<current> appears in the commit ledger
+  (c) is the one that matters most. Ancestry alone would wave through committed FOREIGN content --
+  precisely the hole already demonstrated, where unattributed artifacts entered this session's own
+  commits through a shared index. A commit in the range that is not ledgered is FOREIGN and refuses.
+#>
+function Test-LamAdvanceAdmission {
+    param(
+        [Parameter(Mandatory = $true)][string]$MissionRoot,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$RecordedHeadSha,
+        [string[]]$AdmittedPorcelainPatterns = $null
+    )
+    # The mission declares its own set, or the shared default applies UNCHANGED so
+    # <project>'s scope does not move. An explicit argument still overrides both (instruments).
+    $codeDefault = @('^\?\? \.mission/evidence/verify-', '^\?\? \.claude/worktrees/')
+    $decl = Get-LamDeclaredAdmittedPorcelain -MissionRoot $MissionRoot
+    $tolerated = @()
+    if ($AdmittedPorcelainPatterns) { $activePatterns = @($AdmittedPorcelainPatterns) }
+    elseif ($decl.declared)         { $activePatterns = @($decl.regexes) }
+    else                            { $activePatterns = @($codeDefault) }
+
+    $fail = { param($r) [pscustomobject]@{ admitted = $false; reason = $r; recorded = $RecordedHeadSha
+                                            current = $null; commit_count = 0; ledger_match = $false
+                                            porcelain_declaration = $decl; porcelain_tolerated = @($tolerated) } }
+    if ($decl.error) { return (& $fail $decl.error) }
+    if (-not $RecordedHeadSha) { return (& $fail 'the prior artifact records no head_sha, so there is no basis to compare against') }
+
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $cur = ("$(& git -C $MissionRoot rev-parse HEAD 2>&1)").Trim()
+        if ($LASTEXITCODE -ne 0) { return (& $fail 'the current HEAD could not be derived') }
+
+        # (a) ancestry
+        $null = & git -C $MissionRoot merge-base --is-ancestor $RecordedHeadSha $cur 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            return [pscustomobject]@{ admitted = $false; recorded = $RecordedHeadSha; current = $cur
+                                      commit_count = 0; ledger_match = $false
+                                      porcelain_declaration = $decl; porcelain_tolerated = @($tolerated)
+                                      reason = "NOT AN ADVANCE: $($cur.Substring(0,8)) does not descend from the recorded $($RecordedHeadSha.Substring(0,8)). The tree did not move forward from the anchor -- it moved elsewhere." }
+        }
+
+        # (b) cleanliness, apart from the porcelain contract's admitted entries
+        # CHECK THE RETURN CODE. Without this test a FAILING `git status` produced no output, the
+        # list read EMPTY, and the admission reported "the tree is clean" -- it FAILED OPEN, toward
+        # admission, on the one condition whose job is to notice uncommitted drift. Driven by an
+        # independent validator shadowing git with a function that exits 128 silently (V-1 round 3,
+        # WP-2). R-5 already requires every git return code to be checked; these two calls were the
+        # exceptions, and both leaned the wrong way.
+        $porcState = Get-LamPorcelainState -MissionRoot $MissionRoot
+        if (-not $porcState.ok) { return (& $fail $porcState.reason) }
+        $porc = @($porcState.lines)
+        $unexpected = @($porc | Where-Object {
+            $line = $_
+            -not (@($activePatterns | Where-Object { $line -match $_ }).Count -gt 0)
+        })
+        # LOUDNESS. Record WHICH declared pattern tolerated WHICH entries, so the
+        # completion review reads the tolerance off the artifact's face instead of re-deriving it.
+        # Built for every run, declared or not: a default that tolerated something should be as
+        # visible as a declaration that did.
+        $tolerated = @()
+        for ($i = 0; $i -lt $activePatterns.Count; $i++) {
+            $rx = $activePatterns[$i]
+            $hit = @($porc | Where-Object { $_ -match $rx })
+            if ($hit.Count -gt 0) {
+                $verbatim = if ($decl.declared -and -not $AdmittedPorcelainPatterns) { $decl.patterns[$i] } else { $rx }
+                $tolerated += [pscustomobject]@{ pattern = $verbatim; entries = @($hit) }
+            }
+        }
+        if ($unexpected.Count -gt 0) {
+            $whose = if ($AdmittedPorcelainPatterns) { 'explicitly supplied' }
+                     elseif ($decl.declared)         { "declared by the mission at $($decl.source)" }
+                     else                            { 'the shared code default -- this mission declares no admitted_porcelain' }
+            return [pscustomobject]@{ admitted = $false; recorded = $RecordedHeadSha; current = $cur
+                                      commit_count = 0; ledger_match = $false
+                                      porcelain_declaration = $decl; porcelain_tolerated = @($tolerated)
+                                      reason = "UNCOMMITTED DRIFT: $($unexpected.Count) working-tree entr(y/ies) outside the admitted porcelain set ($whose) -- $($unexpected -join ' ; '). An advance is committed; this is not." }
+        }
+
+        # (c) provenance -- every commit in the range must be ledgered
+        # CHECK THE RETURN CODE. A failing `rev-list` produced no shas, the range read EMPTY, and
+        # the admission reported "ADVANCE: by 0 commit(s), EVERY ONE OF THEM LEDGERED" -- a
+        # provenance claim derived from a command that did not run. This is the condition that
+        # closes the hole already demonstrated, and it failed open.
+        $rangeRaw = @(& git -C $MissionRoot rev-list "$RecordedHeadSha..$cur" 2>&1)
+        if ($LASTEXITCODE -ne 0) { return (& $fail 'the commit range could not be derived (git rev-list failed), so ledger provenance cannot be asserted') }
+        $range = @($rangeRaw | ForEach-Object { "$_".Trim() } | Where-Object { $_ -match '^[0-9a-f]{40}$' })
+        # =====================================================================================
+        # THE MISSION'S OWN LEDGER, OR NONE.
+        # =====================================================================================
+        # This used to fall back to <project>'s ledger when the mission had none, and that is how a
+        # PRODUCTION dispatch's `ledger_match: true` was actually decided -- a provenance claim
+        # about ONE repository answered by ANOTHER repository's record. The commits in range belong
+        # to the mission; a ledger from elsewhere cannot attest to them, and a match found that way
+        # is not evidence of anything.
+        #
+        # It is the same defect class the declaration rule cured for the porcelain contract: a per-mission
+        # judgement silently satisfied from another mission's data. A MISSION WITHOUT ITS OWN LEDGER
+        # INHERITS NOTHING -- it has no provenance to offer, so the admission REFUSES rather than
+        # borrowing one. Refusing is the safe direction: it costs a dispatch that must ledger its
+        # commits first, which is the discipline (c) exists to enforce.
+        $ledger = Join-Path $MissionRoot '.mission-runtime\lam\commit-ledger.jsonl'
+        $ownLedgerPresent = Test-Path -LiteralPath $ledger
+
+        # =====================================================================================
+        # A MISSION MAY DECLARE WHERE ITS RECORDS LIVE.
+        # =====================================================================================
+        # The own-ledger rule above is unchanged: SILENCE still refuses. This reads a declaration and, if
+        # there is one, admits from the declared ledger FILTERED TO THE DECLARED TAG.
+        $ldecl = Get-LamDeclaredCommitLedger -MissionRoot $MissionRoot
+        if ($ldecl.error) { return (& $fail $ldecl.error) }
+
+        # BOTH IS NOT A CHOICE THE TOOL MAKES. The declaration rule does not settle it; a mission with two
+        # candidate provenances has not established which is authoritative, and picking one
+        # silently is the own-ledger rule's failure by another route. It cannot arise by accident, and
+        # the refusal names both so the operator can delete one.
+        if ($ldecl.declared -and $ownLedgerPresent) {
+            return (& $fail "this mission has BOTH its own commit ledger at $ledger AND a declared external ledger at $($ldecl.path) (declared in $($ldecl.source)). Two candidate provenances is not an authority: amendment 18 does not say which wins, and choosing one here would be the silent inheritance amendment 16 abolished. Delete one")
+        }
+
+        if ($ldecl.declared) {
+            if (-not (Test-Path -LiteralPath $ldecl.path)) {
+                return (& $fail "this mission declares its commit ledger at $($ldecl.path) (declared in $($ldecl.source), tag '$($ldecl.required_repo_tag)') and no file is there. A declaration that names nothing is not provenance")
+            }
+            $ledgerToRead = $ldecl.path
+        } else {
+            if ((-not $ownLedgerPresent) -and ($range.Count -gt 0)) {
+                return (& $fail "this mission has no commit ledger at $ledger, and $($range.Count) commit(s) are in range. Provenance is not inheritable: a ledger belonging to another repository cannot attest to these commits, so the admission refuses rather than borrowing one")
+            }
+            $ledgerToRead = $ledger
+        }
+
+        # THE TAG FILTER IS APPLIED BEFORE THE SHA MATCH, and a line lacking the tag is not a
+        # candidate. That is the whole difference between a declaration and the
+        # inheritance the own-ledger rule abolished: filtered after, or treated as a hint, the tag would be
+        # decoration and a mission could borrow another's records by declaring a path and nothing
+        # more. `$otherTag` remembers where a sha WAS found so the refusal can say so -- a refusal
+        # naming the tag it found is the one an operator can act on.
+        $ledgered = @{}
+        $otherTag = @{}
+        if (Test-Path -LiteralPath $ledgerToRead) {
+            foreach ($line in [System.IO.File]::ReadAllLines($ledgerToRead)) {
+                if (-not $line.Trim()) { continue }
+                $rec = $null
+                try { $rec = $line | ConvertFrom-Json } catch { continue }
+                if ($null -eq $rec) { continue }
+                if (-not (($rec.PSObject.Properties.Name -contains 'event') -and ($rec.event -eq 'commit') -and
+                          ($rec.PSObject.Properties.Name -contains 'sha'))) { continue }
+                $sha = [string]$rec.sha
+                if ($ldecl.declared) {
+                    $tag = if ($rec.PSObject.Properties.Name -contains 'repo') { [string]$rec.repo } else { $null }
+                    if ($tag -ne $ldecl.required_repo_tag) {
+                        if (-not $otherTag.ContainsKey($sha)) { $otherTag[$sha] = $(if ($tag) { $tag } else { '(untagged)' }) }
+                        continue
+                    }
+                }
+                $ledgered[$sha] = $true
+            }
+        }
+        $foreign = @($range | Where-Object { -not $ledgered.ContainsKey($_) })
+        if ($foreign.Count -gt 0) {
+            return [pscustomobject]@{ admitted = $false; recorded = $RecordedHeadSha; current = $cur
+                                      commit_count = $range.Count; ledger_match = $false
+                                      porcelain_declaration = $decl; porcelain_tolerated = @($tolerated)
+                                      ledger_declaration = $ldecl
+                                      reason = "FOREIGN COMMIT(S) in the range: $((@($foreign | ForEach-Object { $_.Substring(0,8) })) -join ', ') absent from the commit ledger$(if ($ldecl.declared) { " under the declared tag '$($ldecl.required_repo_tag)'" } else { '' }).$(if ($ldecl.declared) { $found = @($foreign | Where-Object { $otherTag.ContainsKey($_) } | ForEach-Object { "$($_.Substring(0,8)) is tagged '$($otherTag[$_])'" }); if ($found.Count -gt 0) { ' Found under another tag: ' + ($found -join '; ') + '. A record tagged for another repository does not attest to this one.' } else { '' } } else { '' }) Ancestry alone would have admitted these; provenance is what refuses them." }
+        }
+
+        $whose = if ($AdmittedPorcelainPatterns) { 'an explicitly supplied set' }
+                 elseif ($decl.declared)         { "the set this mission declares at $($decl.source)" }
+                 else                            { 'the shared code default' }
+        return [pscustomobject]@{
+            admitted = $true; recorded = $RecordedHeadSha; current = $cur
+            commit_count = $range.Count; ledger_match = $true
+            porcelain_declaration = $decl; porcelain_tolerated = @($tolerated)
+            ledger_declaration = $ldecl
+            reason = "ADVANCE: $($cur.Substring(0,8)) descends from $($RecordedHeadSha.Substring(0,8)) by $($range.Count) commit(s), every one of them ledgered$(if ($ldecl.declared) { " in the ledger this mission DECLARES at $($ldecl.path) under tag '$($ldecl.required_repo_tag)' (declared in $($ldecl.source), sha256 $($ldecl.source_sha256))" } else { '' }), and the tree is clean apart from $whose."
+        }
+    } finally { $ErrorActionPreference = $prev }
+}
+
+# =============================================================================================
+# LEDGER PROVENANCE BINDING -- session-law amendment 3a
+# =============================================================================================
+# A file at a counted path is evidence ONLY if this session spawned the thing that produced it.
+# Presence was the whole of the old test, and presence is what a concurrent writer can forge
+# without trying: ten unattributed artifacts appeared at exactly the paths this goal counts, five
+# of them asserting PASS, and nothing about them was malformed.
+
+function Get-LamLedgerPath {
+    param([string]$MissionRoot)
+    Join-Path $MissionRoot '.mission-runtime\lam\spawn-ledger.jsonl'
+}
+
+<#
+.SYNOPSIS
+  Is this file's sha256 recorded against a COMPLETED ledger line? Returns a verdict object.
+.DESCRIPTION
+  Fails closed in every direction: no ledger, an unreadable ledger, or a file whose hash matches
+  no completed line all return bound=$false. An unledgered file at a counted path is FOREIGN --
+  reported and failed, never passed.
+#>
+# ONE PLACE THAT ASKS GIT FOR THE WORKING-TREE STATE (V-1 round 8, WP-2).
+#
+# There were TWO calls and only one checked the return code. This file's checked and refused; the
+# runner's did not, and wrote `porcelain: []` -- a CLEAN anchor for a tree it could not read. That
+# anchor is the recorded basis the next dispatch verifies against, so the failure did not merely go
+# unnoticed: it manufactured a fact that a later dispatch would confirm.
+#
+# The comment at the cured site already named the class -- "these two calls were the exceptions" --
+# and the cure was applied to one of them. Writing the class down is not fixing it. Both sites now
+# read this, so the pair cannot drift a third time.
+#
+# `--porcelain=v1` is stated explicitly rather than relying on the default, so the two callers ask
+# git the same question in the same words.
+function Get-LamPorcelainState {
+    param([Parameter(Mandatory = $true)][string]$MissionRoot)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $raw  = @(& git -C $MissionRoot status --porcelain=v1 2>&1)
+        $code = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $prev }
+    if ($code -ne 0) {
+        return [pscustomobject]@{
+            ok = $false; lines = @(); code = $code
+            reason = "the working tree state could not be derived (git status --porcelain exited $code), so cleanliness cannot be asserted"
+        }
+    }
+    return [pscustomobject]@{
+        ok = $true; code = 0; reason = $null
+        lines = @($raw | ForEach-Object { "$_" } | Where-Object { $_.Trim() })
+    }
+}
+
+function Test-LamLedgerBound {
+    param(
+        [Parameter(Mandatory = $true)][string]$MissionRoot,
+        [Parameter(Mandatory = $true)][string]$FilePath
+    )
+    if (-not (Test-Path -LiteralPath $FilePath)) {
+        return [pscustomobject]@{ bound = $false; reason = 'file not on disk'; sha256 = $null }
+    }
+    $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $FilePath).Hash.ToLowerInvariant()
+
+    $ledger = Get-LamLedgerPath -MissionRoot $MissionRoot
+    if (-not (Test-Path -LiteralPath $ledger)) {
+        return [pscustomobject]@{ bound = $false; sha256 = $sha
+                                  reason = "FOREIGN: no spawn ledger at $ledger, so no artifact can be provenance-bound" }
+    }
+    foreach ($line in [System.IO.File]::ReadAllLines($ledger)) {
+        if (-not $line.Trim()) { continue }
+        $rec = $null
+        try { $rec = $line | ConvertFrom-Json } catch { continue }
+        if ($null -eq $rec) { continue }
+        if (($rec.PSObject.Properties.Name -contains 'event') -and ($rec.event -eq 'complete')) {
+            if (($rec.PSObject.Properties.Name -contains 'result_sha256') -and
+                ([string]$rec.result_sha256 -eq $sha)) {
+                return [pscustomobject]@{ bound = $true; sha256 = $sha
+                                          reason = "bound to completed ledger line seq $($rec.seq)" }
+            }
+        }
+    }
+    return [pscustomobject]@{ bound = $false; sha256 = $sha
+                              reason = "FOREIGN: sha256 $($sha.Substring(0,16)) matches no completed line in the spawn ledger -- this session did not produce it" }
+}

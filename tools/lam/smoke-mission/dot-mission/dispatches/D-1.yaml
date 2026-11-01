@@ -1,0 +1,35 @@
+# Worker Dispatch -- the build. THIS ARTIFACT IS THE WORK'S ENTIRE INPUT.
+# In this built mission the work was performed by build-smoke-mission.ps1, not by a CLI worker: it
+# did exactly what the instructions below ask, in the worktree they name.
+
+id: D-1
+mission_id: smoke
+worker_id: w-smoke-1
+kind: mainline
+feature_id: F-001
+assertion_targets: [A-1, A-2, A-3, A-5]
+spec_version: 1
+prior_handoff_id: null
+worktree_id: wt-D-1
+base_head_at_authoring: {{BASE}}
+suite_command: tests\test-smoke.ps1
+model_class: coding-strong
+tool_scope: [repo.read, worktree.write, shell.exec.sandboxed]
+budget:
+  cost_cap_usd: 2.00
+  wallclock_cap_minutes: 10
+rework_evidence: null
+goal_condition: "A-1, A-2, A-3 and A-5 pass locally AND the build is committed in the worktree AND a schema-valid handoff exists at the path named by the LAM_HANDOFF environment variable"
+
+# ---------------------------------------------------------------------------------------------
+# INSTRUCTIONS
+# ---------------------------------------------------------------------------------------------
+# STEP 1 -- create exactly these three files in the worktree:
+#   src/greeting.txt      one line, exactly: hello from the smoke worker
+#   src/counter.ps1       prints exactly 3 when run with no arguments, and nothing else
+#   tests/test-smoke.ps1  runs src/counter.ps1, checks its output is 3, prints PASS or FAIL,
+#                         exits 0 on success and 1 on failure
+# STEP 2 -- run tests/test-smoke.ps1 and confirm it exits 0.
+# STEP 3 -- commit the three files in the worktree.
+# STEP 4 -- write the handoff (the twelve keys of the handoff schema) to LAM_HANDOFF. No
+#           runner_anchors: the anchors are written from evidence, never by the work.

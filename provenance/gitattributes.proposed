@@ -1,0 +1,59 @@
+# gitattributes.proposed -- X-1a MANIFEST seat, proposed FROM MEASUREMENT; the operator rules it before S4.
+# Measured over the 330 manifest rows that would be imported (class != STAYS; lam-smoke included),
+# eol/bom measured on the BASE blob bytes exactly as `git cat-file -p` gives them.
+#
+# BY CLASS            eol     bom    files
+#   BOUNDARY         CRLF    false      1
+#   BOUNDARY         LF      false     96
+#   HOST-CONFIG      LF      false      7
+#   MOVE             LF      false    200
+#   MOVE             NONE    false     17
+#   TEMPLATE         LF      false      9
+#
+# BY EXTENSION        LF  CRLF MIXED  NONE   bom   files   uniform?
+#   .md                 90     0     0     0     0      90   yes
+#   .ps1                84     0     0     0     0      84   yes
+#   .py                 65     1     0     0     0      66   NO
+#   .yaml               39     0     0     0     0      39   yes
+#   .gitkeep             0     0     0    17     0      17   yes
+#   .json               17     0     0     0     0      17   yes
+#   .jsonl               6     0     0     0     0       6   yes
+#   .gitignore           2     0     0     0     0       2   yes
+#   .preimage            2     0     0     0     0       2   yes
+#   .txt                 2     0     0     0     0       2   yes
+#   .gitattributes       1     0     0     0     0       1   yes
+#   .lock                1     0     0     0     0       1   yes
+#   .patch               1     0     0     0     0       1   yes
+#   .toml                1     0     0     0     0       1   yes
+#   .worktreeinclude     1     0     0     0     0       1   yes
+#
+# TOTAL: LF 312, CRLF 1, MIXED 0, NONE 17; bom 0; binary 0.
+# Extensions whose files do NOT share one eol/bom: .py.
+#
+# WHY NOT PER-EXTENSION RULES. The import must reproduce blob bytes (G1 section 7): blob id and sha256 of every
+# imported file must equal the manifest's. `text` / `eol=` normalise CRLF to LF in the index on `git add`, so any
+# CRLF or MIXED file under a `text` rule is stored as a DIFFERENT blob; and `eol=crlf|lf` rewrites the checkout
+# of every file whose blob does not already carry that ending. 1 extension(s) mix endings or BOMs (above:
+# .py), so no per-extension `text eol=` set can leave every blob and every checkout byte-identical.
+# 1 CRLF and 0 MIXED blobs would change blob id under any `text` rule; `-text` is the only rule that keeps all.
+#
+# WHAT core.autocrlf=true ON THIS HOST WOULD DO (it is set system-wide: C:/Program Files/Git/etc/gitconfig).
+# With no attribute, git treats non-binary files as text=auto. On `git add` of a NEW path (every S4 path is new),
+# a CRLF working file is normalised to an LF blob -- 1 CRLF files and the CRLF lines of 0 MIXED files would
+# get blob ids that differ from <project>'s and the manifest's; on checkout, every LF blob (312 files) would be
+# smudged to CRLF, so working-tree sha256 != manifest sha256 (<project>'s own .gitattributes records the same
+# hazard: its PDF note and its per-path -text lines). `-text` switches EOL conversion off for every path:
+# add stores the bytes as they are and checkout writes the blob as it is, whatever core.autocrlf / core.eol say.
+# `-text` does not touch a BOM. Binary files (0) need nothing more for bytes; `-diff` would only change diffs.
+#
+# WHAT THE FRAMEWORK ITSELF PINS. Its sealed-hash tables are on the LF-NORMALISED basis, not on disk bytes
+# (docs/framework/LAM-INSTALL.md:37, :75, :90 "BASIS: LF-NORMALISED BYTES"; WP-5 K-5 collapses CRLF before
+# hashing): <project>'s CRLF checkouts and this proposal's LF checkouts measure the same. One pin is on disk bytes:
+# the lam-smoke push gate binds the CRLF rendering of .mission/dispatches/D-2.anchors.yaml
+# (lam-smoke .mission/gates/push-smoke-1.yaml:8) -- that is the MATERIALISED smoke repository's checkout, which
+# its recipe must pin to CRLF; this file governs only the carrier copy under tests/lam/fixtures/lam-smoke/.
+#
+# ORDER FOR S4: this file must be in the working tree BEFORE the first `git add` of imported bytes (git reads
+# .gitattributes from the working tree at add time), and committed in the same or an earlier commit.
+
+* -text

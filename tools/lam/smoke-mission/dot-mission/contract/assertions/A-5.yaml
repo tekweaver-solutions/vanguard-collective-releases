@@ -1,0 +1,8 @@
+# THE ANCHOR ASSERTION. It is about the EVIDENCE, not the code: a dispatch cannot satisfy it by
+# writing a file, because the work has no anchor fields to write.
+id: A-5
+feature_id: F-001
+statement: "The dispatch anchors file records a worktree_tip_sha equal to the worktree HEAD, and a capture_gaps_count of 0"
+kind: runner-anchor
+verification: "Read .mission/dispatches/<id>.anchors.yaml; re-derive git -C <worktree_path> rev-parse HEAD and compare; require capture_gaps_count: 0."
+planted: false

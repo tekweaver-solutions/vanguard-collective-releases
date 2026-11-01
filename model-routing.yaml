@@ -1,0 +1,53 @@
+# model-routing.yaml -- LAM role-to-model routing (LAM-ACCEPT WP-5 K-1, ADR-031)
+#
+# One file, read by the runner (WP-2 R-2) to resolve a dispatch's role to a concrete model id.
+# ADR-031 supersedes the v1 ADR-005 config: coding-strong and qa-validator move to Opus 5, and
+# Sonnet 5 is evaluated for coding-fast.
+#
+# MODEL IDS ARE WRITTEN OUT IN FULL AND ARE NOT ALIASES. An alias resolved by the CLI at spawn
+# time would make the anchor `model_id` a statement about what the CLI happened to pick that day;
+# a literal id is a statement about what was asked for. The runner records BOTH -- what it asked
+# for here, and what the worker's own stream reported -- so a substitution is visible rather than
+# assumed.
+
+version: 1
+
+roles:
+  coding-strong:
+    model: claude-opus-5
+    live: true
+    rationale: "ADR-031: primary build role. Opus 5 is the Claude Code default and carries the 1M context."
+
+  qa-validator:
+    model: claude-opus-5
+    live: true
+    rationale: "ADR-031: validators must not be the weaker reasoner. Fresh-identity adversarial validation is mandatory for evidence-plane artifacts (design SS4.5 law 6), and a cheaper judge there buys nothing."
+
+  coding-fast:
+    model: claude-sonnet-5
+    live: true
+    rationale: "ADR-031: evaluate Sonnet 5 for the fast lane. Not yet benchmarked on this repository -- carried as evaluate, not as decided."
+
+  small-fast:
+    model: claude-haiku-4-5-20251001
+    live: true
+    rationale: "Mechanical, high-volume, low-judgement work only. Never a validator and never an amendment author."
+
+# Ollama fallbacks are RETAINED and FLAGGED NOT LIVE (LAM-ACCEPT K-1). They are kept because the
+# local-first fallback is a standing design property, not because they are in service: nothing in
+# this build has benchmarked them on this host, and ADR-031 requires re-benchmarking per release.
+# A runner that resolved a role to one of these today would be routing on an unverified claim.
+fallbacks:
+  ollama:
+    live: false
+    reason: "Not benchmarked on this host for this release. ADR-031 requires a per-release re-benchmark before any of these may be routed to."
+    models:
+      coding-strong: qwen2.5-coder:32b
+      coding-fast:   qwen2.5-coder:14b
+      small-fast:    llama3.2:3b
+
+# The runner refuses a role that is absent here or flagged live:false, rather than falling back to
+# a default. A silent default is how a validator ends up running on the small model.
+policy:
+  unknown_role: refuse
+  not_live_role: refuse

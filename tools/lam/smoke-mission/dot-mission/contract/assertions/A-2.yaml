@@ -1,0 +1,6 @@
+id: A-2
+feature_id: F-002
+statement: "src/counter.ps1 exists and, when run with no arguments, prints exactly: 3"
+kind: file
+verification: "Execute src/counter.ps1 in the tree under judgement; compare stdout, trimmed, byte for byte."
+planted: false

@@ -1,0 +1,1099 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+  Deterministic goal evaluator, and the Stop hook that runs it. (LAM-ACCEPT WP-3, C-1..C-3)
+
+.DESCRIPTION
+  WHAT THIS FILE IS FOR, stated once and plainly. A session that says it is finished is not
+  evidence that it is finished. Design SS4.4 says a verify result existing only in agent prose does
+  not exist; WP-3 generalises that from verify to the GOAL. Every detector below reads DISK -- an
+  exit code, a file, a hash, a count -- and no detector reads a transcript, a summary, or any
+  claim. The evaluator is indifferent to prose by construction, not by discipline.
+
+  C-1  Reads <mission-root>/.mission/goals/<id>.yaml and writes <id>.verdict.yaml beside it, with
+
+  C-2  With -AsStopHook it emits a Stop-hook decision. NOT_MET blocks and names the failing
+       detectors as the reason, so the session continues on evidence rather than on a transcript
+
+  C-3  A HALT artifact makes the verdict HALT, and on HALT the hook DOES NOT BLOCK -- control
+       returns to the human. A HALT outranks a fully satisfied goal: if the harness has falsified
+       something, "every detector passed" is not a reason to keep going.
+
+  WHERE THE GOAL FILE LIVES. C-1's canonical path is <mission-root>/.mission/goals/<id>.yaml and
+  that is searched first. Two more locations are accepted, in order, and both are disclosed rather
+  than implied:
+    2. <mission-root>/.mission-runtime/lam/goals/<id>.yaml
+    3. an explicit -GoalFile <path>
+  Location 2 exists because .mission/ is outside this build's write surface (LAM-ACCEPT line 6),
+  so the agent building the toolchain cannot author its own goal in the canonical place. The
+  canonical path always wins where it exists; this is a fallback, never an override.
+
+
+  UNKNOWN DETECTOR TYPES REFUSE. A detector this file does not implement is NOT skipped: a
+  skipped detector is a goal that reports MET over a check nobody ran, which is design SS4.5
+  law 2's allow-side failure in miniature.
+#>
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)][string]$Goal,
+    [Parameter(Mandatory = $true)][string]$MissionRoot,
+    [string]$GoalFile,
+    [switch]$AsStopHook,
+    [int]$TurnsElapsed = -1
+)
+
+$ErrorActionPreference = 'Stop'
+
+# =================================================================================================
+# TURN COUNTING -- THE WIRING turn_cap NEVER HAD (V-1 round 3, WP-3 residual).
+# =================================================================================================
+# `turn_cap` could not fail as wired. Neither registration passed -TurnsElapsed, so the detector
+# always took its "not enforced" branch and returned ok, and stdin was discarded so nothing else
+# could supply a count either. A cap that cannot be exceeded is not a cap -- it is a comment.
+#
+# THE COUNT COMES FROM THE TRANSCRIPT, WHICH THE HARNESS WRITES. A Stop hook's stdin payload names
+# `transcript_path`; each user turn is a line whose `type` is `user`. That source sits OUTSIDE the
+# agent's reach, which is the same property that makes the transcript the right second arm for
+# H-2's reconciliation -- a session cannot lower its own turn count by behaving differently.
+#
+# IT STILL REPORTS RATHER THAN ASSUMES. If stdin carries nothing, or the transcript is absent or
+# unreadable, the count stays -1 and the detector says so on its face instead of quietly passing.
+# The explicit -TurnsElapsed parameter still wins where a caller supplies one.
+function Get-TurnsFromStdinTranscript {
+    $raw = $null
+    try {
+        if (-not [Console]::IsInputRedirected) { return -1 }
+        $raw = [Console]::In.ReadToEnd()
+    } catch { return -1 }
+    if (-not $raw -or -not $raw.Trim()) { return -1 }
+    $payload = $null
+    try { $payload = $raw | ConvertFrom-Json } catch { return -1 }
+    if ($null -eq $payload) { return -1 }
+    $tp = [string]$payload.transcript_path
+    if (-not $tp -or -not (Test-Path -LiteralPath $tp)) { return -1 }
+    $turns = 0
+    foreach ($line in [System.IO.File]::ReadAllLines($tp)) {
+        if (-not $line.Trim()) { continue }
+        $o = $null
+        try { $o = $line | ConvertFrom-Json } catch { continue }
+        if ($null -eq $o) { continue }
+        if ([string]$o.type -eq 'user') { $turns++ }
+    }
+    return $turns
+}
+if ($AsStopHook -and ($TurnsElapsed -lt 0)) { $TurnsElapsed = Get-TurnsFromStdinTranscript }
+
+trap {
+    if ($AsStopHook) { Write-Output (@{ decision = 'approve'; reason = "goal-check errored: $($_.Exception.Message)" } | ConvertTo-Json -Compress) }
+    else { Write-Output "mission-goal-check: UNHANDLED ERROR -- $($_.Exception.Message)"; Write-Output "  stack: $(($_.ScriptStackTrace -split "`r?`n") -join ' | ')" }
+    exit 9
+}
+
+# The ONE shared definition of PASS-DIB and of ledger provenance binding. Never restated here.
+. (Join-Path $PSScriptRoot 'lam-verify-admission.ps1')
+# The ONE shared definition of gate classification and gate state. `gate_present` restated the
+# consumed-gate predicate here once, without the (?!null) the other copy carried, and was dead on
+# arrival for it. Never restated here either.
+. (Join-Path $PSScriptRoot 'lam-gate-class.ps1')
+# The ONE shared definition of "run an instrument and persist what it said" -- register row 122 and
+# its other half row 178, landed by batch 2 session 2 and dot-sourced by the runner
+# (tools/lam/mission-dispatch.ps1:2547) as well. The private Save-InstrumentCapture that used to
+# live beside the instrument_exit0 detector is GONE: this file no longer runs an instrument and no
+. (Join-Path $PSScriptRoot 'lam-instrument-run.ps1')
+
+if ($AsStopHook) { try { $null = [Console]::In.ReadToEnd() } catch { } }
+
+# THE WORKER-TRAP GUARD, and it was found by driving rather than by reasoning.
+#
+# A Stop hook registered in a project's settings is inherited by EVERY session whose working
+# directory sits inside that project -- including a headless worker the runner spawns. A worker
+# cannot satisfy the ORCHESTRATOR's goal (it is not building the toolchain, it is building one
+# feature), so a blocking decision traps it: it is told to continue, forever, until something
+# external kills it.
+#
+# MEASURED, not inferred. A trivial `claude -p` prompt run with cwd inside this project produced
+# no output and was killed at 200 seconds; the identical prompt run from a directory outside the
+# project returned in 4 SECONDS. The difference was this hook.
+#
+# The runner marks every worker it spawns with LAM_DISPATCH. Seeing it here means "this session is
+# a dispatched worker, and this goal is not its goal" -- so the hook reports and does not block.
+# It fails toward NOT BLOCKING, which is the only safe direction: a continuation gate that wedges
+# the workers it was meant to supervise defeats the mode it exists to enable.
+if ($AsStopHook -and $env:LAM_DISPATCH) {
+    Write-Output (@{
+        decision = 'approve'
+        reason   = "goal-check: this session is dispatched worker '$env:LAM_DISPATCH', not the orchestrator. Goal '$Goal' is the orchestrator's and is not evaluated here -- a worker held to its dispatcher's goal can never stop."
+    } | ConvertTo-Json -Compress)
+    exit 0
+}
+
+function Out-Line { param([string]$m) if (-not $AsStopHook) { Write-Output $m } }
+
+# --- "is this HALT answered?" -- ONE definition, TWO consumers ----------------------------------
+# The predicate was written out twice, in the halt_absent DETECTOR and again in the C-3 VERDICT
+# path, and the two drifted the moment one was fixed: the detector reported 2 open halts while the
+# verdict line beneath it reported 3, disagreeing about HALT-07 in the same run. Bold is admitted on
+# BOTH sides of the colon -- `**Status:** **ANSWERED**` is answered, and reading it as open is a
+# ruling reported as outstanding because of markdown emphasis. Same lesson as the PASS-DIB constant:
+# a predicate two consumers share lives in one place or it drifts.
+#
+# ROUND-3 CURE (V-1 round 3, WP-3). THE PREDICATE ASKED THE WRONG QUESTION, and the answer it gave
+# was a FALSE PASS in the goal evaluator -- the worst class in this build's vocabulary, and the
+# third instance of it.
+#
+# It asked "does this DOCUMENT CONTAIN a line beginning `Status: ANSWERED`", not "is this ARTIFACT
+# answered". So an OPEN halt whose body merely MENTIONS another halt's marker -- a "Related halts"
+# line, or a fenced example showing the marker's own shape -- read as ANSWERED. Driven: that
+# mission root returns verdict MET, exit 0, records `open_halts: []`, and the Stop hook emits
+# `decision: approve`. THE SESSION IS ALLOWED TO END WITH AN UNANSWERED HALT ON DISK, which is the
+# one outcome the whole HALT mechanism exists to prevent.
+#
+# It is a live trap for this build in particular: these artifacts quote one another constantly, and
+# every writeback shows the marker's shape. Re-derived before fixing -- across all 20 live halts the
+# old and new readings agree, so no artifact tripped it yet; the certification made with the old
+# predicate stands, but it was made with a predicate that could not have said otherwise.
+#
+# AN ARTIFACT'S STATUS IS ITS FIRST `Status:` LINE. That is what a human reads, and it is what
+# these files are written to. Bold on BOTH sides is preserved -- that was HALT-07's cure, where a
+# correctly-answered halt read as open because of markdown emphasis, and it must not regress.
+#
+# FAIL CLOSED WHEN THERE IS NO STATUS AT ALL: not answered. The safe direction is the one that
+# hands control back to the human.
+# --- "where does a relative detector path point?" -- ONE definition, EVERY consumer --------------
+# A GOAL IS A STATEMENT ABOUT A MISSION, NOT ABOUT A SHELL. Relative paths in detectors resolved
+# against the PROCESS CWD, so one goal file with one -MissionRoot answered MET from one directory
+# and NOT_MET from another -- and the Stop hook and a hand-run do not share a working directory.
+#
+# I CURED `file_exists` AND LEFT ITS THREE SIBLINGS (V-1 round 4, WP-3): `instrument_exit0`,
+# `validator_pass_count`'s `dir` and `time_cap`'s `since_file` all still resolved against the cwd,
+# and that was LIVE in the registered goal, which names relative paths for seven detectors. Curing
+# one member of a class and calling the class fixed is the same mistake as special-casing `-C`
+# among git's value-taking options, in a different file on the same day.
+#
+# AND THEN I DID IT AGAIN. The sentence that used to end this comment -- "the resolution lives in
+# one function that every path-taking detector calls" -- was FALSE WHEN WRITTEN. Two inputs never
+# called it: `halt_absent`'s `dir` (fail-OPEN, the worst direction) and `verify_pass_or_dib`'s
+# `path`. V-1 round 5 (WP-3) drove both. There are SIX path-taking inputs, not four, and the count
+# is stated here because a claim of completeness with no number attached is what let this recur.
+#
+# So: SEVEN inputs -- file_exists.path, instrument_exit0.path, validator_pass_count.dir,
+# time_cap.since_file, halt_absent.dir, verify_pass_or_dib.path, and gate_present.path -- and every
+# one of them calls Resolve-DetectorPath.
+#
+# IT SAID SIX, AND SIX WAS WRONG (V-1 round 6, WP-3). `gate_present`'s `path:` override was never
+# counted, and a reader drove a goal satisfying one mission's gate detector with another
+# repository's gate. Twice now this comment has claimed a completeness it did not have: first the
+# unqualified "every path-taking detector calls it", then a NUMBER -- which reads as though somebody
+# had counted. A count is only worth more than a claim if it was DERIVED rather than asserted. So if
+# an eighth is added: it calls this too, this list gains a name, and C-1h's assertion of the
+# call-site count moves with it.
+function Resolve-DetectorPath {
+    param([string]$MissionRoot, [AllowNull()][string]$Path)
+    if (-not $Path) { return $Path }
+    if ([System.IO.Path]::IsPathRooted($Path)) { return $Path }
+    return (Join-Path $MissionRoot $Path)
+}
+
+function Test-HaltAnswered {
+    # ============================================================================================
+    # C-3 AS AMENDED (amendment 21, ruling HALT-27). ONE CANONICAL FORM, AND NOTHING ELSE.
+    # ============================================================================================
+    # A HALT artifact is OPEN unless the FIRST line matching `^\*\*Status:\*\*` at column 0 carries
+    # the value ANSWERED. The label is fixed: no decoration, no alternatives, no blockquote, no
+    # bullet, no heading, no table cell, no ordered-list item. Everything else is OPEN.
+    #
+    # WHAT THIS REPLACES, AND WHY IT IS SHORTER RATHER THAN CLEVERER. The previous implementation was
+    # ~150 lines of accumulated widening: five consecutive V-1 rounds (5, 6, 7, 8, 12) each refuted
+    # it on a form the previous cure had not imagined, and round 13 found 13 of 26 spellings STILL
+    # invisible. Each cure was written against the spellings that round had found, because there was
+    # nothing else to write it against -- C-3 contained no answered-exception at all. `grep -i
+    # answered` over the contract returned two hits, neither about HALT artifacts. Every round was
+    # inventing a little more of a specification nobody had written.
+    #
+    # A RULE WITH NO SPECIFICATION CANNOT BE COMPLETED BY PATCHING, BECAUSE NOTHING SAYS WHEN IT IS
+    # DONE. Amendment 21 writes the specification; this function implements it and stops.
+    #
+    # TWO CASES THE DRAFT GOT WRONG AND THE REGRESSION CAUGHT, both now handled explicitly:
+    #   HALT-07 writes `**Status:** **ANSWERED**` -- the VALUE is emphasised. A naive capture takes
+    #           `**ANSWERED**`, reads it as not-answered, and pins the goal on a permanently open
+    #           HALT. This same artifact broke round 7's widening.
+    #   HALT-06's first STATUS-SHAPED line is a `git status` mention three lines above its real
+    #           marker -- which is why the rule is "first line matching the CANONICAL form", never
+    #           "first status-shaped line".
+    #
+    # FAIL-CLOSED BY CONSTRUCTION: no canonical line at all means OPEN, so a writer using any other
+    # spelling produces an open HALT that is visible immediately rather than a silent false MET.
+    #
+    # THE REGRESSION IS PART OF THE RULE (C-3): any change here ships only after being run over every
+    # live HALT artifact, each of which must read as it should.
+    # ============================================================================================
+    # ONE ADDITION TO THE RULED RULE, AND IT IS DISCLOSED RATHER THAN SLIPPED IN: FENCED CODE BLOCKS
+    # ARE REMOVED BEFORE SCANNING.
+    # ============================================================================================
+    # Amendment 21 says "the first line matching `^\*\*Status:\*\*` at column 0". A line inside a
+    # fenced code block IS at column 0 in the raw text, and these documents routinely show a writeback
+    # EXAMPLE -- "a writeback looks like: ```markdown **Status:** ANSWERED ```" -- ABOVE the
+    # artifact's own marker. Driven before deviating: such a document reports **MET** while its own
+    # marker reads OPEN, with controls (same two lines in the other order; a plain canonical ANSWERED)
+    # both correct. That is a FALSE MET -- a genuinely open HALT reported answered, the Stop hook
+    # approving, the session ending. The silent direction, which is the worst outcome this evaluator
+    # has, reachable by an ordinary documentation habit.
+    #
+    # AND THE CORRECT FENCE HANDLING INVERTS WITH THE RESOLUTION RULE, which is why the previous
+    # implementation did the opposite here. Under "collect every marker and require agreement", an
+    # UNCLOSED fence was left unstripped because over-collection could only produce more disagreement
+    # -- fail-closed. Under "the first canonical line wins", over-collection can hand the verdict to
+    # an example -- fail-OPEN. So an unclosed fence now runs to EOF and takes the rest of the document
+    # with it: that loses markers, which under this rule means OPEN, which is loud.
+    # RATIFIED AS AMENDMENT 22 (operator ruling B), AND THE SINGLE TOGGLE IT REPLACES WAS WRONG THREE
+    # WAYS. `if ($line -match '^[ \t]*```') { $inFence = -not $inFence }` did not recognise a TILDE
+    # fence at all, so an example inside one was SCANNED (false MET); a four-backtick block containing
+    # three-backtick lines toggled state OFF on the inner line, inverting everything after it (false
+    # MET); and a fence indented four or more spaces was treated as a fence when CommonMark says it is
+    # an indented code block (false HALT). Driven over nine cases, then over WP-3's mirror case, before
+    # the text was offered for ruling.
+    #
+    # THE RULE AS RATIFIED: a fence OPENS on a line whose first non-whitespace run is three or more
+    # backticks OR tildes, indented at most three spaces; it CLOSES only on a line of the SAME
+    # character, at least as long as the opener, carrying nothing else; an unclosed fence runs to EOF.
+    # Fails closed by construction -- a marker the rule hides reads OPEN, never ANSWERED.
+    param([string]$Text)
+    $scan = New-Object System.Collections.Generic.List[string]
+    $fenceChar = ''; $fenceLen = 0
+    foreach ($line in (($Text -replace "`r", '') -split "`n")) {
+        if ($fenceChar) {
+            $c = [regex]::Match($line, '^ {0,3}(' + [regex]::Escape($fenceChar) + '{3,})[ \t]*$')
+            if ($c.Success -and $c.Groups[1].Value.Length -ge $fenceLen) { $fenceChar = ''; $fenceLen = 0 }
+            continue
+        }
+        $o = [regex]::Match($line, '^ {0,3}(`{3,}|~{3,})')
+        if ($o.Success) { $fenceChar = $o.Groups[1].Value.Substring(0, 1); $fenceLen = $o.Groups[1].Value.Length; continue }
+        [void]$scan.Add($line)
+    }
+    foreach ($line in $scan) {
+        $m = [regex]::Match($line, '^\*\*Status:\*\*[ \t]*(.*)$')
+        if (-not $m.Success) { continue }
+        # EMPHASIS IS STRIPPED FROM THE VALUE, not from the label. `**ANSWERED**` -> ANSWERED.
+        $v = ($m.Groups[1].Value -replace '[*_`]', '').Trim()
+        # The value is the first word: a marker legitimately carries trailing prose
+        # ("ANSWERED -- ruled by the operator 2026-09-01. ...").
+        $w = [regex]::Match($v, '^(\w+)')
+        return ($w.Success -and $w.Groups[1].Value.ToUpperInvariant() -eq 'ANSWERED')
+    }
+    return $false
+}
+
+# --- "which halts are open?" -- ONE definition, TWO consumers -----------------------------------
+# THE PREDICATE WAS UNIFIED AND THE SCAN WAS NOT, and that is the same defect one level out. The
+# `halt_absent` DETECTOR and the C-3 VERDICT path each ran their own `Get-ChildItem`, so fixing
+# one made them DISAGREE INSIDE A SINGLE RUN: the detector reported the open halt and the verdict
+# beneath it said none, which is exactly the failure the shared predicate was written to end.
+# Caught here by a member whose scan-shape rows returned NOT_MET instead of HALT.
+#
+# So the ENUMERATION is shared too, not just the test it applies. A rule about which files count
+# is as much a predicate as the rule about what they say.
+#
+# RECURSIVE AND NOT LIMITED TO .md (V-1 round 3, WP-3): the scan was `-Filter 'HALT-*.md'` with no
+# `-Recurse`, so `HALT-94.txt` or `halts/archive/HALT-95.md` produced no HALT verdict at all.
+# Widening a HALT scan can only find MORE halts, so it can only make the verdict MORE likely to be
+# HALT and hand control back to the human -- the fail-closed direction, and the only direction in
+# which widening a detector is safe.
+#
+# AND THE ONE NARROWING THAT IS SAFE, BECAUSE IT IS ABOUT SHAPE AND NOT ABOUT STATUS (row 163).
+# `-Filter 'HALT-*'` is a NAME glob: case-insensitive on Windows, extension-blind, and it recurses.
+# The directory it recurses into holds this arc's own TOOLS about halts -- `helpers/halt-append.py`,
+# the helper that appends sections to HALT files and sets their Status lines. A Python file carries
+# no canonical `**Status:**` marker, "no canonical line at all means OPEN" is fail-closed BY
+# CONSTRUCTION, and so THE GOAL COULD NOT READ MET WHILE THAT FILE EXISTED UNDER THAT NAME. No
+# ruling can answer a Python file. DRIVEN before this was written: with `helpers/halt-append.py`
+# and `HALT-tool.ps1` the only files on disk and every detector passing, the evaluator returned
+# verdict HALT and `open_halts: [HALT-tool.ps1, halt-append.py]`.
+#
+# THE CURE IS AN EXTENSION DENYLIST, NOT AN ALLOWLIST, and the difference is the whole argument.
+# An allowlist -- or a return to `'HALT-*.md'` -- makes every artifact shape nobody enumerated
+# INVISIBLE, and V-1 round 3 already measured what that costs: `HALT-94.txt` and
+# `halts/archive/HALT-95.md` produced no HALT verdict at all. Under a denylist the exclusion set is
+# closed and executable, and EVERYTHING ELSE -- .md, .txt, .markdown, .yaml, no extension at all --
+# is still a halt, so widening the artifact set stays the default and the fail-closed direction is
+# preserved. The residual risk is stated rather than hidden: a genuine HALT artifact named
+# `HALT-xx.py` would go invisible. Nothing in this build writes one, and the instrument rows pin
+# that assumption where a reader can refute it.
+#
+# TWO OTHER OPTIONS WERE CONSIDERED AND ARE REFUSED ON THE RECORD. BY LOCATION -- exclude
+# `lam/helpers/`, or stop recursing -- re-creates the round-3 hole exactly: `halts/archive/HALT-95.md`
+# is a real halt one directory down, and no location rule separates that subdirectory from a
+# helpers one without a hand list that rots. BY REQUIRED CANONICAL HEADER inverts the fail
+# direction: a genuine HALT whose header was mistyped becomes INVISIBLE -- a false MET, the silent
+# direction, strictly worse than the false HALT this row is about. GIVING THE HELPER AN ANSWERED
+# MARKER is refused too: putting a HALT marker in a Python file to satisfy a HALT detector is "never
+# fix the state to satisfy a checker" inverted, and it would establish that any future genuinely-open
+# HALT can be silenced the same way.
+#
+# AND THE SKIP IS NOT SILENT. A narrowing that hides a file without saying so is the same class of
+# defect one level down, so every skipped name is collected in $script:HaltScanSkipped and surfaced
+# twice: in the `halt_absent` detail, and as `halt_scan_skipped:` in the verdict artifact. That
+# leaves a record on disk a reader can refute. The list is emitted SINGLE-QUOTED with embedded
+# quotes doubled, for the reason the UNREADABLE entry below records: a bare YAML scalar carrying
+# `: ` silently stops being a string and becomes a single-key MAP, and the narrowing's own report
+# must not become the unparsable artifact.
+$script:HaltToolExtensions = @('.py','.pyc','.pyo','.pyw','.ps1','.psm1','.psd1','.sh','.bash','.zsh',
+                               '.bat','.cmd','.js','.mjs','.cjs','.ts','.rb','.pl','.exe','.dll')
+$script:HaltScanSkipped = @()
+function Get-OpenHalts {
+    param([string]$MissionRoot, [AllowNull()][string[]]$Dirs)
+    $dirs = if ($Dirs) { $Dirs } else {
+        @((Join-Path $MissionRoot '.mission-runtime\halts'), (Join-Path $MissionRoot '.mission-runtime\lam'))
+    }
+    # RESET PER CALL, and both consumers read it IMMEDIATELY after their own call. The report rides
+    # a script-scoped variable rather than the return value because `return $open` is comma-free and
+    # both call sites wrap it in @() -- changing the arity here is what broke `halt_absent` on every
+    # mission the last time this return was touched (the NO COMMA-WRAP note below).
+    $script:HaltScanSkipped = @()
+    $open = @()
+    foreach ($dd in $dirs) {
+        if (-not (Test-Path -LiteralPath $dd)) { continue }
+        foreach ($f in @(Get-ChildItem -LiteralPath $dd -File -Recurse -Filter 'HALT-*' -ErrorAction SilentlyContinue)) {
+            # A TOOL ABOUT HALTS IS NOT A HALT (row 163). The test is on the extension and nothing
+            # else: not on case, not on contents, not on which subdirectory the file sits in. It
+            # sits BEFORE the read, so a skipped file never reaches the catch below and never
+            # appears in `open_halts` -- it appears in the skipped list instead, which is a
+            # different statement and is reported as one.
+            if ($script:HaltToolExtensions -contains $f.Extension.ToLowerInvariant()) {
+                $script:HaltScanSkipped += $f.Name
+                continue
+            }
+            #
+            # AN UNREADABLE HALT IS AN OPEN ONE (V-1 round 6, WP-3). This read had no guard, and it
+            # is reached from the C-3 VERDICT path as well as from the detector -- which sits
+            # OUTSIDE the per-detector try/catch added last round. Driven by an independent reader:
+            # a HALT artifact that cannot be read threw out of the verdict path entirely, so the
+            # evaluator exited 9, wrote NO verdict artifact at all, and the Stop hook approved.
+            #
+            # Same class as the throwing detector, cured in the detector loop and not here -- the
+            # enumeration stopped at the loop because that was where the reader had pointed.
+            #
+            # It counts as OPEN rather than being skipped: a halt nobody can read is the case most
+            # in need of a human, and the safe direction for this artifact is always "stop".
+            $t = $null
+            try { $t = [System.IO.File]::ReadAllText($f.FullName) }
+            catch {
+                # NO COLON-SPACE IN A BARE YAML SCALAR (V-1 round 7, WP-3), AND THE REASON IS NOT
+                # THE ONE FIRST WRITTEN HERE. This comment used to say `[UNREADABLE: ` made the
+                # artifact "unparsable -- PyYAML refused the document". MEASURED, when a
+                # falsification run reported the member blind: PyYAML ACCEPTS it. `- name [UNREADABLE:
+                # msg]` is a well-formed block MAPPING, so the list item silently stops being a
+                # string and becomes a single-key dict.
+                #
+                # That is worse than the refusal I claimed, not better. A refusal is loud and stops
+                # the reader. This passes every parse, and then `"HALT-07.md" -in $open_halts` is
+                # FALSE, the halt's name comes back with `[UNREADABLE` glued onto it, and anything
+                # iterating the list gets a dict where it expects a filename -- in the one artifact
+                # that exists to report that a halt could not be read.
+                #
+                # BOTH HALVES ARE LOAD-BEARING: the literal below, and the colon strip on $msg. An
+                # exception message carrying its own `: ` ("Could not find file: C:\...") produces
+                # the same mapping through the other half. The detector-detail field was
+                # single-quoted for exactly this reason; these two were not.
+                $msg = ($_.Exception.Message -replace '[\r\n]+', ' ') -replace ':', ' -'
+                $open += "$($f.Name) [UNREADABLE - $msg -- counted OPEN, because a halt that cannot be read is the one most needing a human]"
+                continue
+            }
+            if (Test-HaltAnswered -Text $t) { continue }
+            $open += $f.Name
+        }
+    }
+    # NO COMMA-WRAP. `return , $open` survives a bare assignment but is DOUBLE-WRAPPED by an
+    # `@(Get-OpenHalts ...)` call site, so an empty result reads Count=1 and `halt_absent` failed
+    # on every mission -- measured, not reasoned: five checks went red at once. Both consumers wrap
+    # with @() because that is the idiom that is correct for a plain return in every arity.
+    return $open
+}
+
+# EXIT 2 IS CLAUDE CODE'S BLOCKING SIGNAL FOR A STOP HOOK, so these two error paths were doing the
+# exact opposite of what they announce: they emit `decision: approve` -- "not blocking" -- and then
+# exit with the code that blocks. The decision JSON is honoured on exit 0; on exit 2 the exit code
+# wins and the session is held. Found by V-1 round 2 (WP-3), which noted that both cases are ones
+# this script's own docstring says must NOT block.
+#
+# THE CLI PATH IS UNCHANGED AND STILL EXITS 2. A human running this by hand wants a non-zero code
+# for "I could not evaluate anything", and 2 is that code everywhere else in this toolchain. Only
+# the hook path moves, because only the hook path has a caller that reads 2 as a command.
+if (-not (Test-Path -LiteralPath $MissionRoot -PathType Container)) {
+    if ($AsStopHook) {
+        Write-Output (@{ decision = 'approve'; reason = "goal-check: mission root not found: $MissionRoot -- not blocking." } | ConvertTo-Json -Compress)
+        exit 0
+    }
+    Write-Output "mission-goal-check: mission root not found: $MissionRoot"
+    exit 2
+}
+$MissionRoot = (Resolve-Path -LiteralPath $MissionRoot).Path
+
+# --- locate the goal ---------------------------------------------------------------------------
+$searched = @()
+$goalPath = $null
+foreach ($cand in @(
+        (Join-Path $MissionRoot ".mission\goals\$Goal.yaml"),
+        (Join-Path $MissionRoot ".mission-runtime\lam\goals\$Goal.yaml"))) {
+    $searched += $cand
+    if ((-not $goalPath) -and (Test-Path -LiteralPath $cand)) { $goalPath = $cand }
+}
+if ($GoalFile) {
+    $searched += $GoalFile
+    if (Test-Path -LiteralPath $GoalFile) { $goalPath = $GoalFile }
+}
+if (-not $goalPath) {
+    $msg = "no goal file for '$Goal'. Looked in: $($searched -join ' ; ')"
+    if ($AsStopHook) {
+        Write-Output (@{ decision = 'approve'; reason = "goal-check: $msg -- not blocking." } | ConvertTo-Json -Compress)
+        exit 0
+    }
+    Write-Output "mission-goal-check: $msg"
+    exit 2
+}
+
+# --- a very small YAML reader for the detector list ---------------------------------------------
+# REACH, STATED: `detectors:` followed by `- type: <t>` items whose subsequent indented
+# `key: value` lines belong to that item. Nothing else. A shape it cannot read becomes a detector
+# with no type, which REFUSES below rather than being skipped.
+function Read-GoalDetectors {
+    param([string]$Path)
+    $items = New-Object System.Collections.Generic.List[object]
+    $cur = $null
+    $inDetectors = $false
+    foreach ($raw in [System.IO.File]::ReadAllLines($Path)) {
+        $line = $raw -replace "`t", '    '
+        if ($line -match '^\s*#') { continue }
+        if ($line -match '^detectors:\s*$') { $inDetectors = $true; continue }
+        if (-not $inDetectors) { continue }
+        if ($line -match '^\S') { $inDetectors = $false; continue }
+        if ($line -match '^\s*-\s*([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$') {
+            if ($null -ne $cur) { [void]$items.Add($cur) }
+            $cur = @{}
+            $cur[$Matches[1]] = $Matches[2].Trim().Trim('"').Trim("'")
+            continue
+        }
+        if ($line -match '^\s+([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$') {
+            if ($null -ne $cur) { $cur[$Matches[1]] = $Matches[2].Trim().Trim('"').Trim("'") }
+            continue
+        }
+    }
+    if ($null -ne $cur) { [void]$items.Add($cur) }
+    return $items.ToArray()
+}
+
+$detectors = @(Read-GoalDetectors -Path $goalPath)
+
+# --- detector implementations -------------------------------------------------------------------
+# Each returns @{ ok = <bool>; detail = <string> }. Every one of them reads DISK.
+
+# --- ROW 122 (detector half): A RED RUN LEAVES ITS REASON ON DISK -------------------------------
+# `instrument_exit0` ran the instrument as `$null = & powershell ... 2>&1` and threw away everything
+# it said, keeping only $LASTEXITCODE. So the entire record of a failing suite was one sentence --
+# "<leaf> exited 1 (require 0)" -- and the instrument's TALLY line, its failing member names and
+# every diagnostic it printed existed NOWHERE afterwards. Reproduced 2026-09-11 against this
+# evaluator: a goal whose instrument printed
+#   FAILED src/x/test_a.py::test_one
+#   TALLY passed=11 failed=1 skipped=2 deselected=0 runnable=14 stored_floor=14 collection_error=False pytest_exit=1 elapsed_seconds=7
+# and exited 1 produced a verdict artifact carrying `detail: 'red-instrument.ps1 exited 1 (require
+# 0)'` and nothing else, and a full recursive scan of the mission root found that TALLY text in no
+# file but the instrument's own source. The exit code survived; the reason did not.
+#
+# =================================================================================================
+# ITEM 5 (batch 1 session 3): THE PRIVATE CAPTURE IS GONE. THE SHARED HELPER OWNS THE CAPTURE NOW.
+# =================================================================================================
+# Save-InstrumentCapture used to live here and wrote its sidecar into (Split-Path -Parent
+# $goalPath) -- i.e. .mission/goals/, BESIDE the verdict artifact. THAT WAS THE DEFECT, and it is
+# the one this block records. .gitignore:79 ignores `/.mission/goals/*.verdict.yaml` and NOTHING
+# ELSE in that directory, so `<goal>.instrument.txt` was an UNTRACKED, PORCELAIN-VISIBLE file
+# written on EVERY Stop hook. Measured at the base of this item in the repository of record's
+# worktree: a clean tree (0 porcelain lines) gained exactly one line,
+#   ?? .mission/goals/ARC-L2-2.instrument.txt
+# and Assert-CleanWorkingTree (tools/mission-lib.ps1:90) as amendment 36 / register row 172 left it
+# admits NOTHING that the mission has not DECLARED in .mission/mission.yaml `admitted_porcelain`.
+# This mission declares exactly two prefixes -- "?? .mission/evidence/verify-" and
+# "?? .mission/gates/" -- so that line is $offending and A-126 REFUSES. Every lifecycle command
+# (reopen, promote-contract, ledger-append, close, reclose) would have refused, after any Stop hook
+# had run the goal once. The capture cured one hole by opening a worse one.
+#
+# THE CURE IS THE ONE SHARED DEFINITION, tools/lam/lam-instrument-run.ps1 (register row 122 + 178,
+# landed by batch 2 session 2), dot-sourced at the head of this file and called below. It runs the
+# instrument, persists its stdout and its tally under
+# <MissionRoot>/.mission-runtime/lam/instrument-runs/ -- the plane .gitignore:3 excludes WHOLE --
+# and hands back the exit code. Nothing is written under .mission/goals/ but the verdict artifact.
+#
+# WHAT THE PRIVATE FUNCTION GUARANTEED, AND WHERE EACH GUARANTEE WENT. Stated in full because a
+# finding that is merely deleted is a finding that gets re-learned.
+#   CAPTURE ON EVERY OUTCOME, not only on red. HONOURED, unconditionally: the helper's persistence
+#     by the exit code, so a green run writes its transcript too. Let go.
+#   THE TALLY SURFACED IN BOTH DIRECTIONS. HONOURED, in a SECOND FILE rather than as a key: the
+#     helper writes `<base>.tally.txt` carrying the TALLY line verbatim when one was printed, and
+#     the explicit sentinel `NO-TALLY exit_code=<n>` when none was. Absence is still STATED. Let go.
+#   KEYED, BECAUSE ONE GOAL MAY DECLARE MORE THAN ONE instrument_exit0. HONOURED BY THE CALLER, not
+#     by the helper: the helper keys on RunKey/Goal + the instrument's leaf name, which separates
+#     two detectors over DIFFERENT instruments but NOT two over the SAME one. The ordinal counter
+#     below therefore survives the move and is folded into the RunKey, which is exactly what that
+#     parameter is for. MEASURED at the base of this item: with `-Goal` alone, two detectors naming
+#     one instrument write one file and the second overwrites the first; with the RunKey below they
+#     do not. Driven by WP-3 member C-1j's TWO row.
+#   NEVER AN EMPTY FILE. HONOURED BY THE HELPER since amendment 42 / register row 181 (contract
+#     (h) 3). It WAS NOT HONOURED until then: the helper wrote $flat verbatim; a silent instrument
+#     left a ZERO-BYTE `<base>.stdout.txt` where the private function wrote a sentence saying so,
+#     and this walk recorded that as a finding against the helper. Now the stdout header's
+#     `body_bytes:` counts the instrument's own output; when it is 0 the body is one of the helper's
+#     own sentences ("THE INSTRUMENT PRINTED NOTHING ..."). Read `body_bytes: 0`, not the sentence.
+#   THE EXIT CODE ON THE CAPTURE'S FACE. HONOURED BY THE HELPER since amendment 42 / register row
+#     181 (contract (h) 4, with (h) 2's header). It WAS NOT HONOURED until then: the private file
+#     carried `exit_code: <n>` on every capture, the helper's files only in the NO-TALLY sentinel,
+#     and this walk recorded that as a finding against the helper too. Now every stdout header
+#     carries `exit_code: <n>`, and every tally file ENDS with an `EXIT exit_code=<n> ...` line.
+#     C-1j's exit-code rows still read the verdict artifact and the tally file; none was dropped.
+#   THIS FUNCTION MAY THROW; ITS CALLER WRAPS IT. SUPERSEDED BY A STRONGER RULE: the helper's
+#     contract (b) is that it MUST NOT THROW -- persistence is a side effect and an unwritable
+#     directory degrades to `persisted = false`, never to a verdict. The caller below still wraps
+#     the one thing it does for itself (deriving the capture path for the detail line), for the
+#     same reason the old wrapper existed.
+#
+# THE HELPER'S OWN REASONING FOR ITS LOCATION IS STALE, AND ITS CONCLUSION IS STRENGTHENED, NOT
+# WEAKENED. lam-instrument-run.ps1's docblock justifies .mission-runtime/ by citing
+# "Assert-CleanWorkingTree (tools/mission-lib.ps1:110-117) exempts only ^\.mission/evidence/ and
+# ^\.mission/gates/". That describes the gate BEFORE amendment 36: register row 172 deleted those
+# two code exemptions outright and made the admitted set the mission's own declaration, admitting
+# nothing undeclared. The function is now at :90 and there is no code exemption to cite. So the
+# premise is wrong and the conclusion is more true than when it was written -- under the old code
+# a `.mission/goals/` file was offending, and under the new gate it is offending for a reason no
+# mission can quietly widen. lam-instrument-run.ps1 is batch 2's file: REPORTED, NOT EDITED HERE.
+
+function Invoke-Detector {
+    param($D)
+    $type = [string]$D['type']
+    switch ($type) {
+
+        'instrument_exit0' {
+            $pRaw = [string]$D['path']
+            if (-not $pRaw) { return @{ ok = $false; detail = "instrument_exit0 has no 'path'" } }
+            $p = Resolve-DetectorPath -MissionRoot $MissionRoot -Path $pRaw
+            if (-not (Test-Path -LiteralPath $p)) { return @{ ok = $false; detail = "instrument not on disk: $p" } }
+            # THE ORDINAL SURVIVES THE MOVE. One goal may declare MORE THAN ONE instrument_exit0,
+            # and the shared helper keys its files on RunKey/Goal + the instrument's LEAF NAME --
+            # which separates two detectors over different instruments and does NOT separate two
+            # over the SAME instrument. Folding this counter into the RunKey restores the guarantee
+            # the private capture had, using the parameter the helper provides for it, and without
+            # touching the helper. The first detector keeps the plain key (so the common
+            # single-detector goal gets the plainest filename); the second and later carry their
+            # ordinal, exactly as the private capture's ".2.txt" did.
+            if ($null -eq $script:InstrumentCaptureSeq) { $script:InstrumentCaptureSeq = 0 }
+            $script:InstrumentCaptureSeq++
+            # Built by CONCATENATION, never by "$Goal.$n": in a double-quoted string a `.` after a
+            # variable is the property-access operator, and a key that silently became something
+            # else would put the second detector's transcript back on top of the first's.
+            $runKey = [string]$Goal
+            if ($script:InstrumentCaptureSeq -gt 1) {
+                $runKey = ([string]$Goal + '.' + [string]$script:InstrumentCaptureSeq)
+            }
+            # SAVED AS $prev, NEVER AS $p: PowerShell variable names FOLD CASE, so a saved
+            # ErrorActionPreference called $p IS the instrument path resolved two lines up. The one
+            # NATIVE call moved into the helper, which saves and restores its own preference around
+            # it (and names its saved value $prevEap, for this same reason). This guard stays: the
+            # planted-revert kill in tests/lam/instrument-WP-3.ps1 puts a native call back on the
+            # line below, and it must run under the same preference it ran under before.
+            $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try {
+                # THE `$null =` IS LOAD-BEARING AND IT IS NOT COSMETIC. Invoke-Detector answers by
+                # RETURNING @{ ok = ...; detail = ... }, and in PowerShell every unassigned,
+                # unsuppressed expression in a function lands on that same output stream. Without
+                # the suppression this call's [pscustomobject] is emitted too and the detector
+                # answers with an ARRAY whose [0] is the helper's result -- $r['ok'] then reads
+                # $null, every detector reports FAILED, and a MET goal reads NOT_MET. Measured at
+                # the base of this item by dropping it: see amendment 38.
+                $null = Save-LamInstrumentRun -InstrumentPath $p -MissionRoot $MissionRoot -RunKey $runKey -Goal $Goal
+                # CONTRACT (a): the helper's LAST act is `$global:LASTEXITCODE = <instrument exit>`
+                # and it runs NOTHING NATIVE after it, so this line reads the instrument's own code.
+                # Anything native inserted between these two lines destroys the verdict input.
+                $code = $LASTEXITCODE
+            } finally { $ErrorActionPreference = $prev }
+            if ($null -eq $code) { $code = 1 }
+            # THE CAPTURE PATH IS DERIVED, NOT READ BACK. The call above is suppressed, so the
+            # helper's returned object is unreachable here by construction -- which is exactly what
+            # contract (g) exists for: Get-LamInstrumentRunPath is the ONE derivation of the
+            # filename and both callers compute it from what they already hold.
+            #
+            # DEGRADES TO A NOTE, NEVER TO AN EXCEPTION. The helper itself cannot throw (contract
+            # (b)), but these two cmdlets run under this file's 'Stop' preference and a malformed
+            # path would take a GREEN instrument's whole evaluation down. The old wrapper existed
+            # for this reason and it is kept for it.
+            $capNote = ''
+            try {
+                $capPath = (Get-LamInstrumentRunPath -MissionRoot $MissionRoot -InstrumentPath $p `
+                                                     -RunKey $runKey -Goal $Goal).stdout
+                if (Test-Path -LiteralPath $capPath) {
+                    $capNote = " Instrument output kept at $capPath."
+                } else {
+                    $capNote = " Instrument output was NOT PERSISTED -- nothing is on disk at $capPath."
+                }
+            } catch {
+                $capNote = " Instrument output CAPTURE PATH UNRESOLVABLE and is recorded here rather than thrown -- $(($_.Exception.Message -replace '[\r\n]+', ' '))"
+            }
+            # THE VERDICT IS UNMOVED. ok is ($code -eq 0) for every input, exactly as before and
+            # exactly as it was before the capture existed at all; this row moves an artifact, it
+            # does not change a decision.
+            return @{ ok = ($code -eq 0); detail = "$(Split-Path -Leaf $p) exited $code (require 0).$capNote" }
+        }
+
+        'verify_pass_or_dib' {
+            # LAM-ACCEPT C-1 as amended. The PASS-DIB definition is NOT restated here -- it comes
+            # from the one shared file, so a future verify that implements suite execution starts
+            # binding all three members in the runner and in this evaluator at the same instant.
+            # The existence check below ran at the PROCESS cwd while the execution further down runs
+            # after `Push-Location $MissionRoot` -- two statements about one file that meant two
+            # different directories (V-1 round 5, WP-3). Resolving once makes them agree.
+            # Resolve-DetectorPath returns its argument unchanged when falsy, so the default below
+            # is reached exactly as before when no path is declared.
+            $p = Resolve-DetectorPath -MissionRoot $MissionRoot -Path ([string]$D['path'])
+            if (-not $p) { $p = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tools\mission-verify.ps1' }
+            if (-not (Test-Path -LiteralPath $p)) { return @{ ok = $false; detail = "verify not on disk: $p" } }
+            $against = [string]$D['against']
+            $kind    = [string]$D['dispatch_kind']
+            # AMENDMENT 28 (AM-470, ARC-L2-1 / HALT-ARC-L2-1-45): THE EVALUATOR ADMITS THE ADVANCE THE RUNNER
+            # ADMITS. Get-LamVerifyVerdict tests the advance admission -- ancestry, cleanliness, provenance,
+            # R-1's companion admission -- only when it is given the mission root and the RECORDED head_sha of
+            # the anchors verify ran against ("Without a mission root and a recorded sha to test against, they
+            # are simply not admitted"). This detector passed neither, so every advance read REFUSE and a goal
+            # could never read MET once HEAD had moved past the anchors it names -- which every close does.
+            # 3) while the runner had admitted the same advance at spawn seq 134 with the same library. The
+            # recorded head is read from the SAME file verify is pointed at, never from a second source; a
+            # basis that carries no head_sha (or no basis named) leaves the call as it was, and the refusal
+            # stands. Driven by WP-3 member C-1i: the cure, the planted-revert kill, the drift control.
+            $recordedHead = $null
+            if ($against) {
+                $againstPath = Resolve-DetectorPath -MissionRoot $MissionRoot -Path $against
+                if ($againstPath -and (Test-Path -LiteralPath $againstPath -PathType Leaf)) {
+                    $againstText = [System.IO.File]::ReadAllText($againstPath)
+                    if ($againstText -match '(?m)^\s+head_sha:[ \t]*([0-9a-fA-F]{40})[ \t]*\r?$') { $recordedHead = $Matches[1] }
+                }
+            }
+            $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try {
+                Push-Location $MissionRoot     # verify resolves its repo root from cwd first
+                try {
+                    if ($against -and $kind) { $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $p --against $against --dispatch-kind $kind 2>&1 }
+                    elseif ($against)        { $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $p --against $against 2>&1 }
+                    else                     { $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $p 2>&1 }
+                    $code = $LASTEXITCODE
+                } finally { Pop-Location }
+            } finally { $ErrorActionPreference = $prev }
+            $verifyText = ((@($out) | ForEach-Object { "$_" }) -join "`n")
+            if ($recordedHead) { $v = Get-LamVerifyVerdict -VerifyOutput $verifyText -ExitCode $code -MissionRoot $MissionRoot -RecordedHeadSha $recordedHead }
+            else               { $v = Get-LamVerifyVerdict -VerifyOutput $verifyText -ExitCode $code }
+            $ok = ($v.verdict -eq 'PASS') -or ($v.verdict -eq 'PASS-DIB')
+            $adm = if ($v.admitted.Count -gt 0) { " admitted: $($v.admitted -join ', ')" } else { '' }
+            return @{ ok = $ok; detail = "mission verify exited $code -> $($v.verdict).$adm $($v.reason)" }
+        }
+
+        'validator_pass_count' {
+            $dir = Resolve-DetectorPath -MissionRoot $MissionRoot -Path ([string]$D['dir'])
+            if (-not $dir) { $dir = Join-Path $MissionRoot 'tests\lam' }
+            $need = 1
+            if ($D.ContainsKey('count')) { [void][int]::TryParse([string]$D['count'], [ref]$need) }
+            $pat = [string]$D['pattern']; if (-not $pat) { $pat = 'validator-*.result.yaml' }
+            # SESSION-LAW AMENDMENT 3a. A PASS is counted only if the file's sha256 matches a
+            # COMPLETED spawn-ledger line -- that is, only if this session spawned the thing that
+            # produced it. Presence was the whole of the old test, and presence is precisely what a
+            # concurrent writer forged: ten unattributed artifacts appeared at exactly these paths,
+            # five asserting PASS, none of them malformed. An unledgered file here is FOREIGN and
+            # FAILS the detector; it is never silently ignored and never counted.
+            # AMENDMENT 23 (operator ruling D, the stopping rule): A REFUTED RESULT COUNTS AS COMPLETE
+            # WHEN AN OPERATOR HAS ACCEPTED ITS REGISTERED RESIDUALS -- and it is admitted LOUDLY.
+            # Three conditions, all three or none: (1) the result is ledger-bound exactly as a PASS
+            # must be; (2) an unrevoked, unconsumed `completion-acceptance-*.yaml` gate exists under
+            # the mission's gates directory whose binds_sha256 is the sha256 of
+            # docs/framework/LAM-RESIDUALS.md ON DISK NOW -- so an edited manifest un-accepts every
+            # package without anyone revoking anything; (3) that manifest carries at least one
+            # `### RES-nn [WP-x]` heading for the package. The detail then names every package as
+            # PASS or ACCEPTED-WITH-RESIDUALS with its residual count and gate file, because an
+            # acceptance a reader cannot see on the verdict's face is the same hole one layer down.
+            $manifestPath = Join-Path $MissionRoot 'docs\framework\LAM-RESIDUALS.md'
+            $manifestSha = $null; $manifestText = ''
+            if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+                $manifestSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash.ToLowerInvariant()
+                $manifestText = [System.IO.File]::ReadAllText($manifestPath)
+            }
+            $acceptGate = $null
+            $gatesDirD = Join-Path $MissionRoot '.mission\gates'
+            if ($manifestSha -and (Test-Path -LiteralPath $gatesDirD)) {
+                foreach ($gf in @(Get-ChildItem -LiteralPath $gatesDirD -File -Filter 'completion-acceptance-*.yaml' -ErrorAction SilentlyContinue)) {
+                    $gt = [System.IO.File]::ReadAllText($gf.FullName)
+                    if ($gt -notmatch '(?m)^kind:[ \t]*completion-acceptance[ \t]*\r?$') { continue }
+                    $gs = Get-LamGateState -Path $gf.FullName
+                    if ($gs.consumed -or $gs.revoked) { continue }
+                    $bound = if ($gt -match '(?m)^binds_sha256:[ \t]*([0-9a-fA-F]{64})[ \t]*\r?$') { $Matches[1].ToLowerInvariant() } else { '' }
+                    if ($bound -eq $manifestSha) { $acceptGate = $gf.Name; break }
+                }
+            }
+            $found = 0; $names = @(); $foreign = @(); $accepted = @()
+            if (Test-Path -LiteralPath $dir) {
+                foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -Filter $pat -ErrorAction SilentlyContinue)) {
+                    $t = [System.IO.File]::ReadAllText($f.FullName)
+                    if ($t -match '(?m)^verdict:[ \t]*REFUTED[ \t]*\r?$') {
+                        $pkg = if ($f.Name -match 'WP-(\d+)') { $Matches[1] } else { '' }
+                        $resCount = if ($pkg -and $manifestText) { ([regex]::Matches($manifestText, '(?m)^### RES-\d+ \[WP-' + $pkg + '\]')).Count } else { 0 }
+                        if ($acceptGate -and $resCount -gt 0) {
+                            $bR = Test-LamLedgerBound -MissionRoot $MissionRoot -FilePath $f.FullName
+                            if ($bR.bound) {
+                                $found++
+                                $accepted += "$($f.Name)=ACCEPTED-WITH-RESIDUALS($resCount residuals, gate $acceptGate)"
+                            } else { $foreign += "$($f.Name) [$($bR.reason)]" }
+                        }
+                        continue
+                    }
+                    # TOP-LEVEL verdict only -- anchored at COLUMN 0, no leading whitespace.
+                    # `^\s*verdict:` also matched the INDENTED per-member `verdict: PASS` lines
+                    # inside a `members:` block, so a REFUTED result whose individual members mostly
+                    # passed was counted as a PASS. Driven: with five REFUTED results on disk the
+                    # detector reported "6 of 6 ... carry verdict PASS". A false PASS in the goal
+                    # evaluator is the one failure this detector exists to make impossible, and it
+                    # was masked until the ledger binding was fixed -- the FOREIGN failure was
+                    # hiding it. YAML top-level keys sit at column 0; member keys are indented.
+                    if ($t -notmatch '(?m)^verdict:[ \t]*PASS[ \t]*\r?$') { continue }
+                    $b = Test-LamLedgerBound -MissionRoot $MissionRoot -FilePath $f.FullName
+                    if ($b.bound) { $found++; $names += "$($f.Name)=PASS" }
+                    else { $foreign += "$($f.Name) [$($b.reason)]" }
+                }
+            }
+            $ok = ($found -ge $need) -and ($foreign.Count -eq 0)
+            $detail = "$found of $need required validator result(s) are COMPLETE (PASS, or REFUTED accepted with registered residuals under amendment 23) AND provenance-bound to the spawn ledger in $dir [$(@($names + $accepted) -join ', ')]"
+            if ($foreign.Count -gt 0) { $detail += ". FOREIGN (unledgered, NOT counted, detector FAILS): $($foreign -join ' ; ')" }
+            return @{ ok = $ok; detail = $detail }
+        }
+
+        'gate_present' {
+            $kind = [string]$D['kind']; $id = [string]$D['id']
+            $p = Join-Path $MissionRoot ".mission\gates\$kind-$id.yaml"
+            # THE SEVENTH PATH-TAKING INPUT, and the comment above Resolve-DetectorPath said there
+            # were six (V-1 round 6, WP-3). This override was passed through raw, so a goal could
+            # name a relative `path:` that resolved against the CWD -- and an independent reader
+            # drove exactly that, satisfying one mission's gate detector with ANOTHER REPOSITORY'S
+            # gate. Writing "six inputs, enumerated" in a comment did not make it six; it made the
+            # miscount look authoritative.
+            if ($D['path']) { $p = Resolve-DetectorPath -MissionRoot $MissionRoot -Path ([string]$D['path']) }
+            # THE PREDICATE COMES FROM THE ONE SHARED DEFINITION (tools/lam/lam-gate-class.ps1).
+            # It used to be restated here as `-notmatch '^\s*consumed_at:\s*\S'`, WITHOUT the
+            # `(?!null)` that mission-gate.ps1's copy carried and explained. Every gate that tool
+            # writes carries the literal `consumed_at: null`, and `null` is `\S` -- so this detector
+            # reported a FRESH gate as consumed and could never pass on a real artifact. Dead on
+            # arrival, and hidden because a hand-rolled fixture that omits the field takes the other
+            # branch. Same class as the porcelain parameter no caller supplied.
+            $gs = Get-LamGateState -Path $p
+            $exists = $gs.exists
+            $unconsumed = $exists -and (-not $gs.consumed)
+            # A REVOKED GATE IS NOT A PRESENT ONE (V-1 round 3, WP-3 residual). This returned `ok`
+            # for a gate whose own state the SAME LINE printed as REVOKED -- a detector contradicting
+            # itself on its own face, which is the exact shape that makes a reader stop believing the
+            # detail column. Revocation is the withdrawal mechanism for every gate kind and the ONLY
+            # one for `supersession`, so a detector that ignores it can pass on a capability its
+            # author has explicitly taken back.
+            $revoked = $exists -and ($gs.state -eq 'REVOKED')
+            # AND A DISQUALIFIED GATE IS NOT A PRESENT ONE EITHER (V-1 round 14, orchestrator
+            # self-review while curing WP-1 F3 / WP-4 #4c). Amendment 20's `witness_expired_at`
+            # makes a gate unusable WITHOUT consuming or revoking it: the decider refuses it, and
+            # this detector -- reading only `consumed` and `REVOKED` -- would have reported
+            # exists=True, unconsumed=True, ok=True for a gate no push can spend.
+            #
+            # That is precisely the divergence being cured one layer up in this same batch, and it
+            # would have been INTRODUCED HERE BY THAT CURE: adding a state to the shared predicate
+            # silently widened what every consumer of it accepts (E70). The comment above already
+            # said a self-contradicting detector is what makes readers stop believing the detail
+            # column; it simply could not enumerate a state that did not exist when it was written.
+            $disqualified = $exists -and ($gs.state -eq 'DISQUALIFIED')
+            # THE KIND IS READ FROM THE ARTIFACT, NOT INFERRED FROM THE FILENAME THIS DETECTOR BUILT
+            # (V-1 round 5 self-audit). The path above is composed as `<kind>-<id>.yaml`, and nothing
+            # then asked whether the file found there DECLARES that kind -- so `gate_present kind:
+            # dispatch id: X` was satisfied by a `dispatch-X.yaml` whose artifact said `kind: push`,
+            # or said nothing at all. Filenames are chosen by whoever writes the file; the kind is
+            # what the classifier and the zero-paste attestation both read.
+            #
+            # Same defect the supersession lookup carried in the runner, fixed there in the previous
+            # batch and left here -- the class was named and not enumerated, which is E56 exactly.
+            # Get-LamGateClassForArtifact was already dot-sourced in this file and already reads the
+            # kind; the cross-check is one call.
+            #
+            # REPORTED, NOT SILENTLY FAILED. Saying only "not present" about a file that plainly
+            # exists sends a reader to the wrong place; the mismatch is named on the detector's face.
+            $declaredKind = ''
+            $kindMismatch = $false
+            if ($exists -and $kind) {
+                $declaredKind = (Get-LamGateClassForArtifact -Path $p).kind
+                # -cne: A GATE KIND IS CASE-SIGNIFICANT (V-1 round 15, WP-3 F6, driven). With `-ne`
+                # a gate declaring `kind: DISPATCH` satisfied a detector asking for `dispatch`, so
+                # the cross-check this line exists to perform passed on a kind it had not been shown.
+                $kindMismatch = ($declaredKind -cne $kind)
+            }
+            $ok = $exists -and $unconsumed -and (-not $revoked) -and (-not $disqualified) -and (-not $kindMismatch)
+            $detail = "gate $p exists=$exists unconsumed=$unconsumed revoked=$revoked disqualified=$disqualified state=$($gs.state)"
+            if ($kindMismatch) {
+                $detail += ". KIND MISMATCH: this detector asked for '$kind' and the artifact declares " +
+                           $(if ($declaredKind) { "'$declaredKind'" } else { 'no kind at all' }) +
+                           " -- a file NAMED for a kind is not a gate of that kind"
+            }
+            return @{ ok = $ok; detail = $detail }
+        }
+
+        'file_exists' {
+            $p = [string]$D['path']
+            if (-not $p) { return @{ ok = $false; detail = "file_exists has no 'path'" } }
+            # RELATIVE PATHS RESOLVE AGAINST -MissionRoot, NOT THE CWD (V-1 round 3, WP-3 residual).
+            # Every other detector is mission-scoped; this one silently answered about whatever
+            # directory the evaluator happened to be launched from, so the same goal file could
+            # return MET or NOT_MET depending on the caller's cwd -- and the Stop hook and a hand
+            # run do not share one. A goal is a statement about a mission, not about a shell.
+            $resolved = Resolve-DetectorPath -MissionRoot $MissionRoot -Path $p
+            $e = Test-Path -LiteralPath $resolved
+            return @{ ok = $e; detail = "$p exists=$e (resolved against the mission root: $resolved)" }
+        }
+
+        'halt_absent' {
+            # RESOLVED AT THE MISSION ROOT LIKE EVERY OTHER PATH-TAKING INPUT (V-1 round 5, WP-3).
+            # Passed through raw, this was the FAIL-OPEN member of the cwd class, and the only one:
+            # driven by an independent reader, one goal file with one -MissionRoot returned MET and
+            # exit 0 from one working directory and NOT_MET from another over the SAME open HALT.
+            # Every other member of this class fails closed; this one hands the session permission
+            # to end. I cured file_exists, then its three siblings, and called the class closed
+            # twice while this input and verify_pass_or_dib's were still raw.
+            $dirs = if ($D['dir']) { @(Resolve-DetectorPath -MissionRoot $MissionRoot -Path ([string]$D['dir'])) } else { $null }
+            $halts = @(Get-OpenHalts -MissionRoot $MissionRoot -Dirs $dirs)
+            # THE SKIP IS REPORTED WHERE THE COUNT IS REPORTED (row 163). Read immediately after the
+            # call, because the next call resets it. A file that matched `HALT-*` and was set aside
+            # as tooling is named here, so "0 unanswered HALT artifact(s)" is never a count that
+            # quietly swallowed something.
+            $skipped = @($script:HaltScanSkipped)
+            $skipNote = if ($skipped.Count -gt 0) { " -- $($skipped.Count) file(s) matched HALT-* and were SKIPPED as tooling by extension [$($skipped -join ', ')]" } else { '' }
+            return @{ ok = ($halts.Count -eq 0); detail = "$($halts.Count) unanswered HALT artifact(s) [$($halts -join ', ')]$skipNote" }
+        }
+
+        'turn_cap' {
+            $cap = 0; [void][int]::TryParse([string]$D['cap'], [ref]$cap)
+            if ($cap -le 0) { return @{ ok = $false; detail = "turn_cap has no positive 'cap'" } }
+            # UNENFORCEABLE IS NOT SATISFIED. This returned ok when no count was available, and
+            # since nothing ever supplied one it returned ok ALWAYS -- a detector that cannot fail,
+            # reporting its own inertness in a detail column nobody reads on a passing check. It now
+            # refuses: a goal that DECLARES a turn cap and cannot measure turns has an unchecked
+            # condition, and the honest verdict for an unchecked condition is not "met".
+            if ($TurnsElapsed -lt 0) { return @{ ok = $false; detail = "turn_cap $cap CANNOT BE EVALUATED: no turn count is available (no -TurnsElapsed, and no readable transcript_path on stdin). A declared cap that cannot be measured is an unchecked condition, not a satisfied one." } }
+            return @{ ok = ($TurnsElapsed -lt $cap); detail = "$TurnsElapsed turns elapsed against a cap of $cap" }
+        }
+
+        'time_cap' {
+            $cap = 0; [void][int]::TryParse([string]$D['minutes'], [ref]$cap)
+            $since = Resolve-DetectorPath -MissionRoot $MissionRoot -Path ([string]$D['since_file'])
+            if ($cap -le 0 -or -not $since) { return @{ ok = $false; detail = "time_cap needs 'minutes' and 'since_file'" } }
+            if (-not (Test-Path -LiteralPath $since)) { return @{ ok = $false; detail = "time_cap since_file not on disk: $since" } }
+            $mins = [int]((New-TimeSpan -Start (Get-Item -LiteralPath $since).CreationTimeUtc -End (Get-Date).ToUniversalTime()).TotalMinutes)
+            return @{ ok = ($mins -lt $cap); detail = "$mins minute(s) since $([System.IO.Path]::GetFileName($since)) against a cap of $cap" }
+        }
+
+        'sidecar_present' {
+            # amendment 2: a runner-owned session with no capture-gaps sidecar FAILS CLOSED. The
+            # sidecar is the only artifact that says whether calls went missing, so its absence is
+            # a gap in the gap accounting -- not an absence of gaps.
+            $sid = [string]$D['session']
+            if (-not $sid) { return @{ ok = $false; detail = "sidecar_present has no 'session'" } }
+            $evDir = Join-Path $MissionRoot ".mission-runtime\evidence\$sid"
+            $owned = Test-Path -LiteralPath (Join-Path $evDir 'OWNER')
+            $side  = Join-Path $evDir 'capture-gaps.yaml'
+            if (-not $owned) { return @{ ok = $true; detail = "$sid is not runner-owned; the sidecar is not required of it" } }
+            if (-not (Test-Path -LiteralPath $side)) { return @{ ok = $false; detail = "$sid is runner-owned and has NO capture-gaps sidecar -- fail closed" } }
+            $t = [System.IO.File]::ReadAllText($side)
+            $count = -1
+            # ANCHORED AT COLUMN 0 (V-1 round 6, WP-3). Unanchored, this matched the FIRST
+            # textual occurrence anywhere in the file -- including inside a `reason:` string, where
+            # these sidecars quote their own field names while explaining a gap. Driven: a sidecar
+            # recording THREE lost calls read as an empty capture and the detector PASSED. Third
+            # instance in this file of one class -- `validator_pass_count` counted indented
+            # per-member `verdict:` lines, `Test-HaltAnswered` read a quoted marker, and now this.
+            # A key at the top level of a YAML document sits at column 0; anything else is content.
+            if ($t -match '(?m)^capture_gaps_count:[ \t]*(\d+)[ \t]*\r?$') { $count = [int]$Matches[1] }
+            $requireEmpty = $true
+            if ($D.ContainsKey('allow_gaps')) { $requireEmpty = -not ([string]$D['allow_gaps'] -eq 'true') }
+            $ok = if ($requireEmpty) { $count -eq 0 } else { $count -ge 0 }
+            return @{ ok = $ok; detail = "$sid sidecar present, capture_gaps_count=$count (require empty: $requireEmpty)" }
+        }
+
+        default {
+            return @{ ok = $false; unknown = $true
+                      detail = "UNKNOWN detector type '$type'. It is REFUSED, not skipped: a skipped detector is a goal reporting MET over a check nobody ran." }
+        }
+    }
+}
+
+# --- evaluate -----------------------------------------------------------------------------------
+$results = New-Object System.Collections.Generic.List[object]
+$unknownSeen = $false
+$shortCircuited = 0
+
+# SHORT-CIRCUIT, IN HOOK MODE ONLY, AND DISCLOSED ON THE ARTIFACT.
+# A Stop hook needs a DECISION, not a report: once one detector has failed, the decision is
+# `block` and no later detector can change it. A full run evaluates everything.
+#
+# This is not an optimisation for its own sake. Detectors of type instrument_exit0 RUN the
+# instrument, and the full set is tens of seconds; a hook that outran its own timeout would be
+# silently skipped by the harness, and a continuation gate that silently stops firing is worse
+# than no gate at all. Order your goal file cheapest-detector-first and this stays fast until the
+# goal is genuinely close to met.
+#
+# The detectors not reached are RECORDED AS NOT EVALUATED, never as passing. A verdict file that
+# implied a check had run would be the exact overclaim design SS4.5 law 4 forbids.
+foreach ($d in $detectors) {
+    if ($AsStopHook -and ($results | Where-Object { -not $_.ok } | Select-Object -First 1)) {
+        [void]$results.Add([pscustomobject]@{
+            type   = [string]$d['type']
+            ok     = $false
+            detail = 'NOT EVALUATED -- hook-mode short-circuit after an earlier detector failed. This is not a pass.'
+        })
+        $shortCircuited++
+        continue
+    }
+    # A DETECTOR THAT THROWS IS A DETECTOR THAT FAILED -- NOT ONE THAT WAS NEVER ASKED
+    # (V-1 round 4, WP-3). An exception here used to escape to the script trap, which abandoned the
+    # whole evaluation: NO verdict artifact was written at all, and in hook mode it emitted a
+    # NON-BLOCKING decision on the way out. So a detector crashing let a session end, and left
+    # nothing on disk saying why -- the fail-OPEN direction, in the file whose own law is that an
+    # unknown detector refuses rather than being skipped.
+    #
+    # Caught per detector, recorded as a FAILURE with the exception text, and evaluation continues
+    # so the remaining detectors are still reported and the artifact still gets written.
+    $r = $null
+    try { $r = Invoke-Detector -D $d }
+    catch {
+        $r = @{ ok = $false
+                detail = "detector '$([string]$d['type'])' THREW and is recorded as FAILED, not skipped: $($_.Exception.Message). A detector that cannot answer has not answered yes." }
+    }
+    if ($r['unknown']) { $unknownSeen = $true }
+    [void]$results.Add([pscustomobject]@{
+        type   = [string]$d['type']
+        ok     = [bool]$r['ok']
+        detail = [string]$r['detail']
+    })
+}
+
+# --- C-3: a HALT outranks everything ------------------------------------------------------------
+# THE SAME ENUMERATOR THE DETECTOR USES. This path had its own copy of the scan, and the two
+# disagreed the moment one was corrected -- the detector naming an open halt while the verdict
+# beneath it read none. One function, two consumers.
+#
+# AND THE SAME DIRECTORIES, WHICH IS THE HALF THAT WAS STILL MISSING (V-1 round 5). Sharing the
+# FUNCTION was not sharing the SCAN: the detector passed its declared `dir` and this path passed
+# $null, so a goal declaring `halt_absent` with a `dir` produced a FAILING DETECTOR and a verdict of
+# NOT_MET -- while an unanswered HALT sat in the directory the goal had named. Caught by a member I
+# wrote for a different fix, which is the only reason it is not still there.
+#
+# The difference is not cosmetic and it runs the wrong way. NOT_MET means "the agent has work left"
+# and BLOCKS; HALT means "a human must rule" and hands control back. Reporting NOT_MET over an open
+# halt tells the session to keep working on something only the operator can settle -- C-3's whole
+# point is that a HALT outranks every other verdict, and it cannot outrank what it cannot see.
+$declaredHaltDirs = @()
+foreach ($d in $detectors) {
+    if (([string]$d['type']) -ne 'halt_absent') { continue }
+    $dd = [string]$d['dir']
+    if ($dd) { $declaredHaltDirs += (Resolve-DetectorPath -MissionRoot $MissionRoot -Path $dd) }
+}
+# UNION, NEVER REPLACEMENT. A declared dir ADDS somewhere to look; it must not stop this path
+# looking where halts normally live, or a goal could hide the default planes by naming another one.
+$haltDirs = if ($declaredHaltDirs.Count -gt 0) {
+    @((Join-Path $MissionRoot '.mission-runtime\halts'), (Join-Path $MissionRoot '.mission-runtime\lam')) + $declaredHaltDirs
+} else { $null }
+$openHalts = @(Get-OpenHalts -MissionRoot $MissionRoot -Dirs $haltDirs)
+# Captured IMMEDIATELY after the call that produced it (row 163) -- this is the LAST scan of the
+# run, so this list is the one the verdict artifact reports.
+$haltScanSkipped = @($script:HaltScanSkipped)
+
+$failing = @($results | Where-Object { -not $_.ok })
+if ($openHalts.Count -gt 0) { $verdict = 'HALT' }
+elseif ($unknownSeen)       { $verdict = 'NOT_MET' }
+elseif ($failing.Count -eq 0 -and $results.Count -gt 0) { $verdict = 'MET' }
+else { $verdict = 'NOT_MET' }
+
+# --- write the verdict beside the goal ----------------------------------------------------------
+$verdictPath = Join-Path (Split-Path -Parent $goalPath) "$Goal.verdict.yaml"
+$sb = New-Object System.Text.StringBuilder
+[void]$sb.AppendLine("# Written by tools/lam/mission-goal-check.ps1. Every detector below read DISK.")
+[void]$sb.AppendLine("# No detector reads a transcript, a summary, or any claim (LAM-ACCEPT WP-3).")
+[void]$sb.AppendLine("goal: $Goal")
+[void]$sb.AppendLine("goal_file: $goalPath")
+[void]$sb.AppendLine("mission_root: $MissionRoot")
+[void]$sb.AppendLine("evaluated_at: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ'))")
+[void]$sb.AppendLine("verdict: $verdict")
+[void]$sb.AppendLine("detector_count: $($results.Count)")
+[void]$sb.AppendLine("failing_count: $($failing.Count)")
+[void]$sb.AppendLine("short_circuited: $shortCircuited   # detectors NOT evaluated (hook mode); never counted as passing")
+if ($openHalts.Count -gt 0) {
+    [void]$sb.AppendLine("open_halts:")
+    foreach ($h in $openHalts) { [void]$sb.AppendLine("  - $h") }
+} else {
+    [void]$sb.AppendLine("open_halts: []")
+}
+# WHAT THE SCAN SET ASIDE, ON DISK, EVERY RUN (row 163). Emitted unconditionally -- `[]` when
+# nothing was skipped -- because a key that appears only when something was hidden is a key no
+# reader learns to look for. SINGLE-QUOTED WITH QUOTES DOUBLED, the discipline the UNREADABLE entry
+# had to be taught: a bare scalar carrying `: ` becomes a single-key MAP and the entry silently
+# stops being a string. These are file names rather than exception text, so the hazard is smaller --
+# but the report of a narrowing is the last artifact that should be allowed to go unparsable.
+if ($haltScanSkipped.Count -gt 0) {
+    [void]$sb.AppendLine("halt_scan_skipped:")
+    foreach ($s in $haltScanSkipped) { [void]$sb.AppendLine("  - '$(([string]$s) -replace "'", "''")'") }
+} else {
+    [void]$sb.AppendLine("halt_scan_skipped: []")
+}
+[void]$sb.AppendLine("detectors:")
+foreach ($r in $results) {
+    [void]$sb.AppendLine("  - type: $($r.type)")
+    [void]$sb.AppendLine("    ok: $(if ($r.ok) { 'true' } else { 'false' })")
+    # SINGLE-QUOTED, NOT DOUBLE-QUOTED, and this is a correctness fix rather than a style one.
+    # A YAML DOUBLE-quoted scalar processes backslash escapes, and these details are full of Windows
+    # paths -- so an expanded `%USERPROFILE%\...` path contains `\U`, and `\l`, `\d` and friends appear wherever a path
+    # segment starts with those letters. None is a legal YAML escape, so EVERY verdict artifact this
+    # tool has ever written is unparsable, and the error is fatal to the whole document: a reader
+    # cannot recover even the `verdict:` line. Found by V-1 round 2 (WP-3) against both live
+    # artifacts. A YAML SINGLE-quoted scalar has no escapes at all; the only thing needing care is
+    # an embedded quote, which is doubled.
+    # Newlines are folded to spaces first: a raw newline inside a single-line quoted scalar would
+    # break the document in a different way, which would be trading one unparsable artifact for
+    # another.
+    $detailFlat = (([string]$r.detail) -replace "`r?`n", ' ') -replace "'", "''"
+    [void]$sb.AppendLine("    detail: '$detailFlat'")
+}
+[System.IO.File]::WriteAllText($verdictPath, $sb.ToString(), (New-Object System.Text.UTF8Encoding($false)))
+
+# --- report --------------------------------------------------------------------------------------
+if ($AsStopHook) {
+    # C-2 / C-3. NOT_MET blocks and names what is missing. MET and HALT do not block -- MET because
+    # there is nothing left to do, HALT because control belongs to the human.
+    if ($verdict -eq 'NOT_MET') {
+        # Name only the detectors that ACTUALLY failed. The short-circuited ones are recorded in
+        # the verdict file as not-evaluated; repeating them here would bury the one fact the
+        # session needs -- what to go and fix -- under boilerplate.
+        $real = @($failing | Where-Object { $_.detail -notlike 'NOT EVALUATED*' })
+        $why  = ($real | ForEach-Object { "$($_.type): $($_.detail)" }) -join ' ; '
+        $skipped = $failing.Count - $real.Count
+        $tail = if ($skipped -gt 0) { " ($skipped further detector(s) not evaluated -- the decision was already determined.)" } else { '' }
+        $reason = "Goal '$Goal' is NOT_MET on disk. Failing -- $why.$tail Verdict: $verdictPath. Continue working: this decision is derived from the evidence plane, not from the transcript."
+        Write-Output (@{ decision = 'block'; reason = $reason } | ConvertTo-Json -Compress)
+        exit 0
+    }
+    if ($verdict -eq 'HALT') {
+        Write-Output (@{ decision = 'approve'; reason = "Goal '$Goal' derives HALT: unanswered $($openHalts -join ', '). Not blocking -- control returns to the human." } | ConvertTo-Json -Compress)
+        exit 0
+    }
+    Write-Output (@{ decision = 'approve'; reason = "Goal '$Goal' is MET on disk ($($results.Count) detector(s), 0 failing)." } | ConvertTo-Json -Compress)
+    exit 0
+}
+
+Out-Line "mission-goal-check: $Goal -> $verdict"
+Out-Line "  goal file : $goalPath"
+Out-Line "  verdict   : $verdictPath"
+foreach ($r in $results) {
+    Out-Line "  [$(if ($r.ok) { 'ok  ' } else { 'FAIL' })] $($r.type) -- $($r.detail)"
+}
+if ($openHalts.Count -gt 0) { Out-Line "  OPEN HALTS: $($openHalts -join ', ')" }
+
+if ($verdict -eq 'MET') { exit 0 }
+if ($verdict -eq 'HALT') { exit 3 }
+exit 1

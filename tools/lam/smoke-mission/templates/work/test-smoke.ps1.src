@@ -1,0 +1,5 @@
+$counter = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\counter.ps1'
+$out = (& powershell -NoProfile -ExecutionPolicy Bypass -File $counter | Out-String).Trim()
+if ($out -ceq '3') { Write-Output 'PASS'; exit 0 }
+Write-Output 'FAIL'
+exit 1

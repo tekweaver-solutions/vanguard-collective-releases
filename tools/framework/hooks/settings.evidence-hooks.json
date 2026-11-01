@@ -1,0 +1,61 @@
+{
+  "_meta": {
+    "artifact": "A1 evidence-plane hook settings fragment",
+    "authority": "AM-417",
+    "design": "docs/framework/vanguard-collective-local-modes-v2.1.md SS4.1",
+    "citation_convention": "LM2-ADR-0NN denotes a decision in the local-modes v2.1 design document; a bare ADR-0NN denotes the on-disk file under tools/mission-cli/config/. The two namespaces collide numerically and are not related (AM-417 PB2).",
+    "note": "This file is the TRACKED SOURCE OF TRUTH (AM-417 PB1). It is NOT settings.json. tools/framework/install-evidence-hooks.ps1 merges the `hooks` key of this fragment into .claude/settings.json, which is gitignored and therefore a derived, uncommitted install. The `_meta` key is documentation and is never merged.",
+    "install": "powershell -NoProfile -File tools/framework/install-evidence-hooks.ps1 -Apply",
+    "wiring_status": "UNVERIFIED against a live harness. A1 proves the mechanism by driving the hook scripts directly with synthesized payloads; it does not prove the harness invokes them with the payload shape assumed here. Wiring is verified at install time, which is a separate operator-gated act."
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/framework/hooks/evidence-post-tool-use.ps1\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/framework/hooks/evidence-guard-pretooluse.ps1\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/framework/hooks/evidence-stop-finalize.ps1\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/framework/hooks/evidence-pre-compact.ps1\"",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

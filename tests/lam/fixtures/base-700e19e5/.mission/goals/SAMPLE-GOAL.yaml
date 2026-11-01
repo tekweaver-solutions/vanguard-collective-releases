@@ -1,0 +1,60 @@
+# SAMPLE-GOAL -- a synthetic goal of record: the shape a mission's goal of record takes, written by the framework for its
+# acceptance instruments (LAM-ACCEPT WP-3). It belongs to no mission and no evaluator is pointed at it; every detector
+# reads disk. Its fourteen detectors are the shape of a goal of record: the placement arm first, the HALT scan, one stat,
+# one gate read, one directory scan, the arc instrument, the last build's anchors, and one sidecar per dispatch that
+# produced work.
+# NEVER EDITED SILENTLY: the instruments hold this file to its sha256.
+id: SAMPLE-GOAL
+description: "SAMPLE-GOAL is complete: its charter ratified by an amendment-material gate, two validators PASS and ledger-bound, the arc instrument exit 0, the last build verified, no open HALT."
+detectors:
+  # (0) THE PLACEMENT-WINDOW ARM: an untracked file under .mission/amendments/ that no canonical, unrevoked
+  #     amendment-material gate binds is an admitted stop (AWAITING_AMENDMENT_GATE); evaluated first whatever its
+  #     position; no key.
+  - type: ungated_placement_absent
+  # (1) instant, outranks everything -- .mission-runtime/halts and .mission-runtime/lam, recursive HALT-*
+  - type: halt_absent
+  # (2) one stat -- the charter
+  - type: file_exists
+    path: .mission/amendments/sample-charter.yaml
+  # (3) one gate read -- the ratification record
+  - type: gate_present
+    kind: amendment-material
+    id: am-sample
+  # (4) one directory scan -- two results, `verdict: PASS` at column 0, each sha256 bound to a `complete` line of
+  #     .mission-runtime/lam/spawn-ledger.jsonl; a foreign file fails the detector.
+  - type: validator_pass_count
+    dir: tests/lam
+    pattern: validator-S-??.result.yaml
+    count: 2
+  # (5) the expensive tail -- the arc instrument
+  - type: instrument_exit0
+    path: tests/lam/instrument-sample-suite.ps1
+  # (6) the last build's anchors
+  - type: verify_pass_or_dib
+    against: .mission/dispatches/D-7.anchors.yaml
+    dispatch_kind: build
+  # (7) ONE PER RUNNER-OWNED DISPATCH THAT PRODUCED WORK, allow_gaps: true on every one (the sidecar's PRESENCE stays
+  #     required).
+  - type: sidecar_present
+    session: session-D-1
+    allow_gaps: true
+  - type: sidecar_present
+    session: session-D-2
+    allow_gaps: true
+  - type: sidecar_present
+    session: session-D-3
+    allow_gaps: true
+  - type: sidecar_present
+    session: session-D-4
+    allow_gaps: true
+  - type: sidecar_present
+    session: session-D-5
+    allow_gaps: true
+  - type: sidecar_present
+    session: session-D-6
+    allow_gaps: true
+  - type: sidecar_present
+    session: session-D-7
+    allow_gaps: true
+# NOT ENCODED HERE, deliberately: no gate_present over a DISPATCH gate (a consumed one reads NOT_MET); no witness
+# detector; porcelain is checked at close by hand.

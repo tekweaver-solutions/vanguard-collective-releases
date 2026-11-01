@@ -1,0 +1,40 @@
+# Worker Dispatch -- CLOSE (ceremony-class). THIS ARTIFACT IS THE WORK'S ENTIRE INPUT.
+# A ceremony-class operation runs as a dispatch so that the session it runs in is a runner-owned
+# evidence session: its own captured calls name the ceremony, and its prompt is a worker's, never an
+# operator's.
+# Performed by build-smoke-mission.ps1, not by a CLI worker.
+
+id: D-3
+mission_id: smoke
+worker_id: w-smoke-3
+kind: close
+feature_id: F-001
+assertion_targets: []
+spec_version: 1
+prior_handoff_id: handoff-D-2
+worktree_id: wt-D-3
+base_head_at_authoring: {{BASE}}
+suite_command: tests\test-smoke.ps1
+model_class: coding-strong
+tool_scope: [repo.read, shell.exec.sandboxed]
+budget:
+  cost_cap_usd: 2.00
+  wallclock_cap_minutes: 10
+
+goal_condition: "the ceremony wrapper exits 0 against the mission root AND a schema-valid handoff exists at the path named by the LAM_HANDOFF environment variable"
+
+# ---------------------------------------------------------------------------------------------
+# INSTRUCTIONS
+# ---------------------------------------------------------------------------------------------
+# STEP 1 -- from the MISSION ROOT (not the worktree: the wrapper resolves the mission root as its own
+#           script directory's parent, so the copy inside a worktree would gate and commit against the
+#           worktree), run exactly:
+#             powershell -NoProfile -ExecutionPolicy Bypass -File tools\mission-ceremony-record.ps1 -CeremonyId ledger-ceremony-smoke-001
+#           Expect exit 0, both clean-tree gates reported passing, the ledger append and an atomic
+#           commit. The ceremony id is fixed: ledger ids are one per event and fail closed on a
+#           duplicate.
+# STEP 2 -- if and only if STEP 1 exited 0, read back the commit the ceremony made
+#           (git log -1 --format=%H at the mission root).
+# STEP 3 -- write the handoff to LAM_HANDOFF with that commit in `commits`. If the ceremony did not
+#           exit 0, say so in issues_observed, leave commits empty and do not report completed.
+#           No runner_anchors.

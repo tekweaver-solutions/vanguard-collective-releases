@@ -1,0 +1,33 @@
+# SMOKE-MISSION -- the goal a Claude session rooted in THIS repository is held to by the goal-check
+# Stop hook registered in .claude/settings.local.json. Every detector reads disk; none reads a
+# transcript or any claim a session makes about itself.
+
+id: SMOKE-MISSION
+description: "The smoke mission has completed its run: the rework dispatch handed off with anchors, the close ceremony left a ledger entry, and the runner-owned evidence sessions the mission consumes accounted for every call."
+
+# CHEAPEST-FIRST: the Stop hook short-circuits after the first failing detector.
+detectors:
+  # No unanswered HALT anywhere this mission would write one. Outranks everything else.
+  - type: halt_absent
+
+  # The rework dispatch ran and handed off, with anchors.
+  - type: file_exists
+    path: .mission\dispatches\D-2.handoff.yaml
+  - type: file_exists
+    path: .mission\dispatches\D-2.anchors.yaml
+
+  # The close ceremony appended to the append-only ledger.
+  - type: file_exists
+    path: .mission\ledger\entries.jsonl
+
+  # The capture-gaps accounting for the two dispatches whose evidence the mission consumes. A
+  # runner-owned session with no sidecar FAILS CLOSED: the sidecar is the only artifact that says
+  # whether calls went missing.
+  - type: sidecar_present
+    session: session-D-1c
+  - type: sidecar_present
+    session: session-D-2
+
+# NOT ENCODED: the push gate. It was revoked once the push it authorized had landed, so no standing
+# capability remains; WP-6 S-4 reads it from the gates directory. Nor the porcelain contract, which
+# is checked where it gates something (the clean-tree gates and the advance admission).

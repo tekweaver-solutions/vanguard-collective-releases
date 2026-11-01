@@ -1,0 +1,33 @@
+{
+  "_role": "orchestrator",
+  "_contract": "LAM-ACCEPT WP-5 K-3.",
+  "_authority": "The orchestrator agent authors dispatches, schedules validator swarms, consumes verdicts and adjudicates IMMATERIAL amendments (design v2.3 SS9.4). It is read-only on src/ and writes only under the mission plane. Kickoff, material amendments, push, live witness and completion are never delegable to it (SS10).",
+
+  "permissions": {
+    "defaultMode": "auto",
+    "deny": [
+      "Edit(src/**)",
+
+      "Bash(git push*)", "PowerShell(git push*)", "PowerShell(* git push*)",
+
+      "Edit(.mission/gates/**)",
+      "Edit(tools/framework/**)",
+      "Edit(.claude/settings.json)",
+
+      "Bash(*rm -rf*)", "PowerShell(*Remove-Item*.mission*)"
+    ]
+  },
+
+  "_memory_off": {
+    "intent": "ADR-032. Orchestrator-side learnings are promoted to the ledger by ceremony or discarded -- never carried as persistent agent state outside the artifact store.",
+    "declared_mechanism": "spawn with --settings pointing at this file",
+    "separation_obtained": "NONE AT THE MEMORY LAYER, AND THAT IS STATED RATHER THAN LEFT BLANK. The orchestrator runs in the project root, not in a worktree, so it obtains neither the worker's worktree-level directory separation nor the validator's fresh-session separation. What actually constrains it is a different mechanism entirely: orchestrator-side learnings reach the record only by ceremony (the ledger), and anything not promoted that way is discarded rather than carried. A template that claimed a separation it does not have would be the overclaim design SS4.5 law 4 forbids.",
+    "disable_status": "UNOBTAINABLE ON CLI 2.1.241 (erratum E12). See worker.json for the full statement; the only documented control is --bare, which also skips hooks and is therefore unusable here."
+  },
+
+  "lam_residuals": [
+    "MEMORY-OFF IS NOT VERIFIED ON THIS CLI BUILD -- see worker.json for the full statement. The only documented control is --bare, which also skips hooks and is therefore unusable here.",
+    "src/** is denied for WRITES only. The orchestrator reads src/ freely, which is what brief SS4.1's 'read-only on src/' means and is what lets it scope corrective work from real code.",
+    "The gates directory is denied to the orchestrator exactly as it is to a worker. An orchestrator that could mint a push gate would be authorizing its own irreversible act, and the whole point of ADR-033 is that no agent role can."
+  ]
+}

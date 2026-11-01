@@ -1,0 +1,35 @@
+# dispatch anchors -- written by build-smoke-mission.ps1 from the git state it created and from the
+# evidence finaliser's own output, never by the work. No runner ran this dispatch and no CLI worker
+# ran in it: the builder performed the work, drove the evidence hooks with the calls it made, and
+# finalised the session through the dispatch-end finaliser, whose capture-gaps figures are below.
+# The field names are the runner's; every path is relative to the mission root.
+runner_anchors:
+  head_sha: {{HEAD_SHA}}
+  evidence_manifest: .mission-runtime/evidence/{{SESSION}}/manifest.json
+  evidence_manifest_sha256: {{MANIFEST_SHA256}}
+  testimony_conflict: false
+  suite:
+    command: 'tests/test-smoke.ps1'
+    passed: {{SUITE_PASSED}}
+    failed: {{SUITE_FAILED}}
+    skipped: 0
+    exit_code: {{SUITE_EXIT}}
+    provenance: builder-observed
+    provenance_note: "build-smoke-mission.ps1 ran the suite in the worktree and recorded what it saw."
+dispatch_kind: {{DISPATCH_KIND}}
+dispatch_id: {{DISPATCH_ID}}
+dispatch_sha256: {{DISPATCH_SHA256}}
+session_id: {{SESSION}}
+role: coding-strong
+model_id: none
+model_note: "no model ran: the work was build-smoke-mission.ps1's own"
+worktree_path: .claude/worktrees/wt-{{DISPATCH_ID}}
+declared_base_field: base_head_at_authoring
+declared_base: {{BASE}}
+worktree_base_honoured: true
+worktree_tip_sha: {{TIP_SHA}}
+worker_exit_code: 0
+runner_stream: .mission-runtime/evidence/{{SESSION}}/runner-stream.jsonl
+capture_gaps_count: {{GAPS_COUNT}}
+capture_gaps_sha256: {{GAPS_SHA256}}
+git_errors: []

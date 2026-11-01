@@ -1,0 +1,6 @@
+id: A-3
+feature_id: F-002
+statement: "tests/test-smoke.ps1 exists and exits 0"
+kind: test
+verification: "Execute tests/test-smoke.ps1 in the tree under judgement; require exit code 0."
+planted: false

@@ -1,0 +1,42 @@
+# Mission record -- top-level state for the smoke mission.
+# Built by tools/lam/build-smoke-mission.ps1 from the framework's shipped sources.
+
+id: smoke
+created_at: 2026-01-01T00:00:00Z
+created_by: build-smoke-mission.ps1
+
+goal: "Exercise the Local Autonomous Mode toolchain end to end on a deliberately tiny product."
+clarified_scope: "Two features, one milestone, five assertions; one planted assertion forces a rework."
+
+state: Executing
+current_spec_version: 1
+current_milestone: M-1
+
+# THE CANONICAL SUITE COMMAND, read by verify as the detector for the whole suite anchor block.
+suite_command: tests/test-smoke.ps1
+
+# THIS MISSION'S PORCELAIN CONTRACT. Both clean-tree gates (Assert-CleanWorkingTree in
+# tools/mission-lib.ps1, and Assert-CleanGitTree in tools/mission-spec-accept.ps1, which calls it)
+# judge every porcelain line against this set, status code included, and refuse anything else.
+# Three entries, and nothing broader:
+#   - the published evidence plane, untracked by design and written only by the stop finaliser;
+#   - the dispatch worktrees, ephemeral scaffolding (git emits this collapsed form because
+#     .claude/settings.local.json is tracked);
+#   - the gate artifacts, retained for audit and never committed.
+# Each was checked against this repository's real `git status --porcelain` output when it was built.
+admitted_porcelain: ["?? .mission/evidence/", "?? .claude/worktrees/", "?? .mission/gates/"]
+
+# Budget fields are not enforced in Local Orchestrator Mode; they are kept for portability.
+budget:
+  cost_soft_cap_usd: 200.00
+  cost_hard_cap_usd: 500.00
+  wallclock_soft_cap_hours: 40
+  wallclock_hard_cap_hours: 168
+  tokens_used: 0
+  cost_used_usd: 0.00
+
+risk_level: low
+human_owner: build-smoke-mission.ps1
+notification_channel: local-tui
+
+completed_at: null

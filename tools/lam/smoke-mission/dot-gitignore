@@ -1,0 +1,14 @@
+# Runtime plane -- evidence sessions, prompt registers, the builder's disclosure. Losing it is
+# recoverable from .mission/; it is never committed.
+.mission-runtime/
+
+# The goal evaluator writes <id>.verdict.yaml beside the goal on every evaluation. The goal is
+# committed; the verdict is a re-derivation of it, regenerated on every Stop, and is not tracked.
+.mission/goals/*.verdict.yaml
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
