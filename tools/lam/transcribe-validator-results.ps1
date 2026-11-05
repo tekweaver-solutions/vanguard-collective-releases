@@ -123,4 +123,50 @@ if ($RequirePass) { $argv += '--require-pass' }
 if ($Write) { $argv += '--write' }
 
 & $py @argv
-exit $LASTEXITCODE
+$rc = $LASTEXITCODE
+
+# UI-1 S1 (ADR-045): THIS IS SS14's VALIDATOR RESULT WRITER. After a -Write whose worker exited 0 -- every record
+# it names was written, or the worker refused before writing any -- it says one assertion_result per assertion it
+# recorded, READ FROM THE RECORD IT WROTE (<ResultsDir>/<id>.validator-result.json), never from the validator's
+# prose: assertion_id; result from the record's verdict (pass -> green, fail -> red, skip -> skipped); round from
+# attempt_number; validator_kind from validator_type; feature from the contract assertion's feature_id (null where
+# the contract names none). source_path is the record. Then the snapshot: assertion status is read from this same
+# store, so one snapshot line when snapshot_sha256 moved, none when it did not. Through
+# tools\lam\mission-telemetry.ps1, skipped when that file is absent; it prints nothing and can fail nothing, and the
+# exit code is the worker's.
+if ($Write -and $rc -eq 0) {
+    try {
+        $tm = Join-Path $PSScriptRoot 'mission-telemetry.ps1'
+        if (Test-Path -LiteralPath $tm -PathType Leaf) {
+            . $tm
+            $evts = @()
+            $resDir = [System.IO.Path]::Combine($Root, ($ResultsDir -replace '/', '\'))
+            $cdir = Join-Path $Root '.mission\contract\assertions'
+            $ids = @(@($Assertion) | ForEach-Object { "$_" -split ',' } | ForEach-Object { ($_ -split ':')[0].Trim() } | Where-Object { $_ })
+            foreach ($aid in $ids) {
+                # One record that cannot be read costs its own line, never the others' or the snapshot.
+                try {
+                    $recPath = Join-Path $resDir "$aid.validator-result.json"
+                    if (-not (Test-Path -LiteralPath $recPath -PathType Leaf)) { continue }
+                    $rec = [System.IO.File]::ReadAllText($recPath) | ConvertFrom-Json
+                    $res = switch -regex ([string]$rec.verdict) { '^(?i:pass)$' { 'green' } '^(?i:fail)$' { 'red' } '^(?i:skip|skipped)$' { 'skipped' } default { $null } }
+                    $round = 0; [void][int]::TryParse([string]$rec.attempt_number, [ref]$round)
+                    # the worker writes only pass/fail at an attempt >= 1; anything else is not an assertion_result
+                    if (-not $res -or $round -lt 1) { continue }
+                    $feature = $null
+                    foreach ($af in @(Get-ChildItem -LiteralPath $cdir -File -Filter '*.yaml' -ErrorAction SilentlyContinue)) {
+                        $at = [System.IO.File]::ReadAllText($af.FullName)
+                        $afId = Get-MissionTelemetryYamlScalar -Text $at -Key 'id'
+                        if (-not $afId) { $afId = $af.BaseName }
+                        if ($afId -ceq [string]$rec.assertion_id) { $feature = Get-MissionTelemetryYamlScalar -Text $at -Key 'feature_id'; break }
+                    }
+                    $evts += @{ Kind = 'assertion_result'; SourcePath = $recPath
+                                Payload = [ordered]@{ assertion_id = [string]$rec.assertion_id; feature = $feature; result = $res
+                                                      round = $round; validator_kind = [string]$rec.validator_type } }
+                } catch { }
+            }
+            Invoke-MissionTelemetry -Root $Root -Events $evts -Snapshot -Verb 'transcribe-validator-results'
+        }
+    } catch { }
+}
+exit $rc

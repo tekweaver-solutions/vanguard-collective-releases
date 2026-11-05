@@ -153,6 +153,8 @@ $argsDoc = [ordered]@{
     dry_run              = [bool]$DryRun
     project_root         = $projectRoot
     operator_note        = $operatorNoteValue
+    # UI-1 S1: the id is minted HERE, so this entry knows the dispatch it is watching for (see dispatch_opened below).
+    dispatch_id          = [guid]::NewGuid().ToString('D')
 }
 
 # Write to a temp JSON file (avoids shell quoting issues).
@@ -161,11 +163,65 @@ $argsJsonPath = [System.IO.Path]::ChangeExtension($argsJsonPath, '.json')
 $argsJson = $argsDoc | ConvertTo-Json -Depth 10 -Compress
 [System.IO.File]::WriteAllText($argsJsonPath, $argsJson)
 
+# UI-1 S1 (ADR-045): dispatch_opened, said when the dispatch OPENS, as the LAM runner says it -- before the worker
+# runs, not when the core returns. The id is minted above and handed to the core; a dispatch is OPENED when the core
+# has written its committed brief, .mission/dispatches/<id>/task-brief.md, which the runner does before the worker
+# spawns. The core still runs as it always has, `& core`, so its output reaches this entry's caller unchanged; a
+# second runspace WATCHES for the brief meanwhile and says the line the moment it is there. Whatever the watcher has
+# not said by the time the core returns -- whatever exit it had -- is said then. A dry run, or a dispatch refused
+# before its brief, opened nothing and says nothing. kind and feature are this entry's own parameters;
+# assertion_targets are read off the brief's own "Assertion targets" list (the core derives them when
+# -AssertionTargets is omitted) and from nowhere else in it; source_path is the brief. Through
+# tools\lam\mission-telemetry.ps1 -> Write-MissionEvent, skipped when that file is absent; it prints nothing, can
+# fail nothing, and the exit code stays the core's. The block returns $true once the line has been offered (or never
+# can be), $false while the brief is absent or still being written.
+$sendOpened = {
+    param([string]$Brief, [string]$Tm, [string]$Root, [string]$Id, [string]$K, [string]$Feature, [bool]$Final)
+    try {
+        if (-not (Test-Path -LiteralPath $Brief -PathType Leaf)) { return $false }
+        if (-not (Test-Path -LiteralPath $Tm -PathType Leaf)) { return $true }
+        $text = [System.IO.File]::ReadAllText($Brief)
+        # the list, then a line that is not one of its items -- a brief still being written is read again next time
+        $blk = [regex]::Match($text, '(?m)^-[ \t]+\*\*Assertion targets\*\*[^\r\n]*\r?\n((?:[ \t]+-[^\r\n]*\r?\n)+)(?=[^ \t])')
+        if (-not $blk.Success -and -not $Final) { return $false }
+        $targets = @()
+        if ($blk.Success) { $targets = @([regex]::Matches($blk.Groups[1].Value, '(?m)^[ \t]+-[ \t]+`([^`\r\n]+)`[ \t]+->') | ForEach-Object { $_.Groups[1].Value }) }
+        . $Tm
+        Invoke-MissionTelemetry -Root $Root -Verb 'mission-dispatch' -Snapshot -Events @(@{ Kind = 'dispatch_opened'; SourcePath = $Brief
+            Payload = [ordered]@{ dispatch_id = $Id; kind = $K; feature = $Feature; assertion_targets = @($targets) } })
+        return $true
+    } catch { return $true }
+}
+$openArgs = @((Join-Path $projectRoot (".mission\dispatches\" + $argsDoc.dispatch_id + "\task-brief.md")), (Join-Path $PSScriptRoot 'lam\mission-telemetry.ps1'),
+              $projectRoot, $argsDoc.dispatch_id, $Kind, $FeatureId)
+
 try {
     # ----- Invoke Python orchestration -----
     Write-Host "Dispatching worker against $FeatureId / $MilestoneId..." -ForegroundColor Cyan
+    $watch = [hashtable]::Synchronized(@{ stop = $false; said = [bool]$DryRun })
+    $watcher = $null; $watching = $null
+    if (-not $DryRun) {
+        try {
+            $watcher = [PowerShell]::Create()
+            [void]$watcher.AddScript({
+                param($W, $SendText, $A)
+                $send = [scriptblock]::Create($SendText)
+                while (-not $W.stop -and -not $W.said) {
+                    if (& $send $A[0] $A[1] $A[2] $A[3] $A[4] $A[5] $false) { $W.said = $true; break }
+                    Start-Sleep -Milliseconds 250
+                }
+            }).AddArgument($watch).AddArgument($sendOpened.ToString()).AddArgument($openArgs)
+            $watching = $watcher.BeginInvoke()
+        } catch { $watcher = $null; $watching = $null }
+    }
     & $venvPython $dispatchEntry $argsJsonPath
     $rc = $LASTEXITCODE
+    if ($null -ne $watcher) {
+        $watch.stop = $true
+        try { $null = $watcher.EndInvoke($watching) } catch { }
+        try { $watcher.Dispose() } catch { }
+    }
+    if (-not $watch.said) { $null = & $sendOpened $openArgs[0] $openArgs[1] $openArgs[2] $openArgs[3] $openArgs[4] $openArgs[5] $true }
 
     # Propagate exit code per the step-8 contract.
     switch ($rc) {

@@ -80,6 +80,9 @@ try {
     if (-not (Test-Path -LiteralPath $a1)) {
         throw "evidence-hooks-next: the A1 Stop finalizer is not at $a1"
     }
+    # Read for the feed only, so it may not fail the seal: unreadable, it reads as no prior hash.
+    $manShaBefore = $null
+    try { $manShaBefore = Get-Sha256OfFile -Path (Join-Path (Get-EvidenceRuntimeDir -Root $root -DispatchId $did) 'manifest.json') } catch { $manShaBefore = $null }
     $fwd = @{ session_id = $sessionId; hook_event_name = 'Stop' }
     if ($transcriptPath) { $fwd['transcript_path'] = $transcriptPath }
     $json = ($fwd | ConvertTo-Json -Compress -Depth 6)
@@ -137,6 +140,20 @@ try {
         try { Write-EvidenceHookError -Hook 'DispatchEnd' -DispatchId $did `
                 -Message "capture-gaps sidecar write failed: $($_.Exception.Message)" } catch { }
     }
+
+    # THE MISSION-EVENT FEED (UI-1 S1): dispatch_finalized when this run sealed the store (the manifest's
+    # bytes changed). A runner-owned dispatch is never sealed at Stop, so without this line no runner
+    # dispatch would ever say it finalized. Nothing is written to stdout here: the runner parses the two
+    # lines below and nothing else.
+    try {
+        $sf = Get-MissionEvidenceStopFacts -Root $root -DispatchId $did
+        if ($sf.manifest_sha -and ($sf.manifest_sha -ne $manShaBefore)) {
+            $gaps = 0
+            if ($null -ne $side) { try { $gaps = [int]$side.count } catch { $gaps = 0 } }
+            $null = Write-MissionEvent -Root $root -Kind 'dispatch_finalized' -SourcePath $sf.source -Hook 'DispatchEnd' -SessionId $sessionId -DispatchId $did `
+                        -Payload ([ordered]@{ dispatch_id = $did; manifest_state = $sf.manifest_state; partial = (($sf.manifest_state -ne 'FINALIZED') -or ($gaps -gt 0)); capture_gaps_count = $gaps })
+        }
+    } catch { }
 
     if ($null -ne $side) {
         Write-Verbose "evidence-hooks-next: $did sealed (A1 exit $sealExit); capture_gaps_count=$($side.count) sha256=$($side.sha256)"

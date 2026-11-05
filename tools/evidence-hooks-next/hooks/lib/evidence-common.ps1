@@ -7088,3 +7088,437 @@ function Get-EvidenceGuardDecision {
     }
     return $a1
 }
+
+# =================================================================================================
+# THE MISSION-EVENT FEED (UI-1 S1; LM2-ADR-045; expanded-schemas SS14 "Mission Event")
+# =================================================================================================
+# One append-only, never-committed file per checkout, .mission-runtime/telemetry/events.jsonl, read only by
+# `vanguard ui`. It is a PROJECTION SOURCE, NOT EVIDENCE: nothing in it is consumed as proof, and a report
+# cites the artifact a line points at (source_path@sha256), never the line.
+#
+# APPENDED HERE, AT THE END OF THE FILE, AND NOTHING ABOVE IS TOUCHED. LAM-INSTALL SS5.2 cites this file by
+# line range (4188-4264) and WP-5 K-4 compares five of its functions token for token; a function added above
+# them would move every one of those citations.
+#
+# THE RULES THIS SECTION KEEPS (SS14 "Rules"):
+#   * the append never blocks and never fails the call or verb that caused it: one buffered write under a
+#     named mutex per file path, a 500 ms bounded wait, and on ANY failure no line, no gap, and one line in
+#     the hook's own hook-errors.log naming the failed append;
+#   * the emitter never creates the telemetry folder -- the installer's step (Register-MissionCheckout, which
+#     mission init runs) does; a folder that is missing is a failure, recorded;
+#   * no payload carries stdout, stderr, command text, file contents or model output.
+#
+# WHO IS A STREAM. A checkout is a telemetry stream when it carries .mission/mission.yaml with an id AND the
+# host registry (<home>/projects.yaml, home = $env:VANGUARD_HOME or ~/.vanguard) holds a row for THAT
+# checkout -- a worktree is registered as itself. Anything else -- a test sandbox, this framework checkout, a
+# project never initialised on this host -- is not a stream, and the emitter returns at once and writes
+# NOTHING, not even an error line: the registry entry IS the stream identity (SS14 "File"), so a checkout
+# without one has no feed to have failed to append to. Without this rule every sandbox the A1 negative
+# suite drives would grow a hook-errors.log it asserts is absent.
+
+$script:MissionEventSchemaVersion = '1.0'
+$script:MissionEventLockWaitMs    = 500
+$script:MissionEventUuidPattern   = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+function Get-MissionVanguardHome {
+    # $VANGUARD_HOME (environment) overrides ~/.vanguard.
+    if ($env:VANGUARD_HOME) { return $env:VANGUARD_HOME }
+    $prof = $env:USERPROFILE
+    if (-not $prof) { $prof = $env:HOME }
+    if (-not $prof) { return '' }
+    return (Join-Path $prof '.vanguard')
+}
+
+function Get-MissionTelemetryScalar {
+    # A column-0 YAML scalar, ONE key or none: two keys of one name answer $null rather than a guess.
+    param([AllowNull()][string]$Text, [string]$Key)
+    if (-not $Text) { return $null }
+    $ms = [regex]::Matches($Text, '(?m)^' + [regex]::Escape($Key) + ':[ \t]*([^\s#][^\r\n#]*?)[ \t]*(?:#.*)?\r?$')
+    if ($ms.Count -ne 1) { return $null }
+    $v = $ms[0].Groups[1].Value.Trim().Trim('"', "'")
+    if ($v -eq '' -or $v -eq 'null' -or $v -eq '~') { return $null }
+    return $v
+}
+
+function ConvertTo-MissionEventRelPath {
+    # The repo-relative, forward-slash form of a path under $Root, or $null for a path outside it.
+    param([string]$Root, [AllowNull()][string]$Path)
+    if (-not $Path) { return $null }
+    $p = $Path
+    if (-not [System.IO.Path]::IsPathRooted($p)) { $p = Join-Path $Root ($p -replace '/', '\') }
+    $full = [System.IO.Path]::GetFullPath($p)
+    $base = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/') + '\'
+    if (-not $full.StartsWith($base, [System.StringComparison]::OrdinalIgnoreCase)) { return $null }
+    return ($full.Substring($base.Length) -replace '\\', '/')
+}
+
+function Get-MissionTelemetryGitFacts {
+    # ONE git call for HEAD and the common directory. git absent (or no commit yet): commit is $null, which
+    # SS14 shows as "no commit".
+    param([string]$Root)
+    $res = @{ commit = $null; common = $null }
+    $git = @(Get-Command git -CommandType Application -ErrorAction SilentlyContinue)
+    if ($git.Count -eq 0) { return $res }
+    $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try {
+        $o = @(& $git[0].Source -C $Root rev-parse --path-format=absolute HEAD --git-common-dir 2>$null | ForEach-Object { "$_".Trim() })
+        if ($LASTEXITCODE -eq 0 -and $o.Count -ge 2) {
+            if ($o[0] -cmatch '^[0-9a-f]{40}$') { $res.commit = $o[0] }
+            $res.common = $o[1]
+        }
+    } catch { } finally { $ErrorActionPreference = $prev }
+    return $res
+}
+
+function Get-MissionTelemetryContext {
+    # $null = this checkout is not a telemetry stream (see WHO IS A STREAM above); otherwise what a line needs.
+    param([string]$Root)
+    $mf = Join-Path $Root '.mission\mission.yaml'
+    if (-not (Test-Path -LiteralPath $mf -PathType Leaf)) { return $null }
+    $missionId = Get-MissionTelemetryScalar -Text ([System.IO.File]::ReadAllText($mf)) -Key 'id'
+    if (-not $missionId) { return $null }
+    $vh = Get-MissionVanguardHome
+    if (-not $vh) { return $null }
+    $reg = Join-Path $vh 'projects.yaml'
+    if (-not (Test-Path -LiteralPath $reg -PathType Leaf)) { return $null }
+    $rows = @()
+    foreach ($m in [regex]::Matches([System.IO.File]::ReadAllText($reg), "(?m)^\s*(?:-\s+)?checkout_path:\s*'((?:[^']|'')*)'\s*\r?$")) {
+        $rows += ($m.Groups[1].Value -replace "''", "'").TrimEnd('\', '/')
+    }
+    # THE ROW MUST BE THIS CHECKOUT'S OWN -- a worktree included (ADR-045: the stream identity is the registry
+    # entry (host, checkout path)). A worktree is registered as itself (Register-MissionWorktree, the runner;
+    # mission.ps1 register by hand), which also makes its folder; one nobody registered is not a stream and
+    # writes nothing, rather than failing one append per call into a folder no one will make.
+    $here = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    $registered = $false
+    foreach ($r in $rows) { if ([string]::Equals($here, $r, [System.StringComparison]::OrdinalIgnoreCase)) { $registered = $true } }
+    if (-not $registered) { return $null }
+    $git = Get-MissionTelemetryGitFacts -Root $Root
+    $hostId = ''
+    $hp = Join-Path $vh 'host-id'
+    if (Test-Path -LiteralPath $hp -PathType Leaf) { $hostId = ([System.IO.File]::ReadAllText($hp)).Trim() }
+    $dir = Join-Path $Root '.mission-runtime\telemetry'
+    return @{ mission_id = $missionId; host_id = $hostId; host_id_path = $hp; commit = $git.commit
+              dir = $dir; path = (Join-Path $dir 'events.jsonl') }
+}
+
+function Test-MissionTelemetryStream {
+    # Is $Root a telemetry stream? Every error path OUTSIDE Write-MissionEvent asks this first, so a checkout
+    # that is not a stream never gains a hook-errors.log line on the feed's account.
+    param([string]$Root)
+    try { return ($null -ne (Get-MissionTelemetryContext -Root $Root)) } catch { return $false }
+}
+
+function Write-MissionTelemetryError {
+    # THE ONE TRACE OF A FAILED APPEND (SS14): a line in the hook's own hook-errors.log, the per-dispatch file
+    # Get-EvidenceState already points a reader at. A verb has no session; it writes to the dispatch the
+    # environment or CURRENT_DISPATCH names, else session-unknown -- the same order A1's resolver uses, taken
+    # from $Root and not from the library's own location. This function itself never throws.
+    param([string]$Root, [string]$Hook, [string]$Message, [string]$SessionId = '', [string]$DispatchId = '')
+    try {
+        $did = $DispatchId
+        if (-not $did) { $did = $env:MISSION_DISPATCH_ID }
+        if (-not $did) {
+            $ptr = Join-Path $Root '.mission-runtime\evidence\CURRENT_DISPATCH'
+            if (Test-Path -LiteralPath $ptr -PathType Leaf) { $did = ([System.IO.File]::ReadAllText($ptr)).Trim() }
+        }
+        if (-not $did) { $did = $(if ($SessionId) { "session-$SessionId" } else { 'session-unknown' }) }
+        $p = Get-EvidenceHookErrorPath -Root $Root -DispatchId $did
+        $d = Split-Path -Parent $p
+        if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+        Add-Content -LiteralPath $p -Value "$(Get-UtcStampZ) ${Hook}: $Message"
+    } catch { }
+}
+
+function Write-MissionEvent {
+    <#
+      THE EMITTER. Appends ONE mission-event line to <Root>\.mission-runtime\telemetry\events.jsonl and
+      returns $true, or writes nothing to the feed, records the failure in hook-errors.log and returns $false.
+      It never throws and never writes to the pipeline anything but its one boolean.
+
+      seq is allocated UNDER THE LOCK from the file's own last line: a named mutex per file path, waited on
+      for at most 500 ms, then the file opened (FileShare.Read, so a reader can tail it) within the same
+      500 ms. The line is ONE buffered write ending in LF; if the file does not end in LF (a torn write by
+      something else) an LF goes first, so a line is never glued onto a partial one.
+
+      $SourcePath is the artifact the event derives from, repo-relative (an absolute path under $Root is
+      converted); sha256 is that file's raw bytes now, after the write that caused the event. A source that
+      is not on disk is a failure: SS14 rejects a line without its sha256 at ingest, so none is written.
+    #>
+    # -ChangeField names a payload field whose value must DIFFER from the one on the feed's last line of the
+    # same kind for the line to be written; the comparison is made UNDER THE LOCK, so two concurrent writers of
+    # one unchanged value write it once. A suppressed line is not a failure: $false, and nothing is recorded.
+    param([string]$Root, [string]$Kind, $Payload, [string]$SourcePath, [string]$Hook = 'telemetry',
+          [string]$SessionId = '', [string]$DispatchId = '', [string]$ChangeField = '')
+    $mutex = $null; $owned = $false; $fs = $null
+    try {
+        $ctx = Get-MissionTelemetryContext -Root $Root
+        if ($null -eq $ctx) { return $false }
+        if ($ctx.host_id -cnotmatch $script:MissionEventUuidPattern) { throw "the host has no usable host-id at $($ctx.host_id_path)" }
+        if (-not (Test-Path -LiteralPath $ctx.dir -PathType Container)) {
+            throw "the telemetry folder .mission-runtime/telemetry is missing (the installer makes it; the emitter makes no directory)"
+        }
+        $rel = ConvertTo-MissionEventRelPath -Root $Root -Path $SourcePath
+        if (-not $rel) { throw "the source path '$SourcePath' is not under the checkout" }
+        $sha = Get-Sha256OfFile -Path (Join-Path $Root ($rel -replace '/', '\'))
+        if (-not $sha) { throw "the source '$rel' is not on disk, so the line would carry no sha256" }
+        if ($null -eq $Payload) { $Payload = [ordered]@{} }
+
+        $full = [System.IO.Path]::GetFullPath($ctx.path)
+        $name = 'Local\vanguard-mission-event-' + (Get-Sha256OfString -Text $full.ToLowerInvariant()).Substring(0, 40)
+        $mutex = New-Object System.Threading.Mutex($false, $name)
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+        try { $owned = $mutex.WaitOne($script:MissionEventLockWaitMs) }
+        catch [System.Threading.AbandonedMutexException] { $owned = $true }
+        if (-not $owned) { throw "the lock on events.jsonl was not obtained within $($script:MissionEventLockWaitMs) ms" }
+        while ($null -eq $fs) {
+            try {
+                $fs = [System.IO.File]::Open($full, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::Read)
+            } catch [System.IO.IOException] {
+                if ($sw.ElapsedMilliseconds -ge $script:MissionEventLockWaitMs) { throw "events.jsonl could not be opened within $($script:MissionEventLockWaitMs) ms: $($_.Exception.Message)" }
+                Start-Sleep -Milliseconds 25
+            }
+        }
+
+        # THE LAST seq, read from the file's tail (the whole file only when the tail holds no line).
+        $len = $fs.Length
+        $last = [int64]0
+        $needLf = $false
+        if ($len -gt 0) {
+            $take = [int][Math]::Min($len, [int64]65536)
+            foreach ($pass in 1..2) {
+                $buf = New-Object byte[] $take
+                $fs.Position = $len - $take
+                $got = 0
+                while ($got -lt $take) { $n = $fs.Read($buf, $got, $take - $got); if ($n -le 0) { break }; $got += $n }
+                if ($pass -eq 1) { $needLf = ($buf[$take - 1] -ne 10) }
+                $text = [System.Text.Encoding]::UTF8.GetString($buf, 0, $got)
+                foreach ($m in [regex]::Matches($text, '"host_id":"[^"]*","seq":(\d+),')) { $v = [int64]$m.Groups[1].Value; if ($v -gt $last) { $last = $v } }
+                if ($last -gt 0 -or $take -ge $len) { break }
+                $take = [int]$len
+            }
+        }
+
+        if ($ChangeField -and $len -gt 0) {
+            $want = [string]$Payload[$ChangeField]
+            $all = New-Object byte[] ([int]$len)
+            $fs.Position = 0
+            $got = 0
+            while ($got -lt $len) { $n = $fs.Read($all, $got, [int]$len - $got); if ($n -le 0) { break }; $got += $n }
+            $prior = $null
+            $kindTok = '"kind":"' + $Kind + '"'
+            $fieldRx = '"' + [regex]::Escape($ChangeField) + '":"([^"]*)"'
+            foreach ($ln in ([System.Text.Encoding]::UTF8.GetString($all, 0, $got) -split "`n")) {
+                if (-not $ln.Contains($kindTok)) { continue }
+                $fm = [regex]::Match($ln, $fieldRx)
+                if ($fm.Success) { $prior = $fm.Groups[1].Value }
+            }
+            if (($null -ne $prior) -and ($prior -ceq $want)) { return $false }
+        }
+
+        $line = [ordered]@{
+            schema_version = $script:MissionEventSchemaVersion
+            mission_id     = $ctx.mission_id
+            host_id        = $ctx.host_id
+            seq            = $last + 1
+            ts             = Get-UtcStampZ
+            kind           = $Kind
+            payload        = $Payload
+            source_path    = $rel
+            sha256         = $sha
+            commit         = $ctx.commit
+        }
+        $json = ($line | ConvertTo-Json -Compress -Depth 12)
+        $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($(if ($needLf) { "`n" } else { '' }) + $json + "`n")
+        $fs.Position = $len
+        $fs.Write($bytes, 0, $bytes.Length)
+        $fs.Flush()
+        return $true
+    }
+    catch {
+        Write-MissionTelemetryError -Root $Root -Hook $Hook -SessionId $SessionId -DispatchId $DispatchId `
+            -Message ("telemetry: the append of a '$Kind' line to .mission-runtime/telemetry/events.jsonl failed and nothing was written to it: " + $_.Exception.Message)
+        return $false
+    }
+    finally {
+        if ($null -ne $fs) { try { $fs.Dispose() } catch { } }
+        if ($null -ne $mutex) {
+            if ($owned) { try { $mutex.ReleaseMutex() } catch { } }
+            try { $mutex.Dispose() } catch { }
+        }
+    }
+}
+
+# --- once-only markers, files in the telemetry folder (never a directory: a missing folder stays missing) ---
+function Get-MissionTelemetryMarkerPath {
+    param([string]$Root, [string]$Name)
+    Join-Path $Root ('.mission-runtime\telemetry\' + ($Name -replace '[^A-Za-z0-9._-]', '-') + '.marker')
+}
+function Test-MissionTelemetryMarker {
+    param([string]$Root, [string]$Name)
+    try { return (Test-Path -LiteralPath (Get-MissionTelemetryMarkerPath -Root $Root -Name $Name) -PathType Leaf) } catch { return $false }
+}
+function Set-MissionTelemetryMarker {
+    param([string]$Root, [string]$Name)
+    try {
+        $p = Get-MissionTelemetryMarkerPath -Root $Root -Name $Name
+        if (Test-Path -LiteralPath (Split-Path -Parent $p) -PathType Container) { [System.IO.File]::WriteAllText($p, (Get-UtcStampZ)) }
+    } catch { }
+}
+
+function New-MissionTelemetryMarker {
+    # CLAIM a once-only marker: $true only for the ONE caller whose CreateNew wins, so concurrent first calls
+    # of one session say session_start once. $false when it exists already or cannot be made.
+    param([string]$Root, [string]$Name)
+    try {
+        $p = Get-MissionTelemetryMarkerPath -Root $Root -Name $Name
+        if (-not (Test-Path -LiteralPath (Split-Path -Parent $p) -PathType Container)) { return $false }
+        $fs = [System.IO.File]::Open($p, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        try { $b = [System.Text.Encoding]::UTF8.GetBytes((Get-UtcStampZ)); $fs.Write($b, 0, $b.Length) } finally { $fs.Dispose() }
+        return $true
+    } catch { return $false }
+}
+function Remove-MissionTelemetryMarker {
+    # Release a claim whose line could not be written, so the next call may claim it again.
+    param([string]$Root, [string]$Name)
+    try { $p = Get-MissionTelemetryMarkerPath -Root $Root -Name $Name; if (Test-Path -LiteralPath $p -PathType Leaf) { Remove-Item -LiteralPath $p -Force } } catch { }
+}
+
+function Get-MissionEventToolPaths {
+    # tool_call.paths: the path-valued arguments the hook captured, verbatim -- the keys the guard's own
+    # tool-input walk reads. Never the command text and never any other argument.
+    param($ToolInput)
+    $out = New-Object System.Collections.Generic.List[string]
+    if ($ToolInput -is [System.Management.Automation.PSCustomObject]) {
+        foreach ($p in @($ToolInput.PSObject.Properties)) {
+            if ((@('file_path', 'path', 'notebook_path', 'filePath') -contains $p.Name) -and ($p.Value -is [string]) -and $p.Value) { [void]$out.Add([string]$p.Value) }
+        }
+    }
+    return $out.ToArray()
+}
+
+function Write-MissionGateEvent {
+    # gate_minted / gate_consumed / gate_expired, read off the gate artifact itself after the write that
+    # caused the event. gate_id is the artifact's push_id (<kind>-<id>), else its file name; tip_sha rides on
+    # push gates. gate_expired is once per gate (a marker), so a verb that observes expiry twice says it once.
+    # ONE GATE IS ITS ID AND ITS MINT: reapprove re-mints a gate under the same <kind>-<id> at the same path, so the
+    # marker is keyed by gate_id AND the mint stamp (created_at; the artifact's sha256 where it states none), and a
+    # re-minted gate reports its own expiry once -- a prior mint's marker never suppresses it.
+    param([string]$Root, [string]$Kind, [string]$GatePath, [string]$Hook = 'mission-gate', [string]$SessionId = '', [string]$DispatchId = '')
+    try {
+        $t = [System.IO.File]::ReadAllText($GatePath)
+        $gk = Get-MissionTelemetryScalar -Text $t -Key 'kind'
+        $pushId = Get-MissionTelemetryScalar -Text $t -Key 'push_id'
+        $gateId = $(if ($pushId) { $pushId } else { [System.IO.Path]::GetFileNameWithoutExtension($GatePath) })
+        $expMarker = ''
+        $expClaimed = $false
+        if ($Kind -eq 'gate_expired') {
+            $mint = Get-MissionTelemetryScalar -Text $t -Key 'created_at'
+            if (-not $mint) { $mint = Get-Sha256OfFile -Path $GatePath }
+            $expMarker = 'gate-expired-' + $gateId + '-' + (Get-Sha256OfString -Text ([string]$mint)).Substring(0, 16)
+            if (Test-MissionTelemetryMarker -Root $Root -Name $expMarker) { return $false }
+            # CLAIMED, as session_start's is: of two concurrent observers of one expiry only the CreateNew winner says
+            # it. A claim that fails with no marker standing was not lost to another observer -- the folder is missing
+            # or cannot be written -- so the append below is still attempted, and its failure recorded (SS14's trace).
+            if (Test-Path -LiteralPath (Join-Path $Root '.mission-runtime\telemetry') -PathType Container) {
+                if (New-MissionTelemetryMarker -Root $Root -Name $expMarker) { $expClaimed = $true }
+                elseif (Test-MissionTelemetryMarker -Root $Root -Name $expMarker) { return $false }
+            }
+        }
+        $p = [ordered]@{
+            gate_id    = $gateId
+            kind       = $gk
+            expires_at = Get-MissionTelemetryScalar -Text $t -Key 'expires_at'
+        }
+        if ($Kind -eq 'gate_consumed') { $p['consumed_at'] = Get-MissionTelemetryScalar -Text $t -Key 'consumed_at' }
+        if ($gk -eq 'push') { $p['tip_sha'] = Get-MissionTelemetryScalar -Text $t -Key 'authorized_tip_sha' }
+        $ok = Write-MissionEvent -Root $Root -Kind $Kind -Payload $p -SourcePath $GatePath -Hook $Hook -SessionId $SessionId -DispatchId $DispatchId
+        if ($expClaimed -and -not $ok) { Remove-MissionTelemetryMarker -Root $Root -Name $expMarker }   # released: the next observer may say it
+        elseif ($ok -and $expMarker -and -not $expClaimed) { Set-MissionTelemetryMarker -Root $Root -Name $expMarker }
+        return $ok
+    } catch {
+        if (Test-MissionTelemetryStream -Root $Root) {
+            Write-MissionTelemetryError -Root $Root -Hook $Hook -SessionId $SessionId -DispatchId $DispatchId -Message ("telemetry: a '$Kind' line could not be composed from $GatePath and nothing was written to .mission-runtime/telemetry/events.jsonl: " + $_.Exception.Message)
+        }
+        return $false
+    }
+}
+
+function Write-MissionHaltEvent {
+    # halt_raised / halt_resolved. halt_id is the HALT file's base name (the id a halt-ruling gate binds);
+    # severity is the file's own `severity:` / `**Severity:**` line, or null where it states none.
+    # halt_raised is once per HALT (a marker): editing a HALT does not raise it again.
+    param([string]$Root, [string]$Kind, [string]$HaltPath, [AllowNull()][string]$Resolution = $null, [string]$Hook = 'mission-gate', [string]$SessionId = '', [string]$DispatchId = '')
+    try {
+        $hid = [System.IO.Path]::GetFileNameWithoutExtension($HaltPath)
+        if ($Kind -eq 'halt_raised' -and (Test-MissionTelemetryMarker -Root $Root -Name ('halt-raised-' + $hid))) { return $false }
+        $sev = $null
+        if (Test-Path -LiteralPath $HaltPath -PathType Leaf) {
+            $m = [regex]::Match([System.IO.File]::ReadAllText($HaltPath), '(?im)^\s*[*_]*severity[*_]*\s*:\s*[*_]*\s*([A-Za-z0-9_-]+)')
+            if ($m.Success) { $sev = $m.Groups[1].Value }
+        }
+        $p = [ordered]@{ halt_id = $hid; severity = $sev }
+        if ($Kind -eq 'halt_resolved') { $p['resolution'] = $Resolution }
+        $ok = Write-MissionEvent -Root $Root -Kind $Kind -Payload $p -SourcePath $HaltPath -Hook $Hook -SessionId $SessionId -DispatchId $DispatchId
+        if ($ok -and $Kind -eq 'halt_raised') { Set-MissionTelemetryMarker -Root $Root -Name ('halt-raised-' + $hid) }
+        return $ok
+    } catch {
+        if (Test-MissionTelemetryStream -Root $Root) {
+            Write-MissionTelemetryError -Root $Root -Hook $Hook -SessionId $SessionId -DispatchId $DispatchId -Message ("telemetry: a '$Kind' line could not be composed from $HaltPath and nothing was written to .mission-runtime/telemetry/events.jsonl: " + $_.Exception.Message)
+        }
+        return $false
+    }
+}
+
+function Get-MissionEvidenceStopFacts {
+    # session_stop / dispatch_finalized: the manifest as it is on disk now. SS14's manifest_state enum has
+    # four values and the state machine derives six; OPEN (runner-owned, not yet ended) and GREW (sealed,
+    # then appended to) both mean "not sealed as it stands", which is PARTIAL, and the derived state rides
+    # beside it, additively, as evidence_state.
+    param([string]$Root, [string]$DispatchId)
+    $st = Get-EvidenceState -Root $Root -DispatchId $DispatchId
+    $native = [string]$st.state
+    $mapped = if (@('ABSENT', 'PARTIAL', 'FINALIZED', 'TAMPERED') -contains $native) { $native } else { 'PARTIAL' }
+    $rt = Get-EvidenceRuntimeDir -Root $Root -DispatchId $DispatchId
+    $man = Join-Path $rt 'manifest.json'
+    $log = Join-Path $rt 'log.jsonl'
+    $ec = 0
+    if (Test-Path -LiteralPath $man -PathType Leaf) {
+        try { $mo = [System.IO.File]::ReadAllText($man) | ConvertFrom-Json; $ec = [int](Get-EntryField $mo 'entry_count' 0) } catch { $ec = 0 }
+    }
+    $src = if (Test-Path -LiteralPath $man -PathType Leaf) { $man } elseif (Test-Path -LiteralPath $log -PathType Leaf) { $log } else { Join-Path $Root '.mission\mission.yaml' }
+    return @{ manifest_state = $mapped; evidence_state = $native; entry_count = $ec; source = $src; manifest_sha = (Get-Sha256OfFile -Path $man) }
+}
+
+function Write-MissionPushTipEvent {
+    # tip_observed from the push hook (SS14: "push hook / verify"), beside the gate_consumed it says for the same gate.
+    # origin_tip is what the push settle OBSERVED the declared origin to hold -- an ls-remote read, live, so cached is
+    # false -- as Complete-EvidencePushGate stamped it on the consumed gate (consumed_origin_tip, beside consumed_ref,
+    # which rides additively as ref). local_tip is this checkout's HEAD; ahead/behind count HEAD against that observed
+    # tip from local objects, null where they cannot be counted (git absent, or the tip not held here). source_path is
+    # the gate.
+    param([string]$Root, [string]$GatePath, [string]$Hook = 'PostToolUse', [string]$SessionId = '', [string]$DispatchId = '')
+    try {
+        $t = [System.IO.File]::ReadAllText($GatePath)
+        $p = [ordered]@{ local_tip = $null; origin_tip = (Get-MissionTelemetryScalar -Text $t -Key 'consumed_origin_tip'); ahead = $null; behind = $null
+                         cached = $false; ref = (Get-MissionTelemetryScalar -Text $t -Key 'consumed_ref') }
+        $git = @(Get-Command git -CommandType Application -ErrorAction SilentlyContinue)
+        if ($git.Count -gt 0) {
+            $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try {
+                $h = @(& $git[0].Source -C $Root rev-parse HEAD 2>$null | ForEach-Object { "$_".Trim() })
+                if ($LASTEXITCODE -eq 0 -and $h.Count -ge 1 -and $h[0] -cmatch '^[0-9a-f]{40}$') { $p['local_tip'] = $h[0] }
+                if ($p['local_tip'] -and ([string]$p['origin_tip'] -cmatch '^[0-9a-f]{40}$')) {
+                    $c = @(& $git[0].Source -C $Root rev-list --left-right --count ('HEAD...' + $p['origin_tip']) 2>$null | ForEach-Object { "$_" })
+                    if ($LASTEXITCODE -eq 0 -and $c.Count -ge 1 -and ($c[0] -match '^\s*(\d+)\s+(\d+)\s*$')) { $p['ahead'] = [int]$Matches[1]; $p['behind'] = [int]$Matches[2] }
+                }
+            } catch { } finally { $ErrorActionPreference = $prev }
+        }
+        return (Write-MissionEvent -Root $Root -Kind 'tip_observed' -Payload $p -SourcePath $GatePath -Hook $Hook -SessionId $SessionId -DispatchId $DispatchId)
+    } catch {
+        if (Test-MissionTelemetryStream -Root $Root) {
+            Write-MissionTelemetryError -Root $Root -Hook $Hook -SessionId $SessionId -DispatchId $DispatchId -Message ("telemetry: a 'tip_observed' line could not be composed from $GatePath and nothing was written to .mission-runtime/telemetry/events.jsonl: " + $_.Exception.Message)
+        }
+        return $false
+    }
+}

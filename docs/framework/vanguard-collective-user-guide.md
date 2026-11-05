@@ -1,4 +1,4 @@
-# Vanguard Collective 1.0.0 -- the operator's guide
+# Vanguard Collective 1.1.0 -- the operator's guide
 
 This guide says what the parts of the framework are, what each one records, who may write it, and
 how to read what the acceptance instruments say about it. It does not repeat the procedures: the
@@ -339,9 +339,9 @@ tools leave it: dispatch, handoff, validation, a failure answered by rework, sup
 gate, a ledgered close, a gated publication and its revocation -- and the evidence plane's record of
 each session. The project's own `.mission\` from `init` has the same shape, empty.
 
-## 10. The six instruments
+## 10. The seven instruments
 
-The acceptance instruments are `tests\lam\instrument-WP-1.ps1` to `instrument-WP-6.ps1`. Each
+The acceptance instruments are `tests\lam\instrument-WP-1.ps1` to `instrument-WP-7.ps1`. Each
 exercises the machinery by running it, and each obeys the same law: its exit code is its failure
 count, it derives its counts from its own check recorder, and it prints no green summary on a
 failing run. Except where stated, every fixture lives in a sandbox under `.mission-runtime\`, so a
@@ -381,16 +381,24 @@ worker there, and deletes the clone. **That costs one billed worker spawn per re
 the CLI's own per-project state for that temporary path in your user profile. With no smoke mission
 found and none named, WP-6's members fail, its fixture check first.
 
+**WP-7 -- the dashboard.** The mission-event feed (U-members: each hook and lifecycle command appends
+its one line, valid against `docs\framework\mission-event.schema.json`, to a fixture's
+`.mission-runtime\telemetry\events.jsonl`; host-id and the registry), the service (V-members, through its
+pytest suite `tools\ui\tests`) and the dashboard (L-members, through its own build and Playwright smoke
+under `ui\`). The service's tests and the dashboard's source stay in the framework's development
+repository, and `mission.ps1` and `VERSION` stay in the release tree: in an installed project the V-members, the
+L-members and the members whose fixtures `mission.ps1` makes skip by name.
+
 ## 11. Readings
 
-**What a reading is.** One run of all six instruments under one run key:
+**What a reading is.** One run of all seven instruments under one run key:
 
 ```powershell
 cd C:\work\my-project
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\lam\instrument-acceptance.ps1 -RunKey reading-1 -SmokeRoot C:\work\lam-smoke
 ```
 
-The wrapper runs WP-1 to WP-6 in order through the shared instrument-run helper,
+The wrapper runs WP-1 to WP-7 in order through the shared instrument-run helper,
 `tools\lam\lam-instrument-run.ps1`, which records a capture of each: under
 `.mission-runtime\lam\instrument-runs\`, `<key>.instrument-WP-<n>.stdout.txt` -- a provenance header
 (the run key, the commit, whether the tree was clean, the instrument's sha256, the exit code, the
@@ -440,16 +448,22 @@ failure). A count line whose numbers no instrument could print is not read at al
   row that was measured and missed fails the member: a measured miss outranks an unmeasurable row.
 
 **Why skips are expected on a fresh project.** A skip names an environment, not a defect. A
-reading of a fresh install of this release -- a new git project with a bare origin, the install,
-`mission init`, the smoke mission built, Docker Desktop running, no Python venv -- failed nothing
-and showed fifteen named skips, each with its reason on its face:
+reading of a fresh install of this release -- a new git project with a bare origin, the install with
+its Python set, `mission init`, the smoke mission built, the container engine down -- failed nothing
+and showed fifty-nine named skips, each with its reason on its face:
 
 - **No project acceptance record: WP-1 H-12, WP-2 R-16 and R-B, WP-3 C-1v, C-1w and C-2d.** Each
   measures against a project's own acceptance record, `docs/framework/LAM-ACCEPT.md`, which no
   release after 0.2.0 ships: the record is neither in the checkout nor in its history.
-- **No Python venv: WP-2 R-57, WP-3 C-1k and C-1be.** Each runs a fixture's pytest, and none of
-  `src\.venv` and `tools\.venv` (the primary checkout's too, from a worktree) has a
-  `Scripts\python.exe`.
+- **No venv with pytest: WP-2 R-57, WP-3 C-1k and C-1be.** Each runs a fixture's pytest in the first
+  of `src\.venv` and `tools\.venv` (the primary checkout's too, from a worktree) that has a
+  `Scripts\python.exe`; the install's `tools\.venv` holds the dashboard's packages and no pytest, so
+  each skips, naming it. With pytest installed there, or a `src\.venv` that has it, they are measured.
+- **The dashboard's tests and source not installed: WP-7 V-1 to V-20 and L-1 to L-16.** The service's
+  pytest suite and the dashboard's source stay in the framework's development repository.
+- **The release tree's `mission.ps1` and `VERSION` not installed: WP-7 F-0, U-4, U-5, U-10, U-13, U-14,
+  U-15 and U-16.** Their fixtures are fresh checkouts `mission.ps1 init` makes, and one reads `VERSION`;
+  the members that read only the smoke mission are measured.
 - **No goal-check registration file: WP-3 C-2c.** There is no `.claude\settings.local.json` in the
   checkout, nor in the primary checkout when the reading runs in a worktree. Once that file exists
   the member is measured: it must register a command Stop hook that runs `mission-goal-check.ps1`
@@ -459,9 +473,10 @@ and showed fifteen named skips, each with its reason on its face:
   plane at all, there is nothing live to drive. Where HALTs stand, its census row still has nothing
   to read while `tools\lam\legacy-halt-census.txt` is empty, as the framework ships it, so the member
   stays a named SKIP unless one of the rows it measured missed.
-- **The container engine up: WP-3 C-1bd.** It measures what a goal reads with the engine really
-  down, so it skips while the engine's named pipe (`\\.\pipe\dockerDesktopLinuxEngine`) is among the
-  host's pipes, or while the pipes cannot be listed.
+- **The container engine down: WP-3 C-1aw.** It measures what a goal reads with the engine up, so it
+  skips while the engine cannot be reached. With the engine up, **WP-3 C-1bd** skips in its place: it
+  measures what a goal reads with the engine really down, so it skips while the engine's named pipe
+  (`\\.\pipe\dockerDesktopLinuxEngine`) is among the host's pipes, or while the pipes cannot be listed.
 - **No spawn ledger yet: WP-4 T-42.** Its live row reads the primary checkout's
   `.mission-runtime\lam\spawn-ledger.jsonl`, which a project's runner writes when it first
   dispatches; with none there it skips. Once one stands, T-42 fails: its audit holds the ledger's
@@ -470,7 +485,7 @@ and showed fifteen named skips, each with its reason on its face:
 - **Records of the project the framework was extracted from: WP-4 T-53 and T-54.** Each re-read a
   seat brief and runtime records of that project, which are not part of this distribution.
 
-Three members that failed on a fresh install of an earlier build are cured in this release: WP-1
+Three members that failed on a fresh install of a build before 1.0.0 were cured in 1.0.0: WP-1
 H-26, now that
 `mission init` adds the project's ignore rules for `.claude/settings.local.json` and
 `.claude/worktrees/`; WP-3 C-2e, whose comparison with the base evaluator's strings read changed
@@ -491,7 +506,69 @@ its dependence as a skip whose reason says where it stood. To compare two, run t
 with the same smoke mission and compare their `CHECKS` lines field by field (LAM-INSTALL
 section 10).
 
-## 12. Authentication, briefly
+## 12. The dashboard -- `vanguard ui`
+
+The dashboard is a read-only, local view of every mission registered on this machine -- ADR-045 in the
+local-modes design document (section 11.6), which supersedes ADR-029 for the human-facing Mission Control
+surface. It owns no truth: `.mission\` and the evidence plane stay the record, and the dashboard is a
+projection of the projects' event feeds that can be deleted and rebuilt from them at any time. It sends
+nothing to an agent, writes nothing into a project, and holds no cost figure.
+
+**What it shows.** Three screens.
+
+- **Fleet**: tiles for the fleet (missions in flight, open errors, active sessions, assertions green), then
+  one card per mission, those that need attention first: its state, current milestone, last activity,
+  assertions and the error that ranks highest, naming the artifact.
+- **Project**: the mission's header tiles; milestone progress; features and their assertions; the open
+  sessions and dispatches; the spec timeline; the last verify, its scope shown beside its verdict; and the
+  open errors ranked by severity, each with the `source_path@sha256` of the line it came from.
+- **Stats**: Green -- green assertions over all of them, the headline; the pass rate of those evaluated,
+  green over green and red, always labelled so; dispatches finalized against PARTIAL; validator rounds
+  confirmed against refuted; HALTs raised and resolved and the mean time to resolve; the tool-call non-zero
+  exit rate, or "not captured" where no exit code was captured; and the time spent on each milestone.
+
+Every figure carries its formula and the window it was read over, and is computed when it is asked for,
+never stored. Every tile carries a badge naming what it was read as of -- the stream, its last `seq` and
+commit -- and a stream that has fallen behind is marked stale, never shown as current. The errors are a
+closed set: an open HALT (a blocking error only when its own severity is critical, high or blocking), a
+PARTIAL manifest, a testimony conflict, a failed verify, an expired gate, a refuted assertion, and main
+ahead of origin beyond N days (`--ahead-days`, 7 by default).
+
+**Where it reads from.** Each checkout's mission-event feed, `.mission-runtime\telemetry\events.jsonl`:
+append-only, never committed, one line per event, appended by the hooks and the lifecycle commands, each
+line valid against `docs\framework\mission-event.schema.json` (expanded-schemas section 14) and naming the
+`source_path@sha256` it reports; a line without it is rejected and counted. The service tails every
+registered feed into a disposable projection, `ui.db`, in the Vanguard home; `vanguard ui --rebuild`
+deletes it and regenerates it from the feeds.
+
+**The registry.** The Vanguard home is `%USERPROFILE%\.vanguard\` (or the folder `VANGUARD_HOME` names, or
+`--home`). It holds `host-id`, this machine's id, made once, and `projects.yaml`, one row per registered
+checkout -- `host_id`, `checkout_path`, `mission_id`, `registered_at`, `framework_version` -- appended by
+`mission init`, by `mission.ps1 register -Target <checkout>` (a mission made before the feed existed, or a
+worktree made by hand, which is a stream of its own), and by `install.ps1` over a project whose mission
+already has its feed folder. Rows are never pruned: a row whose checkout is gone is shown stale. Two
+checkouts of one mission are grouped by `mission_id` on the Fleet screen.
+
+**Starting it.** From the project, after the install put its Python set in `tools\.venv` (INSTALL.md
+section 5):
+
+```powershell
+C:\work\my-project\tools\ui\vanguard.cmd ui
+```
+
+-- or `vanguard ui` with `C:\work\my-project\tools\ui` on `PATH`. It prints
+`vanguard ui: http://127.0.0.1:8765/  (home <the Vanguard home>)` and serves the dashboard there, with
+live updates, until it is stopped; `--port` names another port. Version 1 serves loopback only: a request
+whose Host is not loopback (`127.0.0.1`, `localhost` or `[::1]`) is answered 421 with no body by design, so
+binding another address with `--host` serves nothing -- the flag is reserved for the v2 hub.
+
+**Stopping it.** On Windows the service's catchable stops are Ctrl+C and Ctrl+Break: either closes every
+open live stream, releases `ui.db` and the port, prints `vanguard ui: stopped (SIGINT)` (or `SIGBREAK`)
+and exits 0. SIGTERM is the POSIX signal; an external TerminateProcess -- `Stop-Process`, Task Manager's
+End task -- cannot be handled, so the service ends with no line of its own and may leave `ui.db`'s
+write-ahead files beside it.
+
+## 13. Authentication, briefly
 
 `VANGUARD_AUTH_MODE` in the shell that starts the toolchain decides how every CLI it starts
 authenticates: unset, nothing is checked, and the subscription Claude Code is signed in with is used
@@ -502,9 +579,9 @@ precedence); `subscription`, the same with any other credential refused; `api-ke
 CLI that calls a model starts. `docs/QUICKSTART.md` step 5 and LAM-INSTALL section 7c have the
 details.
 
-## 13. Where to go next
+## 14. Where to go next
 
-- `INSTALL.md` -- install, verify, upgrade, `mission init` and `mission smoke`.
+- `INSTALL.md` -- install, verify, upgrade, `mission init`, `mission smoke` and the dashboard's Python set.
 - `docs/QUICKSTART.md` -- the shortest route through all of it.
 - `docs/framework/LAM-INSTALL.md` -- the operator's procedure, including the complete operator
   install sequence. Read it whole before its step 1.

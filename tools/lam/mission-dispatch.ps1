@@ -2748,6 +2748,31 @@ foreach ($stalePath in @($rcPath, $endedPath)) {
 }
 [System.IO.File]::WriteAllText($startedPath, "$stampStart`n", (New-Object System.Text.UTF8Encoding($false)))
 
+# UI-1 S1 (ADR-045): dispatch_opened, once the ownership and the run record exist. kind, feature and the
+# assertion targets are read off the dispatch artifact (a flow list or a block list); source_path is that
+# artifact. Through tools\lam\mission-telemetry.ps1; it can fail nothing and prints nothing.
+try {
+    $tmD = Join-Path $PSScriptRoot 'mission-telemetry.ps1'
+    $dArt = Join-Path $MissionRoot ".mission\dispatches\$Dispatch.yaml"
+    if ((Test-Path -LiteralPath $tmD -PathType Leaf) -and (Test-Path -LiteralPath $dArt -PathType Leaf)) {
+        . $tmD
+        $dText = [System.IO.File]::ReadAllText($dArt)
+        $dTargets = @()
+        $dFlow = [regex]::Match($dText, '(?m)^assertion_targets:\s*\[([^\]]*)\]')
+        if ($dFlow.Success) { $dTargets = @($dFlow.Groups[1].Value -split ',' | ForEach-Object { $_.Trim().Trim('"', "'") } | Where-Object { $_ }) }
+        else {
+            $dBlock = [regex]::Match($dText, '(?ms)^assertion_targets:[ \t]*\r?\n((?:[ \t]+-[^\r\n]*\r?\n?)+)')
+            if ($dBlock.Success) { $dTargets = @([regex]::Matches($dBlock.Groups[1].Value, '(?m)^[ \t]+-[ \t]*([^\s#]+)') | ForEach-Object { $_.Groups[1].Value.Trim('"', "'") }) }
+        }
+        $dFeature = Get-MissionTelemetryYamlScalar -Text $dText -Key 'feature_id'
+        if (-not $dFeature) { $dFeature = Get-MissionTelemetryYamlScalar -Text $dText -Key 'feature' }
+        $dKind = Get-MissionTelemetryYamlScalar -Text $dText -Key 'kind'
+        if (-not $dKind) { $dKind = 'mainline' }
+        Invoke-MissionTelemetry -Root $MissionRoot -Verb 'mission-dispatch' -Snapshot -Events @(@{ Kind = 'dispatch_opened'; SourcePath = $dArt
+            Payload = [ordered]@{ dispatch_id = $Dispatch; kind = $dKind; feature = $dFeature; assertion_targets = @($dTargets); session_id = $sessionId } })
+    }
+} catch { }
+
 # --- the worktree ------------------------------------------------------------------------------
 # THE RUNNER CREATES THE TREE, AT THE SIBLING HOME, AND IT IS THE WORKER'S WORKING DIRECTORY
 # (operator ruling). The path was composed once, above, where the
@@ -3051,6 +3076,15 @@ if (-not $isRepo) {
             } else { $worktreeCreatedHere = $true }
             if (-not (Test-Path -LiteralPath $worktreePath)) {
                 $treeDenial = "no worktree could be created at $worktreePath from $MissionRoot at $worktreeCutAt (git said: $(@($gitErrors | Select-Object -Last 2) -join ' / ')). Nothing was spawned."
+            }
+            # UI-1 S1 (ADR-045): a worktree is its own stream -- its own registry row and its own telemetry
+            # folder, which git never brings along (the folder is ignored). Registered only when the mission
+            # root itself is a stream; it prints nothing and can fail nothing.
+            if ($worktreeCreatedHere -and (Test-Path -LiteralPath $worktreePath)) {
+                try {
+                    $tmW = Join-Path $PSScriptRoot 'mission-telemetry.ps1'
+                    if (Test-Path -LiteralPath $tmW -PathType Leaf) { . $tmW; $null = Register-MissionWorktree -PrimaryRoot $MissionRoot -WorktreeRoot $worktreePath }
+                } catch { }
             }
         }
         if ($worktreeCutAt -and (-not $treeDenial) -and (Test-Path -LiteralPath $worktreePath)) {
@@ -3809,6 +3843,19 @@ function Get-HandoffProblems {
 # SHARED PATH PRESENT => USED UNCHANGED. Some workers can write it directly; for those this whole
 # section is inert and nothing is copied, printed or recorded.
 $wtHandoffPath     = $null
+# UI-1 S1 (ADR-045): THE CLOSE MOVES THE DERIVED STATE. The snapshot counts a dispatch open while <id>.yaml has no
+# <id>.handoff.yaml beside it, and by the end of the run one stands at the shared path -- the worker's, the one placed
+# below, or the rejection record -- so the runner offers the snapshot again once the handoff is settled, as it did at
+# open: one line when snapshot_sha256 moved, none when it did not. It prints nothing and can fail nothing.
+function Send-LamDispatchSnapshot {
+    try {
+        $tmS = Join-Path $PSScriptRoot 'mission-telemetry.ps1'
+        if (-not (Test-Path -LiteralPath $tmS -PathType Leaf)) { return }
+        . $tmS
+        Invoke-MissionTelemetry -Root $MissionRoot -Snapshot -Verb 'mission-dispatch'
+    } catch { }
+}
+
 $handoffPlacedFrom = $null
 $handoffPlacedSha  = $null
 $handoffPlacedTime = $null
@@ -3865,6 +3912,8 @@ if ((-not (Test-Path -LiteralPath $handoffPath)) -and $wtHandoffPath -and (Test-
         } finally { $ErrorActionPreference = $prevEap }
     }
 }
+# the worker's handoff (written at the shared path, or placed just above) is settled: offer the snapshot
+Send-LamDispatchSnapshot
 
 $handoffProblems = @()
 if (-not (Test-Path -LiteralPath $handoffPath)) {
@@ -5107,6 +5156,8 @@ if ($handoffProblems.Count -gt 0) {
     $body = "status: rejected`ndispatch_id: $Dispatch`nrejected_at: $stampEnd`nproblems:`n"
     foreach ($p in $handoffProblems) { $body = $body + "  - $(ConvertTo-YamlSingleQuoted $p)`n" }
     [System.IO.File]::WriteAllText($handoffPath, $body, (New-Object System.Text.UTF8Encoding($false)))
+    # the rejection record now stands at the shared path (where no handoff stood, the dispatch has just closed)
+    Send-LamDispatchSnapshot
     Write-Line "mission-dispatch: handoff REJECTED for $Dispatch"
     foreach ($p in $handoffProblems) { Write-Line "  - $p" }
     exit 3

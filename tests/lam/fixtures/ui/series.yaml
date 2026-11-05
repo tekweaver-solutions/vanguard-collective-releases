@@ -1,0 +1,14 @@
+# Vanguard host registry -- WP-7 V fixture (UI-1 S2-AM1). {{ROOT}} is the per-run home; each row's feed is
+# the fixture file of the same name, copied to <checkout>\.mission-runtime\telemetry\events.jsonl.
+# l: m-long, six weeks of dated lines (assertions over 34 days, dispatches and HALTs in six weekly buckets,
+# snapshots carrying milestones); d: m-done, a second host, Complete, a session whose exit codes are null.
+- host_id: 6f1c2a3e-0b7d-4c9a-9e21-5a0d3c7b8f41
+  checkout_path: '{{ROOT}}\l'
+  mission_id: 'm-long'
+  registered_at: '2026-08-30T07:00:00.000Z'
+  framework_version: '1.0.0'
+- host_id: 3b9e7d21-4c5a-4f8e-a1d2-7c6b5e4f3a29
+  checkout_path: '{{ROOT}}\d'
+  mission_id: 'm-done'
+  registered_at: '2026-09-20T07:00:00.000Z'
+  framework_version: '1.0.0'

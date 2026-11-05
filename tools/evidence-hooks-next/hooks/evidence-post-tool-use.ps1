@@ -128,6 +128,40 @@ try {
     }
     Add-EvidenceLogLine -LogPath $logPath -Entry $entry
 
+    # THE MISSION-EVENT FEED (UI-1 S1, ADR-045). After the evidence line, so the feed points at a log that
+    # already holds it: session_start on the session's first call, then tool_call, then halt_raised when the
+    # call wrote a HALT file. The payload carries the tool, its exit code (null where the harness gives none,
+    # E5-i) and the captured path arguments -- never the command text, stdout or stderr. Write-MissionEvent
+    # never throws; this try is for the composition around it, and a failure here is the feed's, not the call's.
+    try {
+        $evPaths = @(Get-MissionEventToolPaths -ToolInput $toolInput)
+        $evExit = $null
+        if ($null -ne $exitCode) { $evEc = 0; if ([int]::TryParse([string]$exitCode, [ref]$evEc)) { $evExit = $evEc } }
+        $evSource = Join-Path $rt 'log.jsonl'
+        # The session's marker lives in the telemetry folder; with the folder missing the session cannot be told
+        # new from old, so only tool_call is attempted (and its failure recorded) -- never a guessed session_start.
+        # The marker is CLAIMED (CreateNew) before session_start is written, so of concurrent first calls only
+        # one says it; a claim whose line fails is released, so the next call says it instead.
+        if ((Test-Path -LiteralPath (Join-Path $root '.mission-runtime\telemetry') -PathType Container) -and
+            (Test-MissionTelemetryStream -Root $root) -and
+            (New-MissionTelemetryMarker -Root $root -Name ('session-' + $sessionId))) {
+            if (-not (Write-MissionEvent -Root $root -Kind 'session_start' -Payload ([ordered]@{ session_id = $sessionId; dispatch_id = $dispatchId }) `
+                                         -SourcePath $evSource -Hook 'PostToolUse' -SessionId $sessionId -DispatchId $dispatchId)) {
+                Remove-MissionTelemetryMarker -Root $root -Name ('session-' + $sessionId)
+            }
+        }
+        $null = Write-MissionEvent -Root $root -Kind 'tool_call' -SourcePath $evSource -Hook 'PostToolUse' -SessionId $sessionId -DispatchId $dispatchId `
+                    -Payload ([ordered]@{ tool = $toolName; exit_code = $evExit; paths = $evPaths; session_id = $sessionId; dispatch_id = $dispatchId })
+        if (@('Write', 'Edit', 'MultiEdit', 'NotebookEdit') -contains $toolName) {
+            foreach ($evP in $evPaths) {
+                $evRel = ConvertTo-MissionEventRelPath -Root $root -Path $evP
+                if ($evRel -and ($evRel -match '^\.mission-runtime/(.+/)?HALT-[^/]*\.md$') -and (Test-Path -LiteralPath $evP -PathType Leaf)) {
+                    $null = Write-MissionHaltEvent -Root $root -Kind 'halt_raised' -HaltPath $evP -Hook 'PostToolUse' -SessionId $sessionId -DispatchId $dispatchId
+                }
+            }
+        }
+    } catch { }
+
     # T-2, single use. THE CLAIM THIS BLOCK WAS BUILT ON IS FALSE, AND IT WAS MEASURED FALSE
     # (V-1 round 8, WP-4). It read: "this hook firing IS the evidence that the push succeeded --
     # PostToolUse fires only on successful permitted calls". Driven: a payload carrying
@@ -223,6 +257,15 @@ try {
         try {
             $r = Complete-EvidencePushGate -Root $fr
             if ($r.consumed) {
+                # Every push gate spent by an observed publication: one gate_consumed each, tip_sha off the gate
+                # (one push can spend more than one -- consumed_all, not consumed, which is only the first), then
+                # tip_observed for the origin tip the settle observed for that gate's ref.
+                try {
+                    foreach ($cg in @(@($r.consumed_all) | Where-Object { $_ })) {
+                        $null = Write-MissionGateEvent -Root $fr -Kind 'gate_consumed' -GatePath ([string]$cg) -Hook 'PostToolUse' -SessionId $sessionId
+                        $null = Write-MissionPushTipEvent -Root $fr -GatePath ([string]$cg) -Hook 'PostToolUse' -SessionId $sessionId
+                    }
+                } catch { }
                 Write-Verbose "evidence-hooks-next: push gate consumed -- $($r.consumed)"
             } else {
                 # Fires ONLY when the decider actually witnessed a publication, so an ordinary

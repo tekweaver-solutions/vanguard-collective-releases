@@ -131,6 +131,14 @@ try {
     Pop-Location
 }
 
+# ----- UI-1 S1 (ADR-045): the stage transition offers the mission-event feed its snapshot -----
+# Created -> Planning moves the derived state, so a snapshot line is written (on change only). Through
+# tools\lam\mission-telemetry.ps1; it prints nothing and can fail nothing.
+try {
+    $tmS = Join-Path $PSScriptRoot 'lam\mission-telemetry.ps1'
+    if (Test-Path -LiteralPath $tmS -PathType Leaf) { . $tmS; Invoke-MissionTelemetry -Root $root -Snapshot -Verb 'design-start' }
+} catch { }
+
 # ----- Designer instructions -----
 Write-Host ""
 Write-Host "=== DESIGNER INSTRUCTIONS ===" -ForegroundColor Cyan

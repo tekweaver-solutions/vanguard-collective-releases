@@ -1,0 +1,20 @@
+# Vanguard host registry -- WP-7 V fixture (UI-1 S2). {{ROOT}} is the per-run home; each row's feed is
+# the fixture file of the same name, copied to <checkout>\.mission-runtime\telemetry\events.jsonl.
+- host_id: 6f1c2a3e-0b7d-4c9a-9e21-5a0d3c7b8f41
+  checkout_path: '{{ROOT}}\p'
+  mission_id: 'm-primary'
+  registered_at: '2026-10-01T07:00:00.000Z'
+  framework_version: '1.0.0'
+- host_id: 6f1c2a3e-0b7d-4c9a-9e21-5a0d3c7b8f41
+  checkout_path: '{{ROOT}}\w'
+  mission_id: 'm-primary'
+  registered_at: '2026-10-01T07:00:00.000Z'
+  framework_version: '1.0.0'
+- host_id: 6f1c2a3e-0b7d-4c9a-9e21-5a0d3c7b8f41
+  checkout_path: '{{ROOT}}\gone'
+  mission_id: 'm-stale'
+  registered_at: '2026-10-01T07:00:00.000Z'
+  framework_version: '1.0.0'
+- host_id: not-a-uuid
+  checkout_path: '{{ROOT}}\bad'
+  mission_id: 'm-bad'

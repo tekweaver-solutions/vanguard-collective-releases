@@ -11,3 +11,9 @@
 /tools/.venv/
 # Python's bytecode caches, which the test runs leave beside the sources; never committed.
 __pycache__/
+# UI-1 S3: the dashboard's npm install (`npm ci` makes it), wherever a package lives; never committed.
+node_modules/
+# UI-1 S3: the dashboard's build output, ui/dist/ (S4's release member, rebuilt from ui/ source), and the smoke's leftovers.
+/ui/dist/
+/ui/test-results/
+/ui/playwright-report/

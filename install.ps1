@@ -104,7 +104,10 @@
   The staging folder is removed either way, unless the old lock is in it and could not be put back.
 
   NEVER TOUCHED: the target's .mission/ and .mission-runtime/. No installer-owned destination may
-  lie under either (the guard), and the only other write is framework.lock at the target root.
+  lie under either (the guard), and the only other write is framework.lock at the target root. Outside the
+  target, a run that writes also registers the host (UI-1 S1, ADR-045): <home>/host-id, minted once, and,
+  when the target already carries a mission, its row in <home>/projects.yaml (home = $env:VANGUARD_HOME,
+  else ~/.vanguard). The telemetry folder inside the target is mission init's to make, not this script's.
 
   framework.lock -- JSON lines, LF, UTF-8 without BOM, rewritten whole by every run that writes; lock_format 2.
   Line 1 is the header: lock, lock_format, eol_rule, version, previous_version (null on a fresh install),
@@ -129,6 +132,23 @@
   installer hashes it, after checking that its RELEASE member is this tree's RELEASE byte for byte.
   Without it zip_sha256 is null.
 
+  THE PYTHON SET (UI-1 S4, ruling F4). A run that writes -- a fresh install or an upgrade -- then installs the
+  dashboard service's pinned Python set into the target's tools\.venv, after the lock is in place:
+      <tools\.venv's python> -m pip install --require-hashes --only-binary :all: -r <target>\tools\ui\requirements.txt
+  from PyPI (the network, as the venv always needed). tools\.venv is the target's own when it holds
+  Scripts\python.exe and that interpreter is CPython 3.14 for win-amd64 -- the platform the hashes pin; any
+  other interpreter there is left untouched and the step fails. With no tools\.venv the step makes one, with
+  -Python when given, else the py launcher's 3.14 (py -3.14), else python on PATH, each held to CPython 3.14
+  win-amd64. Every file and the lock stand whatever the step does: when it fails (no such interpreter, pip
+  refusing a hash, no network) the reason and the command to run are printed and the exit code is 4. A run
+  that writes nothing (-WhatIf, -Verify, a target already at this version) installs nothing; -WhatIf says what
+  the step would do. -SkipPythonSet leaves tools\.venv as it stands (`vanguard ui` needs the set).
+  THE vanguard COMMAND is tools\ui\vanguard.cmd, installed with the files: `<target>\tools\ui\vanguard.cmd ui`
+  starts the dashboard with tools\.venv's interpreter (INSTALL.md section 7).
+  -WhatIf also says, writing nothing: the host registration below (host-id, the registry row) and the
+  mission-event feed's ignore rule (/.mission-runtime/telemetry/ in the target's .gitignore), which this script
+  never writes -- mission init writes it, and mission.ps1 register for a mission made before the feed.
+
   MARK OF THE WEB. This script copies bytes; it never runs, dot-sources or imports a file from the
   source tree. A file it writes is a new file and carries no Zone.Identifier stream, whatever the
   source carried. It does NOT Unblock-File its own tree: a marked install.ps1 is refused by a
@@ -147,19 +167,25 @@
   Re-judge every file framework.lock lists in the target (EOL above; each path through the guard first);
   print each difference; write nothing. Reads lock_format 1 and 2, and says which it read. A not-written row
   names no file the framework wrote, and is passed over and counted.
+.PARAMETER Python
+  The CPython 3.14 (win-amd64) interpreter THE PYTHON SET makes tools\.venv with, where the target has none.
+.PARAMETER SkipPythonSet
+  Install the files and the lock only; tools\.venv is left as it stands.
 
 .NOTES
   EXIT: 0 done, or already installed and verified (or nothing to report); 2 refused, nothing written;
   3 -Verify, or a run over a target already at this version, found differences; 1 the source or the
   target could not be used -- a clone off its release tag, or with local changes, or one git cannot
-  confirm, among them.
+  confirm, among them; 4 the files and the lock are installed, and the Python set is not (THE PYTHON SET).
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Target,
     [string]$ReleaseZip,
     [switch]$WhatIf,
-    [switch]$Verify
+    [switch]$Verify,
+    [string]$Python,
+    [switch]$SkipPythonSet
 )
 
 $ErrorActionPreference = 'Stop'
@@ -455,6 +481,113 @@ function Test-MarkOfTheWeb {
     param([Parameter(Mandatory = $true)][string]$Path)
     try { return (@(Get-Item -LiteralPath $Path -Stream * -ErrorAction Stop | Where-Object { $_.Stream -eq 'Zone.Identifier' }).Count -gt 0) }
     catch { return $false }
+}
+
+function Invoke-Program {
+    # A native program run to its end, its stdout and stderr merged as lines; PS 5.1's 'Stop' relaxed around the
+    # one call, as Invoke-Git does.
+    param([Parameter(Mandatory = $true)][string]$Exe, [string[]]$ArgList)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $out = @(); $code = -1
+    try { $out = @(& $Exe @ArgList 2>&1 | ForEach-Object { [string]$_ }); $code = $LASTEXITCODE }
+    catch { $out = @($_.Exception.Message); $code = -1 }
+    finally { $ErrorActionPreference = $prev }
+    return [pscustomobject]@{ code = $code; out = $out }
+}
+
+function Get-PythonIdentity {
+    # THE PYTHON SET (header): an interpreter's implementation, version, platform and executable, and whether it is
+    # CPython 3.14 for win-amd64; $null when it does not run. -Pre goes before the script (py's -3.14).
+    param([Parameter(Mandatory = $true)][string]$Exe, [string[]]$Pre)
+    $r = Invoke-Program -Exe $Exe -ArgList (@($Pre) + @('-I', '-c', 'import sys,sysconfig;print(sys.implementation.name,''%d.%d.%d''%sys.version_info[:3],sysconfig.get_platform(),sys.executable)'))
+    if ($r.code -ne 0 -or $r.out.Count -lt 1) { return $null }
+    $f = @($r.out[-1].Trim() -split ' ', 4)
+    if ($f.Count -lt 4) { return $null }
+    return [pscustomobject]@{ impl = $f[0]; version = $f[1]; platform = $f[2]; exe = $f[3]; fits = ($f[0] -ceq 'cpython' -and $f[1] -match '^3\.14\.\d+$' -and $f[2] -ceq 'win-amd64') }
+}
+
+function Get-PythonSetPlan {
+    # THE PYTHON SET (header), decided and written nothing: { action = into | create | fail; exe; base; why; text }.
+    param([Parameter(Mandatory = $true)][string]$TargetRoot)
+    $venv = Join-Path $TargetRoot 'tools\.venv'
+    $vpy = Join-Path $venv 'Scripts\python.exe'
+    $guard = Get-PathRefusal -Rel 'tools/.venv/Scripts/python.exe' -Root $TargetRoot
+    if ($guard) { return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "the path guard refuses tools\.venv: $guard" } }
+    if (Test-Path -LiteralPath $vpy -PathType Leaf) {
+        $id = Get-PythonIdentity -Exe $vpy
+        if ($id -and $id.fits) { return [pscustomobject]@{ action = 'into'; exe = $vpy; base = $null; why = "the target's tools\.venv (CPython $($id.version), $($id.platform))" } }
+        return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "the target's tools\.venv is $(if ($id) { "$($id.impl) $($id.version) $($id.platform)" } else { 'an interpreter that does not run' }), not CPython 3.14 win-amd64; it is left untouched" }
+    }
+    if (Test-Path -LiteralPath $venv) { return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "tools\.venv stands in the target without Scripts\python.exe; it is left untouched" } }
+    $tried = New-Object System.Collections.Generic.List[string]
+    $cands = @()
+    if ($Python) { $cands += , @('-Python', $Python, @()) }
+    else {
+        if (Get-Command 'py' -ErrorAction SilentlyContinue) { $cands += , @('py -3.14', 'py', @('-3.14')) }
+        if (Get-Command 'python' -ErrorAction SilentlyContinue) { $cands += , @('python on PATH', 'python', @()) }
+    }
+    foreach ($c in $cands) {
+        $id = Get-PythonIdentity -Exe $c[1] -Pre $c[2]
+        if ($id -and $id.fits) { return [pscustomobject]@{ action = 'create'; exe = $vpy; base = $id.exe; why = "tools\.venv made by $($c[0]): $($id.exe) (CPython $($id.version), $($id.platform))" } }
+        $tried.Add("$(if ($c[0] -eq '-Python') { '-Python ' + $c[1] } else { $c[0] }): $(if ($id) { "$($id.impl) $($id.version) $($id.platform)" } else { 'does not run' })")
+    }
+    return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "no CPython 3.14 win-amd64 interpreter to make tools\.venv with ($(if ($tried.Count) { $tried -join '; ' } else { 'neither py nor python is on PATH' })); name one with -Python" }
+}
+
+function Install-PythonSet {
+    # THE PYTHON SET (header), after the lock: the venv made where the plan says, then pip with --require-hashes over the
+    # installed requirements.txt. Returns '' when the set is installed, else the reason.
+    param([Parameter(Mandatory = $true)]$Plan, [Parameter(Mandatory = $true)][string]$TargetRoot)
+    if ($Plan.action -eq 'fail') { return $Plan.why }
+    if ($Plan.action -eq 'create') {
+        $r = Invoke-Program -Exe $Plan.base -ArgList @('-m', 'venv', (Join-Path $TargetRoot 'tools\.venv'))
+        if ($r.code -ne 0) { return "$($Plan.base) -m venv exited $($r.code): $((@($r.out) | Select-Object -Last 3) -join ' | ')" }
+    }
+    $r = Invoke-Program -Exe $Plan.exe -ArgList @('-m', 'pip', 'install', '--require-hashes', '--only-binary', ':all:', '--disable-pip-version-check', '--no-input', '-r', (Join-Path $TargetRoot 'tools\ui\requirements.txt'))
+    foreach ($l in @($r.out | Where-Object { $_ -match '^(Successfully installed|ERROR|WARNING)' })) { Say "  pip | $l" }
+    $already = @($r.out | Where-Object { $_ -match '^Requirement already satisfied' }).Count
+    if ($already -gt 0) { Say "  pip | $already requirement(s) already satisfied" }
+    if ($r.code -ne 0) { return "pip exited $($r.code): $((@($r.out) | Select-Object -Last 3) -join ' | ')" }
+    return ''
+}
+
+function Get-RegistrationPlan {
+    # -WhatIf's reading of THE HOST REGISTRATION at the end of this script and of the feed's ignore rule: the same
+    # decisions, read only, written nothing. Returns two lines.
+    param([Parameter(Mandatory = $true)][string]$TargetRoot)
+    $vgHome = if ($env:VANGUARD_HOME) { $env:VANGUARD_HOME } else { Join-Path $env:USERPROFILE '.vanguard' }
+    $idPath = Join-Path $vgHome 'host-id'
+    $idText = if ([System.IO.File]::Exists($idPath)) { "host-id $(([System.IO.File]::ReadAllText($idPath)).Trim()) in $vgHome, kept" } else { "a host-id would be minted in $vgHome" }
+    $mission = $null
+    $mf = Join-Path $TargetRoot '.mission\mission.yaml'
+    if ([System.IO.File]::Exists($mf)) {
+        $mm = [regex]::Matches([System.IO.File]::ReadAllText($mf), '(?m)^id:[ \t]*([^\s#]+)')
+        if ($mm.Count -eq 1 -and $mm[0].Groups[1].Value -ne 'null') { $mission = $mm[0].Groups[1].Value.Trim('"', "'") }
+    }
+    $feed = [System.IO.Directory]::Exists((Join-Path $TargetRoot '.mission-runtime\telemetry'))
+    if (-not $mission) { $rowText = 'no registry row (the target carries no mission yet: mission init adds it)' }
+    elseif (-not $feed) { $rowText = "no registry row: the target's mission $mission is not registered for the mission-event feed (no .mission-runtime/telemetry/) -- mission.ps1 register -Target $TargetRoot makes the folder, the row and the ignore rule" }
+    else {
+        $reg = Join-Path $vgHome 'projects.yaml'
+        $known = $false
+        if ([System.IO.File]::Exists($reg)) {
+            foreach ($row in [regex]::Matches([System.IO.File]::ReadAllText($reg), "(?m)^\s*(?:-\s+)?checkout_path:\s*'((?:[^']|'')*)'\s*\r?$")) {
+                if ([string]::Equals((($row.Groups[1].Value -replace "''", "'").TrimEnd('\', '/')), ([System.IO.Path]::GetFullPath($TargetRoot).TrimEnd('\', '/')), [System.StringComparison]::OrdinalIgnoreCase)) { $known = $true }
+            }
+        }
+        $rowText = if ($known) { "the target already has its row in $reg" } else { "a row for the target (mission $mission) would be added to $reg" }
+    }
+    $gi = Join-Path $TargetRoot '.gitignore'
+    $held = $false
+    if ([System.IO.File]::Exists($gi)) {
+        $giLines = @(($script:Utf8NoBom.GetString([System.IO.File]::ReadAllBytes($gi)).TrimStart([char]0xFEFF) -split "`n") | ForEach-Object { $_.TrimEnd(' ', "`r") })
+        $held = (@(@('/.mission-runtime/telemetry/', '.mission-runtime/telemetry/', '/.mission-runtime/', '.mission-runtime/') | Where-Object { $giLines -ccontains $_ }).Count -gt 0)
+    }
+    $giText = if ($held) { "the target's .gitignore already ignores /.mission-runtime/telemetry/" }
+        elseif ($mission) { "the target's .gitignore does not ignore /.mission-runtime/telemetry/; install.ps1 writes no .gitignore -- mission.ps1 register -Target $TargetRoot adds the rule" }
+        else { "no mission yet: mission init writes the rule /.mission-runtime/telemetry/ into the target's .gitignore" }
+    return @("planned host registration: $idText; $rowText", "planned telemetry ignore rule: $giText")
 }
 
 function Read-Lock {
@@ -924,7 +1057,28 @@ if ($refusedCount -gt 0) {
     if ($mode -eq 'upgrade') { $whole = ", so the upgrade from $($lock.version) to $version is refused as a whole" }
     Stop-Install 2 "REFUSED: $refusedCount file(s) above$whole. Nothing was written -- no file and no lock$(if ($WhatIf) { ' (WhatIf)' })."
 }
-if ($WhatIf) { Say 'WhatIf: nothing was written.'; exit 0 }
+# THE PYTHON SET (header): the source pins it in tools/ui/requirements.txt, an installer-owned file.
+$pinCount = 0
+$reqSource = Join-Path $sourceRoot 'tools\ui\requirements.txt'
+if ($byPath.ContainsKey('tools/ui/requirements.txt') -and (Test-Path -LiteralPath $reqSource -PathType Leaf)) {
+    $pinCount = [regex]::Matches([System.IO.File]::ReadAllText($reqSource), '(?m)^[A-Za-z0-9][A-Za-z0-9._-]*==\S+').Count
+}
+if ($WhatIf) {
+    $pyPlan = $null
+    if ($SkipPythonSet) { Say 'planned python set: skipped (-SkipPythonSet); tools\.venv is left as it stands' }
+    elseif ($pinCount -eq 0) { Say 'planned python set: none (this release pins no Python set)' }
+    else {
+        $pyPlan = Get-PythonSetPlan -TargetRoot $targetRoot
+        if ($pyPlan.action -eq 'fail') { Say "planned python set: NOT INSTALLED -- $($pyPlan.why); the files and framework.lock would be written and the run would exit 4" }
+        else { Say "planned python set: $($pyPlan.why); then pip install --require-hashes --only-binary :all: -r tools\ui\requirements.txt ($pinCount pinned package(s), from PyPI)" }
+    }
+    $vc = @($plan | Where-Object { $_.path -ceq 'tools/ui/vanguard.cmd' })
+    if ($vc.Count) { Say "planned vanguard command: tools\ui\vanguard.cmd ($($vc[0].disposition)) -- $targetRoot\tools\ui\vanguard.cmd ui starts the dashboard" }
+    foreach ($l in (Get-RegistrationPlan -TargetRoot $targetRoot)) { Say $l }
+    Say 'WhatIf: nothing was written.'
+    if ($null -ne $pyPlan -and $pyPlan.action -eq 'fail') { exit 4 }
+    exit 0
+}
 
 # ------------------------------------------------------------------------------------------------
 # THE WRITE, staged (header): every file to install or upgrade, then the lock, written whole into a staging
@@ -1008,8 +1162,76 @@ try {
     Stop-Install 1 "framework.lock could not be put in place: $why. Every file to write ($moved) is in place, and the target's lock is as it was before this run. Run the same release again once the cause is gone: each file is judged already-identical, and the lock is written."
 }
 try { [System.IO.Directory]::Delete($stage, $true) } catch { Say "NOTE: the staging folder $stage could not be removed: $($_.Exception.Message)" }
+# UI-1 S1 (ADR-045): THE HOST REGISTRATION, OUTSIDE THE TARGET, after the lock is in place. <home>/host-id is
+# minted once (a UUID; home = $env:VANGUARD_HOME, else ~/.vanguard) and, when the target already carries a
+# mission, one row is appended to <home>/projects.yaml unless the target has one -- the same act mission init
+# performs (tools\lam\mission-telemetry.ps1, Register-MissionCheckout), written out here because this script
+# never runs a file from the source tree. Nothing is written into the target, and nothing in the install
+# depends on it: a registration that cannot complete is said, and the install still stands.
+try {
+    $vgHome = if ($env:VANGUARD_HOME) { $env:VANGUARD_HOME } else { Join-Path $env:USERPROFILE '.vanguard' }
+    if (-not [System.IO.Directory]::Exists($vgHome)) { $null = [System.IO.Directory]::CreateDirectory($vgHome) }
+    $vgUtf8 = New-Object System.Text.UTF8Encoding($false)
+    $vgIdPath = Join-Path $vgHome 'host-id'
+    if (-not [System.IO.File]::Exists($vgIdPath)) {
+        try {
+            $vgFs = [System.IO.File]::Open($vgIdPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+            try { $vgB = $vgUtf8.GetBytes([guid]::NewGuid().ToString('D').ToLowerInvariant() + "`n"); $vgFs.Write($vgB, 0, $vgB.Length) } finally { $vgFs.Dispose() }
+        } catch [System.IO.IOException] { if (-not [System.IO.File]::Exists($vgIdPath)) { throw } }
+    }
+    $vgHostId = ([System.IO.File]::ReadAllText($vgIdPath)).Trim()
+    $vgMission = $null
+    $vgMf = Join-Path $targetRoot '.mission\mission.yaml'
+    if ([System.IO.File]::Exists($vgMf)) {
+        $vgM = [regex]::Matches([System.IO.File]::ReadAllText($vgMf), '(?m)^id:[ \t]*([^\s#]+)')
+        if ($vgM.Count -eq 1 -and $vgM[0].Groups[1].Value -ne 'null') { $vgMission = $vgM[0].Groups[1].Value.Trim('"', "'") }
+    }
+    $vgNote = "host-id $vgHostId in $vgHome; no registry row (the target carries no mission yet: mission init adds it)"
+    # A ROW ONLY WHERE THE FEED FOLDER ALREADY IS. This script may not make .mission-runtime/telemetry/ (it never
+    # touches the target's runtime plane), and a registered checkout without that folder fails one append per
+    # call. A mission that predates the feed is pointed at mission.ps1 register, which makes the folder, the row
+    # and the ignore rule together.
+    if ($vgMission -and -not [System.IO.Directory]::Exists((Join-Path $targetRoot '.mission-runtime\telemetry'))) {
+        $vgNote = "host-id $vgHostId in $vgHome; the target's mission is not registered for the mission-event feed -- run mission.ps1 register -Target $targetRoot to start it"
+        $vgMission = $null
+    }
+    if ($vgMission) {
+        $vgReg = Join-Path $vgHome 'projects.yaml'
+        $vgPath = [System.IO.Path]::GetFullPath($targetRoot).TrimEnd('\', '/')
+        $vgKnown = $false
+        if ([System.IO.File]::Exists($vgReg)) {
+            foreach ($vgRow in [regex]::Matches([System.IO.File]::ReadAllText($vgReg), "(?m)^\s*(?:-\s+)?checkout_path:\s*'((?:[^']|'')*)'\s*\r?$")) {
+                if ([string]::Equals((($vgRow.Groups[1].Value -replace "''", "'").TrimEnd('\', '/')), $vgPath, [System.StringComparison]::OrdinalIgnoreCase)) { $vgKnown = $true }
+            }
+        }
+        if ($vgKnown) { $vgNote = "host-id $vgHostId; the target already has its row in $vgReg" }
+        else {
+            $vgText = ''
+            if (-not [System.IO.File]::Exists($vgReg)) { $vgText = "# Vanguard host registry -- one row per registered checkout, appended by install.ps1 and mission init`n# (ADR-045). Read by ``vanguard ui``. Rows are never pruned: a row whose path is gone is shown as stale.`n" }
+            $vgText += "- host_id: $vgHostId`n  checkout_path: '" + ($vgPath -replace "'", "''") + "'`n  mission_id: '" + ($vgMission -replace "'", "''") + "'`n" +
+                       "  registered_at: '" + [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [System.Globalization.CultureInfo]::InvariantCulture) + "'`n  framework_version: '$version'`n"
+            $vgBytes = $vgUtf8.GetBytes($vgText)
+            $vgFs = [System.IO.File]::Open($vgReg, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+            try { $vgFs.Write($vgBytes, 0, $vgBytes.Length) } finally { $vgFs.Dispose() }
+            $vgNote = "host-id $vgHostId; a row for the target added to $vgReg"
+        }
+    }
+    Say "host registration: $vgNote"
+} catch { Say "NOTE: the host registration did not complete ($($_.Exception.Message)); the install is complete and nothing in it depends on it." }
+# THE PYTHON SET (header), after the lock: every file stands whatever it does.
+$pySetWhy = ''
+if ($SkipPythonSet) { Say 'python set: skipped (-SkipPythonSet); tools\.venv is as it stood, and vanguard ui needs the set' }
+elseif ($pinCount -gt 0) {
+    $pyPlan = Get-PythonSetPlan -TargetRoot $targetRoot
+    if ($pyPlan.action -ne 'fail') { Say "python set: $($pyPlan.why)" }
+    $pySetWhy = Install-PythonSet -Plan $pyPlan -TargetRoot $targetRoot
+    if ($pySetWhy) {
+        Say "PYTHON SET NOT INSTALLED: $pySetWhy. The files and framework.lock are installed; vanguard ui needs the set: make $targetRoot\tools\.venv with CPython 3.14 (win-amd64) and run $targetRoot\tools\.venv\Scripts\python.exe -m pip install --require-hashes --only-binary :all: -r $targetRoot\tools\ui\requirements.txt"
+    } else { Say "python set: $pinCount pinned package(s) in tools\.venv, installed with --require-hashes" }
+}
 Say "done: $countText"
 Say ("framework.lock written: {0} line(s) for {1} file(s), sha256 {2}" -f $lockLines.Count, $plan.Count, (Get-FileSha256Hex -Path $lockPath))
 if ($mode -eq 'upgrade') { Say "upgraded $previous to $version in $targetRoot." }
 else { Say "installed $version into $targetRoot." }
+if ($pySetWhy) { exit 4 }
 exit 0

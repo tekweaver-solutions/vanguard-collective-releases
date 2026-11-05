@@ -26,8 +26,10 @@
          .gitignore ignore Claude Code's two per-checkout paths, the rules the framework repository's
          .gitignore carries: /.claude/settings.local.json and /.claude/worktrees/ (.claude/settings.json
          is named by neither and stays tracked). WP-1 H-26 reads both as ignored (git check-ignore
-         --no-index) once .claude/settings.json is tracked. No .gitignore: it is created holding a
-         one-line comment and the two rules, LF. One there: a rule it already holds -- a line equal to
+         --no-index) once .claude/settings.json is tracked. A THIRD RULE, /.mission-runtime/telemetry/
+         (UI-1 S1, ADR-045): the mission-event feed is never committed; a line .mission-runtime/ (anchored or
+         not) already ignores it and counts as the rule held. No .gitignore: it is created holding a
+         one-line comment and the three rules, LF. One there: a rule it already holds -- a line equal to
          the rule, with or without its leading slash (a middle slash anchors it either way), trailing
          spaces aside -- is left alone, and only the missing ones are appended after the same one-line
          comment, in the line ending the file's first line break uses (LF if it has none), after a
@@ -62,7 +64,10 @@
   file_exists rows then fail until the folders are made again.
 
 .PARAMETER Verb
-  init or smoke.
+  init, smoke or register. register (UI-1 S1, ADR-045) registers an EXISTING checkout on this host for the
+  mission-event feed -- a mission initialised before the feed existed, or a worktree made by hand: host-id
+  once, its own registry row, .mission-runtime/telemetry/, the root .gitignore rule. EXIT 0 registered, 1 no
+  mission or no registration step on disk.
 .PARAMETER Target
   The folder install.ps1 installed into.
 
@@ -73,7 +78,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, Position = 0)][ValidateSet('init', 'smoke')][string]$Verb,
+    [Parameter(Mandatory = $true, Position = 0)][ValidateSet('init', 'smoke', 'register')][string]$Verb,
     [Parameter(Mandatory = $true)][string]$Target
 )
 
@@ -224,12 +229,15 @@ detectors:
     # THE ROOT .gitignore (header): the two rules, each with the spellings that already ignore the same path.
     $giPath = Join-Path $root '.gitignore'
     if (Test-Path -LiteralPath $giPath -PathType Container) { Say "$giPath is a folder, not a file -- init cannot make it ignore Claude Code's per-checkout files. Nothing was written."; exit 1 }
+    # The third rule is the mission-event feed's (UI-1 S1, ADR-045: events.jsonl is "never committed, ignored by
+    # the installer's .gitignore entry"); a rule that already ignores the whole runtime plane counts as present.
     $giRules = [ordered]@{
         '/.claude/settings.local.json' = @('/.claude/settings.local.json', '.claude/settings.local.json')
         '/.claude/worktrees/'          = @('/.claude/worktrees/', '.claude/worktrees/')
+        '/.mission-runtime/telemetry/' = @('/.mission-runtime/telemetry/', '.mission-runtime/telemetry/', '/.mission-runtime/', '.mission-runtime/')
     }
-    $giComment = '# Claude Code''s per-checkout files at this root, its local settings and its worktrees, are never committed (written by mission.ps1 init); .claude/settings.json is named by neither and stays tracked.'
-    $giWhy = 'Claude Code''s per-checkout files, never committed'
+    $giComment = '# Claude Code''s per-checkout files at this root, its local settings and its worktrees, and the mission-event feed under .mission-runtime/telemetry/, are never committed (written by mission.ps1 init); .claude/settings.json is named by none and stays tracked.'
+    $giWhy = 'per-checkout files, never committed'
     # The whole .gitignore decision is made HERE, before the first write: a .gitignore that cannot be read, or that
     # lacks a rule and cannot be appended to, makes the target unusable (exit 1) with nothing written -- never a
     # half-initialised mission that a second init then refuses as "already here".
@@ -278,7 +286,54 @@ detectors:
             Say ("  .gitignore appended {0} rule(s): {1} ({2}); no line already there was changed" -f $giMissing.Count, ($giMissing -join ' and '), $giWhy)
         }
     }
+    # UI-1 S1 (ADR-045): THE HOST REGISTRATION, after every refusal above, so a refused init writes nothing
+    # anywhere. Register-MissionCheckout mints <home>/host-id once, appends this checkout's registry row unless
+    # it has one, and makes .mission-runtime/telemetry/ -- the folder the emitter never makes. Then the first
+    # mission_snapshot. A registration that cannot complete is said, and does not un-initialise the mission:
+    # nothing in the mission depends on the feed.
+    $tmI = Join-Path $PSScriptRoot 'tools\lam\mission-telemetry.ps1'
+    if (Test-Path -LiteralPath $tmI -PathType Leaf) {
+        try {
+            . $tmI
+            $regI = Register-MissionCheckout -Root $root
+            Say ("  registered on this host: host_id {0}, {1} ({2})" -f $regI.host_id, $(if ($regI.row_added) { 'a row added to ' + $regI.registry } else { 'already a row in ' + $regI.registry }), 'the mission-event feed folder .mission-runtime/telemetry/ made')
+            Invoke-MissionTelemetry -Root $root -Snapshot -Verb 'mission-init'
+        } catch { Say "  registration on this host did not complete ($($_.Exception.Message)); the mission is initialised and nothing in it depends on the feed." }
+    }
     Say "initialised an empty mission at $root (id $id). Next: mission.ps1 smoke -Target $root"
+    exit 0
+}
+
+if ($Verb -eq 'register') {
+    # UI-1 S1 (ADR-045): REGISTER AN EXISTING CHECKOUT ON THIS HOST -- a mission initialised before the feed
+    # existed, or a worktree made by hand (git never brings the ignored telemetry folder along, and a worktree
+    # is its own stream). The installer's step init runs: host-id once, this checkout's own registry row unless
+    # it has one, the folder .mission-runtime/telemetry/; then the ignore rule init writes, appended to the
+    # root .gitignore when no line already ignores the folder (a .mission-runtime/ line counts); then the
+    # first snapshot. Nothing in the mission itself is written.
+    $mfR = Join-Path $root '.mission\mission.yaml'
+    if (-not (Test-Path -LiteralPath $mfR -PathType Leaf)) { Say "no mission at $root (no .mission/mission.yaml) -- run mission.ps1 init -Target first."; exit 1 }
+    $tmR = Join-Path $PSScriptRoot 'tools\lam\mission-telemetry.ps1'
+    if (-not (Test-Path -LiteralPath $tmR -PathType Leaf)) { Say "the registration step is not on disk at $tmR. Nothing was written."; exit 1 }
+    . $tmR
+    $regR = Register-MissionCheckout -Root $root
+    Say ("registered on this host: host_id {0}, {1}; the feed folder .mission-runtime/telemetry/ is there" -f $regR.host_id, $(if ($regR.row_added) { 'a row added to ' + $regR.registry } else { 'already a row in ' + $regR.registry }))
+    $giR = Join-Path $root '.gitignore'
+    $giHeld = @('/.mission-runtime/telemetry/', '.mission-runtime/telemetry/', '/.mission-runtime/', '.mission-runtime/')
+    $giText = if (Test-Path -LiteralPath $giR -PathType Leaf) { $script:Utf8NoBom.GetString([System.IO.File]::ReadAllBytes($giR)) } else { $null }
+    $giLinesR = if ($null -ne $giText) { @(($giText.TrimStart([char]0xFEFF) -split "`n") | ForEach-Object { $_.TrimEnd(' ', "`r") }) } else { @() }
+    if (@($giHeld | Where-Object { $giLinesR -ccontains $_ }).Count -gt 0) { Say "  .gitignore unchanged: it already ignores /.mission-runtime/telemetry/" }
+    else {
+        $giNlR = if ($null -ne $giText) { $giText.IndexOf("`n") } else { -1 }
+        $giEolR = if (($giNlR -gt 0) -and ($giText[$giNlR - 1] -eq [char]13)) { "`r`n" } else { "`n" }
+        $giAddR = ''
+        if (($null -ne $giText) -and ($giText.Length -gt 0) -and -not $giText.EndsWith("`n")) { $giAddR += $giEolR }
+        $giAddR += '# The mission-event feed under .mission-runtime/telemetry/ is never committed (written by mission.ps1 register).' + $giEolR + '/.mission-runtime/telemetry/' + $giEolR
+        $giS = [System.IO.File]::Open($giR, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write)
+        try { $giB = $script:Utf8NoBom.GetBytes($giAddR); $giS.Write($giB, 0, $giB.Length) } finally { $giS.Dispose() }
+        Say "  .gitignore $(if ($null -eq $giText) { 'created' } else { 'appended 1 rule' }): /.mission-runtime/telemetry/ (the mission-event feed, never committed)"
+    }
+    Invoke-MissionTelemetry -Root $root -Snapshot -Verb 'mission-register'
     exit 0
 }
 

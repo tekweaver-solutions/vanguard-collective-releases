@@ -2647,6 +2647,44 @@ function Invoke-MissionVerify {
             return 2
         }
     }
+
+    # ---- UI-1 S1 (ADR-045): the mission-event feed ---------------------------------------------------
+    # verify_result (the verdict, the arms that ran, the --against artifact, the DIVERGED count) and
+    # tip_observed. ahead/behind are read against the branch's remote-tracking ref WITHOUT a fetch -- this
+    # tool never fetches -- so the line says cached: true. Its source is this run's self-captured report,
+    # else the --out report, else the --against artifact. Never changes the verdict or the exit code.
+    try {
+        $tmV = Join-Path $PSScriptRoot 'lam\mission-telemetry.ps1'
+        if (Test-Path -LiteralPath $tmV -PathType Leaf) {
+            $vSrc = $againstPath
+            if ($opt['out']) { $vSrc = $opt['out'] }
+            if (-not $evidenceWriteFailed) { $vSrc = Join-Path (Join-Path $evidenceRoot $verifyId) 'verify-report.yaml' }
+            $vArms = @(@($script:Arms) | ForEach-Object { [string](Get-JsonMember -Object $_ -Name 'arm') } | Where-Object { $_ } | Select-Object -Unique)
+            $vDiv = @(@($script:Arms) | Where-Object { [string](Get-JsonMember -Object $_ -Name 'outcome') -eq 'DIVERGED' }).Count
+            $vAgainst = $againstPath
+            try {
+                $vFull = [System.IO.Path]::GetFullPath($againstPath); $vBase = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/') + '\'
+                if ($vFull.StartsWith($vBase, [System.StringComparison]::OrdinalIgnoreCase)) { $vAgainst = $vFull.Substring($vBase.Length) -replace '\\', '/' }
+            } catch { }
+            $vTip = [ordered]@{ local_tip = $null; origin_tip = $null; ahead = $null; behind = $null; cached = $true; upstream = $null }
+            $prevEapV = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try {
+                $vh = @(& git -C $repoRoot rev-parse HEAD 2>$null); if ($LASTEXITCODE -eq 0 -and $vh.Count) { $vTip.local_tip = ([string]$vh[0]).Trim() }
+                $vu = @(& git -C $repoRoot rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null)
+                if ($LASTEXITCODE -eq 0 -and $vu.Count) { $vTip.upstream = ([string]$vu[0]).Trim() }
+                if ($vTip.upstream) {
+                    $vo = @(& git -C $repoRoot rev-parse $vTip.upstream 2>$null); if ($LASTEXITCODE -eq 0 -and $vo.Count) { $vTip.origin_tip = ([string]$vo[0]).Trim() }
+                    $vc = @(& git -C $repoRoot rev-list --left-right --count ('HEAD...' + $vTip.upstream) 2>$null)
+                    if ($LASTEXITCODE -eq 0 -and $vc.Count -and (([string]$vc[0]) -match '^\s*(\d+)\s+(\d+)\s*$')) { $vTip.ahead = [int]$Matches[1]; $vTip.behind = [int]$Matches[2] }
+                }
+            } finally { $ErrorActionPreference = $prevEapV }
+            . $tmV
+            Invoke-MissionTelemetry -Root $repoRoot -Verb 'mission-verify' -Events @(
+                @{ Kind = 'verify_result'; SourcePath = $vSrc; Payload = [ordered]@{ verdict = [string]$g.Gate; arms_run = @($vArms); against = $vAgainst; divergences = $vDiv; refused_by = $g.RefusedBy } },
+                @{ Kind = 'tip_observed'; SourcePath = $vSrc; Payload = $vTip })
+        }
+    } catch { }
+
     Write-Std $text
 
     if ($g.Gate -eq 'PASS') { return 0 }

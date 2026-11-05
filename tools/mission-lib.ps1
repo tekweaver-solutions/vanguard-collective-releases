@@ -348,6 +348,28 @@ function Add-LedgerEntry {
     $fs = [System.IO.File]::Open($led, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write)
     try { $fs.Write($bytes, 0, $bytes.Length) } finally { $fs.Dispose() }
     Write-Pass "ledger entry appended (CRLF, append-only): $($Entry.id)"
+    # UI-1 S1 (ADR-045): one ledger_row line. entry is the row's 1-based line number in entries.jsonl (SS14
+    # types it an integer; the ledger id rides beside it), row the register row, which this ledger has none of.
+    # The line count is read for the feed only, so it sits inside the same never-fail rule: a ledger it cannot
+    # re-read (held by a concurrent writer) costs the feed its line, never the append its success.
+    try {
+        $ledN = @([System.IO.File]::ReadAllLines($led) | Where-Object { $_.Trim() }).Count
+        Invoke-MissionLibTelemetry -Root $Root -Verb 'ledger-append' -Events @(@{ Kind = 'ledger_row'; SourcePath = '.mission/ledger/entries.jsonl'
+            Payload = [ordered]@{ entry = $ledN; row = $null; type = [string]$Entry.type; ledger_id = [string]$Entry.id } })
+    } catch { }
+}
+
+# --- UI-1 S1 (ADR-045): the mission-event feed, reached through tools\lam\mission-telemetry.ps1. A copy of
+#     this library vendored without that file (the smoke mission's) skips the feed; nothing here can fail a
+#     verb, because SS14's append never fails the verb that caused it. ---
+function Invoke-MissionLibTelemetry {
+    param([string]$Root, [object[]]$Events = @(), [switch]$Snapshot, [string]$Verb = 'verb')
+    try {
+        $tm = Join-Path $PSScriptRoot 'lam\mission-telemetry.ps1'
+        if (-not (Test-Path -LiteralPath $tm -PathType Leaf)) { return }
+        . $tm
+        Invoke-MissionTelemetry -Root $Root -Events $Events -Snapshot:$Snapshot -Verb $Verb
+    } catch { }
 }
 
 # --- A-123 + A-124: stage ONLY the named paths and commit as ONE logical unit via a -F message file;
@@ -372,6 +394,8 @@ function Invoke-AtomicCommit {
         $newSha = (& git -C $Root rev-parse HEAD).Trim()
         if ($newSha -eq $preSha) { throw "git commit did not advance HEAD (phantom-commit risk) -- aborting." }
         Write-Pass "atomic commit: $newSha"
+        # UI-1 S1: every stage verb that commits through here offers the feed its snapshot (written on change only).
+        Invoke-MissionLibTelemetry -Root $Root -Snapshot -Verb 'stage-verb'
         return $newSha
     }
     catch {

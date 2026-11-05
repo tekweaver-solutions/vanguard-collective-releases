@@ -71,6 +71,15 @@ stamp is git's blob id of this file's bytes with every CR LF collapsed to LF, cu
 "tools/lam/commit_ledger.py@<8 hex>". An edited, uncommitted or copied composer stamps nothing. `composed_by` is a
 declaration this file writes, not an attestation: nothing stops a seat from writing a line by hand with a copied
 stamp, and nothing audits this ledger's lines for one.
+
+THE MISSION-EVENT FEED (UI-1 S1, LM2-ADR-045, expanded-schemas SS14: ledger_row's emitter is "commit-ledger / ledger
+verbs"). After an append, ONE ledger_row line -- entry (the line's number), row (null: a commit line has no register
+row), type ("commit") -- is said by the feed's ONE writer, Write-MissionEvent, through tools/lam/emit-mission-event.ps1
+run as a subprocess with the fields as arguments. This file never writes the feed itself: a second emitter would be a
+second writer with a second lock. Only where the checkout holds a mission (.mission/mission.yaml), the entry point
+sits beside this file, and the ledger is the checkout's own; the subprocess is silent and bounded, its outcome is not
+read, and nothing about it changes this composer's output or exit code -- a failed append is recorded by the
+PowerShell side in the evidence plane's hook-errors.log.
 """
 import argparse
 import datetime
@@ -78,6 +87,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -444,6 +454,33 @@ def append_record(sha, obj, ledger, repo):
     return ledger, count, line
 
 
+def offer_ledger_row(ledger, entry):
+    """ledger_row, said by the feed's one writer (the docstring's THE MISSION-EVENT FEED). Never raises, prints nothing."""
+    try:
+        top, _ = repository()
+        if top is None or not os.path.isfile(os.path.join(top, ".mission", "mission.yaml")):
+            return
+        entry_point = os.path.join(top, "tools", "lam", "emit-mission-event.ps1")
+        if not os.path.isfile(entry_point):
+            return
+        source = os.path.realpath(ledger)
+        if os.path.normcase(os.path.commonpath([source, top])) != os.path.normcase(top):
+            return
+        shell = shutil.which("powershell") or shutil.which("pwsh")
+        if shell is None:
+            return
+        env = dict(os.environ)
+        for name in list(env):
+            if name in GIT_REDIRECTS or name.startswith("GIT_CONFIG_KEY_") or name.startswith("GIT_CONFIG_VALUE_"):
+                env.pop(name, None)
+        subprocess.run([shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", entry_point,
+                        "-Root", top, "-Kind", "ledger_row", "-SourcePath", source, "-Hook", "commit-ledger",
+                        "int:entry=" + str(entry), "null:row", "str:type=commit"],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env, timeout=120)
+    except Exception:
+        return
+
+
 def run_append(args):
     named = args.ledger if args.ledger is not None else "the checkout's commit ledger"
     try:
@@ -467,6 +504,7 @@ def run_append(args):
         emit("REFUSED: " + "; ".join(exc.reasons) + " -- nothing was appended to " + (exc.where or named))
         return 2
     emit("APPENDED line " + str(count) + " to " + ledger + ": " + line)
+    offer_ledger_row(ledger, count)
     return 0
 
 

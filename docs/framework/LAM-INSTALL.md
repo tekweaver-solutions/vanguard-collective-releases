@@ -92,13 +92,13 @@ functionality.**
 | file | bytes | sha256 (16) |
 |---|---:|---|
 | `evidence-guard-pretooluse.ps1` | 5409 | `4835cff6ed2b02b8` |
-| `evidence-post-tool-use.ps1` | 15287 | `5f08812113d0979e` |
-| `evidence-stop-finalize.ps1` | 6235 | `909331638d77340e` |
-| `evidence-pre-compact.ps1` | 2055 | `3d56009be038d655` |
-| `evidence-dispatch-end.ps1` | 8310 | `a5a3c272bdd00b9f` |
+| `evidence-post-tool-use.ps1` | 18832 | `8b36ffe49e50d551` |
+| `evidence-stop-finalize.ps1` | 8434 | `91036e870784b110` |
+| `evidence-pre-compact.ps1` | 4229 | `6e1c166d20317d00` |
+| `evidence-dispatch-end.ps1` | 9606 | `694566395549df2d` |
 | `evidence-pre-push.ps1` | 10059 | `160976931b1e7b45` |
 | `check-prepush-installed.ps1` | 2067 | `ed36ac62e4b4a468` |
-| `lib/evidence-common.ps1` | 503493 | `d2a401cfb3fcd709` |
+| `lib/evidence-common.ps1` | 530424 | `9b2d5712906e343a` |
 
 > **THIS TABLE WAS STALE IN 5 OF 6 ROWS, and the library row was off by 141,267 bytes** — it read
 > 29246 against a live 170513. (That figure read *131,946* until a later WP-5 reading subtracted it:
@@ -751,7 +751,7 @@ obtained, not two** — so R-3's required handoff was unwritable by the role obl
 The blanket deny is gone from `worker.json` and **enforcement is here**.
 
 **Cut from** `tools/evidence-hooks-next/hooks/lib/evidence-common.ps1` **lines 4188-4264**, whose
-file sha256 (16) is **`d2a401cfb3fcd709`** over 503493 bytes — **BASIS: LF-NORMALISED BYTES**, the
+file sha256 (16) is **`9b2d5712906e343a`** over 530424 bytes — **BASIS: LF-NORMALISED BYTES**, the
 same basis as §1's tables and reproduced by the block above them. (On a checkout whose working
 copy has CRLF line endings, `Get-FileHash` answers another hash over more bytes; that is the
 working copy's basis and it is *not* what this line states. The two bases are named here on purpose: the round that cut this excerpt is

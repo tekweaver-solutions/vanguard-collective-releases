@@ -468,6 +468,25 @@ if (-not (Test-Path -LiteralPath $gateClassLib)) {
 }
 . $gateClassLib
 
+# UI-1 S1 (ADR-045): THE MISSION-EVENT FEED. After a gate write lands, one line read off the artifact
+# itself -- gate_minted (approve/reapprove), gate_consumed (settle), gate_expired (list, once per gate) --
+# plus halt_resolved ANSWERED when a halt-ruling answers its HALT. Through tools\lam\mission-telemetry.ps1,
+# skipped when that file is absent; it writes nothing to this tool's output and can fail nothing.
+# No -Kind: no gate line, the snapshot alone -- revoke, which SS14 gives no kind of its own, but which changes
+# the derived state when it revokes a halt-ruling gate (its HALT is open again).
+function Send-LamGateTelemetry {
+    param([string]$Kind = '', [string]$GatePath = '', [string]$HaltKind = '', [string]$HaltPath = '', [string]$Resolution = '', [switch]$Snapshot)
+    try {
+        $tm = Join-Path $PSScriptRoot 'mission-telemetry.ps1'
+        if (-not (Test-Path -LiteralPath $tm -PathType Leaf)) { return }
+        . $tm
+        $evts = @()
+        if ($Kind -and $GatePath) { $evts += @{ Kind = $Kind; GatePath = $GatePath } }
+        if ($HaltKind -and $HaltPath) { $evts += @{ Kind = $HaltKind; HaltPath = $HaltPath; Resolution = $Resolution } }
+        Invoke-MissionTelemetry -Root $MissionRoot -Events $evts -Snapshot:$Snapshot -Verb 'mission-gate'
+    } catch { }
+}
+
 trap {
     Write-Output "mission-gate: UNHANDLED ERROR -- $($_.Exception.Message)"
     Write-Output "  stack: $(($_.ScriptStackTrace -split "`r?`n") -join ' | ')"
@@ -938,6 +957,19 @@ switch ($Command) {
             # one carried the load-bearing (?!null), that one did not, so that one reported every
             # fresh gate as consumed and could never pass. One definition, every consumer.
             $state = (Get-LamGateState -Path $f.FullName).state
+            # UI-1 S1 (ADR-045): AN OPEN GATE PAST ITS expires_at HAS EXPIRED, and `list` is the verb that
+            # observes it -- no code ever writes an expiry; expires_at binds the pre-push decider at read time.
+            # gate_expired is said once per gate (the emitter keeps a marker), however often `list` runs. The
+            # listed state is unchanged: this tool's states are the shared predicate's, and expiry is not one.
+            if ($state -eq 'open') {
+                $expRead = Get-LamGateScalarField -Text $t -Field 'expires_at'
+                $expAt = [DateTime]::MinValue
+                if ($expRead.ok -and $expRead.value -and [DateTime]::TryParse([string]$expRead.value, [System.Globalization.CultureInfo]::InvariantCulture,
+                        ([System.Globalization.DateTimeStyles]::AdjustToUniversal -bor [System.Globalization.DateTimeStyles]::AssumeUniversal), [ref]$expAt) -and
+                        ($expAt -lt [DateTime]::UtcNow)) {
+                    Send-LamGateTelemetry -Kind 'gate_expired' -GatePath $f.FullName
+                }
+            }
             # ONE SCALAR READER, AND IT COUNTS (round 3, a review finding). This line was one of FOUR
             # copies of a first-match regex that never asked how many keys there were, so a gate
             # declaring TWO `authorized_tip_sha` values listed the first and said nothing about the
@@ -1021,6 +1053,9 @@ switch ($Command) {
         $revokeDigest = Get-LamActDigest -Writes $revokeWrites
         Invoke-LamGateComposeOrRefuse -Verb $Command -Writes $revokeWrites -BindsPath '' -BindsSha '' -ActDigest $revokeDigest
         [System.IO.File]::WriteAllBytes($p, $resultBytes)
+        # UI-1 S1 (ADR-045): a revocation can move the derived state (a revoked halt-ruling reopens its HALT), so
+        # revoke offers the snapshot -- one snapshot line when snapshot_sha256 moved, none when it did not.
+        Send-LamGateTelemetry -Snapshot
         Write-Output "mission-gate: revoked $Kind-$Id"
         if ($Reason) {
             Write-Output "  reason   : $Reason"
@@ -1315,6 +1350,7 @@ switch ($Command) {
             $settleDigest = Get-LamActDigest -Writes $settleWrites
             Invoke-LamGateComposeOrRefuse -Verb $Command -Writes $settleWrites -BindsPath '' -BindsSha '' -ActDigest $settleDigest
             [System.IO.File]::WriteAllBytes($p, $settleBytes)
+            Send-LamGateTelemetry -Kind 'gate_consumed' -GatePath $p -Snapshot
             Write-Output "mission-gate: settled $Kind-$Id"
             Write-Output "  consumed_at            : $stamp"
             Write-Output "  consumed_origin_tip    : $observed"
@@ -1502,6 +1538,7 @@ switch ($Command) {
         $settleDigest = Get-LamActDigest -Writes $settleWrites
         Invoke-LamGateComposeOrRefuse -Verb $Command -Writes $settleWrites -BindsPath '' -BindsSha '' -ActDigest $settleDigest
         [System.IO.File]::WriteAllBytes($p, $settleBytes)
+        Send-LamGateTelemetry -Kind 'gate_consumed' -GatePath $p -Snapshot
         Write-Output "mission-gate: settled $Kind-$Id"
         Write-Output "  consumed_at     : $stamp"
         Write-Output "  consumed_commit : $obsCommit"
@@ -2378,6 +2415,14 @@ switch ($Command) {
             Write-Output "mission-gate: REFUSING -- the gate artifact could not be written to $p."
             Write-Output "  $($_.Exception.Message)"
             exit 2
+        }
+
+        # UI-1 S1: the mint has landed -- gate_minted; a halt-ruling ANSWERS the HALT it binds.
+        if ($Kind -eq 'halt-ruling') {
+            $haltBound = if ([System.IO.Path]::IsPathRooted($Binds)) { $Binds } else { Join-Path $MissionRoot $Binds }
+            Send-LamGateTelemetry -Kind 'gate_minted' -GatePath $p -HaltKind 'halt_resolved' -HaltPath $haltBound -Resolution 'ANSWERED' -Snapshot
+        } else {
+            Send-LamGateTelemetry -Kind 'gate_minted' -GatePath $p -Snapshot
         }
 
         if ($isReapprove) {

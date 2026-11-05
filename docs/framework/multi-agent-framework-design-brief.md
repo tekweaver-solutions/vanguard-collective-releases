@@ -257,6 +257,9 @@ Async human interface. Not for real-time micromanagement.
 - Escalation inbox (amendments, approvals, blocked items).
 - Trace explorer (drill into any past decision).
 - Mission audit trail (full reproducibility on demand).
+
+v1 is specified by ADR-045 (read-only local dashboard, `vanguard ui`); §12.9 carries the status.
+
 ---
  
 ## 7. Mission Lifecycle
@@ -345,22 +348,89 @@ Between these touchpoints, the human monitors via Mission Control UI but is not 
  
 ---
  
-## 12. Open Architectural Decisions
- 
-The receiving architect should make these choices and document tradeoffs.
- 
-1. **Durable runtime platform.** LangGraph + checkpointer, DBOS, Temporal, or custom on Postgres. Tradeoffs: ecosystem maturity vs. vendor lock-in vs. operational complexity.
-2. **Storage backend.** Postgres (rich query, mature) vs. SQLite (zero-ops, single-node) vs. Redis + durable store (latency vs. complexity).
-3. **Sandboxing technology.** Containers (Docker), microVMs (Firecracker), or platform-native (Lambda, Fly Machines). Tradeoffs: startup time, isolation strength, cost.
-4. **Schema enforcement.** JSON Schema, Protobuf, Pydantic, or custom. Where validation happens (gateway, runtime, both).
-5. **Worktree management.** Bare git worktrees with custom orchestration vs. existing frameworks (Claude Code Spaces, Augment Intent, custom).
-6. **Conflict scanner implementation.** File-level (path overlap), AST-level (symbol overlap), or behavioral (test-impact analysis).
-7. **Trace store backend.** OpenTelemetry-compatible (Honeycomb, Jaeger), LLM-native (LangSmith, Helicone), or self-hosted.
-8. **Eval framework.** How prompt versions are tested before promotion. Manual gating vs. automated regression suite vs. shadow runs.
-9. **Mission Control UI.** Web app, terminal UI, IDE plugin, or all three.
-10. **Multi-mission resource management.** How concurrent missions share compute, model rate limits, and human attention. Out of scope for v1, but the architecture should not foreclose it.
-11. **Identity and permissions.** Per-mission scoping, per-role credentials, secrets management.
-12. **Cost attribution.** Per-mission, per-feature, per-role accounting for billing/showback.
+## 12. Architectural Decisions — status (back-filled 2026-11-01)
+
+This section was written as a list of open choices for the receiving architect. It is now a status
+register. Legend: CLOSED — ruled and recorded (ADR cited); PROPOSED — a design exists and the fork
+is named, no ruling; OPEN — deliberately unresolved, with the condition that reopens it; DEFERRED — out of v1 by ruling, with what keeps it from being foreclosed; CLOUD-GATED —
+not designed until a hosted customer exists. "Local" is Local Orchestrator / Local Autonomous Mode on
+one workstation (local-modes v2.3 §3); "Cloud" is Hosted Autonomous Mode, designed-not-built.
+
+1. **Durable runtime platform.** Local CLOSED: git holds `.mission/` (ADR-003) and the evidence
+   plane holds per-dispatch manifests (ADR-021); the runner spawns workers as pure functions
+   (ADR-023). Replay is re-execution from recorded inputs (spec version, brief bytes by sha256, base
+   commit) against the captured transcript — LLM nondeterminism means re-execute, never reproduce.
+   What this gives up: Principle 9 holds at dispatch granularity, not per call; a crash mid-dispatch
+   resumes from the handoff or the PARTIAL manifest, not from the last tool call. Cloud PROPOSED:
+   CR-3 — Postgres mirror of artifacts + WORM evidence store + `replay <dispatch_id>`. Watchlist,
+   no decision: Claude Managed Agents as hosted substrate (agent loop and session state would live
+   outside the framework's checkpoint ownership).
+2. **Storage backend.** Local CLOSED: `.mission/` tracked in git is canonical; `.mission-runtime/`
+   untracked holds evidence, gates' runtime state and telemetry. There is no query engine locally:
+   instruments and grep are the query layer, and the dashboard's SQLite projection (ADR-045) is a
+   disposable cache, never storage. Cloud PROPOSED: the CR-3 Postgres mirror, which depends on
+   published JSON Schemas (item 4).
+3. **Sandboxing technology.** Local CLOSED: layered (ADR-027) — Docker as the outer, user-owned
+   boundary; the sandboxed Bash tool as the near-zero-startup inner layer for validator swarms.
+   Named limit: a native Windows session has no mount namespace, so evidence-machinery exclusion
+   (v2.3 §4.1 layer (a)) does not exist locally; the PreToolUse guard is an accident tripwire, not a
+   boundary (v2.3 §4.5 law 1). Cloud PROPOSED: CR-2 — a seat container image (Linux, pwsh 7,
+   Python, Claude Code / Agent SDK) with mount exclusion and an egress allowlist; doubles as the
+   devcontainer for non-Windows Local.
+4. **Schema enforcement.** CLOSED: Pydantic at the runner boundary for Handoff, ValidatorResult,
+   Report, Amendment (ADR-024); invalid → reject + respawn (§8). Refinement PROPOSED, not ruled
+   (P5 / LH-6): JSON Schema as the canonical form with Pydantic generated from it, so a Cloud
+   mirror and the dashboard validate against the same files. Precedent already on disk: the
+   Evidence Manifest ships as JSON Schema 1.2.0; the `mission-event` artifact (ADR-045) follows that
+   precedent without pre-empting P5.
+5. **Worktree management.** CLOSED: Claude Code native worktrees with `.worktreeinclude`
+   (ADR-026); custom orchestration deleted. Merge sequencing stays framework-owned and the
+   operator's `--no-ff` merge at the root is the trust boundary for tooling branches.
+6. **Conflict scanner.** OPEN on purpose. Nothing native detects cross-worktree conflict. PROPOSED
+   for v1 (LH-7): file-level — each dispatch declares `writes:` globs, the guard refuses writes
+   outside them, a check reports overlap across active worktrees (mechanizes today's hand-written
+   pair-proof table). AST-level or behavioral only after file-level has measured how often it is too
+   coarse.
+7. **Trace store backend.** PROPOSED, not ruled (LH-3): Claude Code's native OpenTelemetry metrics
+   and events into a collector, with resource attributes `mission_id, dispatch_id, role,
+   prompt_version` set by the runner; usage and cost anchors read from transcript snapshots in the
+   evidence plane, never from telemetry (telemetry's cost metric is an estimate for trends). The
+   backend fork — OTel-compatible, LLM-native, self-hosted — is open. The dashboard's
+   `events.jsonl` (ADR-045) is not the trace store and carries no LLM-call content.
+8. **Eval framework.** Half CLOSED: cadence work (archive scans, prompt-regression checks,
+   pre-witness deploy-currency checks) runs as scheduled routines whose output counts only once it
+   lands in `.mission/` (ADR-030). PROPOSED (LH-5): prompt versions as artifacts — brief templates
+   under `prompts/`, `prompt_version` = template id + sha256 on every spawn line (validator prompts'
+   sha256 already recorded). Failure clustering → regression evals DEFERRED until traces from ≥ 2
+   missions exist; today the loop is retrospective → batch, by hand.
+9. **Mission Control UI.** CLOSED for v1 by ADR-045, which supersedes ADR-029: a read-only,
+   local-machine dashboard (`vanguard ui`) projecting each project's `mission-event` feed; no
+   commands, no messages to agents. ADR-029's native surfaces (agent view, channels, Artifacts)
+   remain the operator's surfaces at the seat; what ADR-045 replaces is the deferral of a custom UI
+   and the claim that native surfaces are the product's face. Web app only; no terminal UI or IDE
+   plugin.
+10. **Multi-mission resource management.** DEFERRED on purpose (out of v1, §13). Two rulings keep
+    it from being foreclosed: hosted mode, if built, is bring-your-own-cloud so each customer's
+    missions run on their own compute and model quota (productization F2, deferred with Cloud);
+    and every `mission-event` carries `mission_id + host_id + seq` and the dashboard speaks only to
+    `/api/*`, so a fleet view over many hosts is an endpoint re-implementation, not a schema change.
+11. **Identity and permissions.** OPEN; CLOUD-GATED. Local today: the operator's console
+    credential mints gates, the push gate is a hash-bound single-use artifact (ADR-033), and the only
+    credential the framework handles is the model key, read from the environment in API-key mode
+    (release 0.3.0) and never stored. PROPOSED for Cloud (CR-1): per-role scoped Git-provider tokens
+    (worker: branch push; validator: read; main only after a verified signed gate) and secrets in
+    the data plane's manager. Also gates the dashboard's v2 control path (human-authored
+    touchpoint artifacts through the UI) — not designed until this item is.
+12. **Cost attribution.** PROPOSED, not ruled: per-dispatch and per-arc caps and showback derive
+    from transcript-derived anchors (LH-4, a `budget_within` detector reading the evidence plane);
+    billing-grade figures come from the provider (usage reporting per workspace or key, or the
+    customer's cloud bill). Attribution keys per mission / feature / role follow the Role Manifest
+    (LH-1), not built. The dashboard shows no cost figure until an anchor exists (ADR-045).
+
+Sources of record: local-modes v2.3 §5 (ADR-023–035) and §11; the productization recommendation of
+2026-10-19 (§5 triage LH-1…7, CR-1…5; §9; §11 rulings); release 0.3.0 (API-key mode); ADR-045.
+These are framework decisions; the operator's host ledger carries the rulings that made them.
+
 ---
  
 ## 13. Non-Goals

@@ -50,7 +50,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 # Set up sys.path for cross-directory framework imports BEFORE the imports.
 # Standalone invocation (python dispatch_entry.py ...) doesn't go through
@@ -116,6 +116,10 @@ class DispatchInputs:
     # mission-dispatch.ps1 -OperatorNote into the constructed task brief.
     # Additive to, never replacing, the artifact-derived objective.
     operator_note: Optional[str] = None
+    # UI-1 S1: the dispatch id, minted by mission-dispatch.ps1 so that it can say
+    # dispatch_opened the moment the committed brief appears, while the worker runs.
+    # A UUID string; None mints one here, as before.
+    dispatch_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -268,7 +272,7 @@ def build_dispatch(
             )
 
     return WorkerDispatch(
-        id=uuid4(),
+        id=UUID(inputs.dispatch_id) if inputs.dispatch_id else uuid4(),
         created_at=_iso_now(),
         created_by="claude-code:operator",
         mission_id=mission_id,
@@ -567,6 +571,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             ),
             dry_run=bool(args_doc.get("dry_run", False)),
             operator_note=operator_note,
+            dispatch_id=args_doc.get("dispatch_id") or None,
         )
     except (KeyError, ValueError) as e:
         print(json.dumps({"exit_code": 3, "error": f"args parse failed: {e}"}))

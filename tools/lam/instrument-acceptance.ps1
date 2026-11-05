@@ -1,5 +1,6 @@
 #Requires -Version 5.1
-# The acceptance run of a checkout: WP-1..6 serially through the house helper, one run key per reading.
+# The acceptance run of a checkout: WP-1..7 serially through the house helper, one run key per reading (WP-7, the
+# mission-event telemetry feed of UI-1, runs after WP-6).
 #
 #   -RunKey     the reading's key; a key that already names a capture is refused (exit 9), never overwritten.
 #   -Root       the checkout whose instruments run and whose .mission-runtime\lam\instrument-runs\ takes the
@@ -45,7 +46,7 @@ $summary = @()
 $smokeBefore = [Environment]::GetEnvironmentVariable('LAM_SMOKE_ROOT')
 try {
     [Environment]::SetEnvironmentVariable('LAM_SMOKE_ROOT', $(if ($SmokeRoot) { $SmokeRoot } else { $null }))
-    foreach ($n in 1..6) {
+    foreach ($n in 1..7) {
         $inst = Join-Path $root ("tests\lam\instrument-WP-$n.ps1")
         $t0 = [DateTime]::UtcNow
         $r = Save-LamInstrumentRun -InstrumentPath $inst -MissionRoot $root -RunKey $RunKey

@@ -1339,3 +1339,71 @@ The evidence-plane enforcement claims are inherited from A1 and are not re-argue
 **No *standing* enforcement is claimed for this document's own shape**, and an earlier form of this paragraph understated what does exist. An acceptance test ships beside this document at `tools/framework/tests/test-a2-acceptance.ps1`. It checks that every field named by v2.2 §12, by the sealed `evidence-manifest.schema.json`, and by the capture hook's own log-line construction appears here with exact spelling; that every row of *Registered decisions* carries a status; that the observed populations re-derive verbatim; and that the encoding holds. Each of those field sets is read from its source rather than transcribed, so none of them is a list this document maintains.
 
 What the test is not is standing. **Nothing invokes it** — no hook, no gate, no ceremony step — so it decides only when a person runs it, and its population check skips at any HEAD other than the derivation anchor rather than deciding on moved ground. It is an instrument, not a boundary, and this document can drift between runs of it.
+
+---
+
+## 14. Mission Event (`mission-event`) — telemetry line (LM2-ADR-045)
+
+**Purpose.** A project's own append-only feed of what happened, emitted by the hooks and lifecycle
+verbs that already hold the pen, consumed only by the read-only dashboard (`vanguard ui`). It is a
+projection source, not evidence: the record stays `.mission/` (git), the evidence manifests and the
+trace store. A report never cites an event as proof of anything; it cites the artifact the event
+points at, by `source_path@sha256`.
+
+**File.** `.mission-runtime/telemetry/events.jsonl` — one JSON object per line, UTF-8, LF, never
+committed (ignored by the installer's `.gitignore` entry), one file per project checkout. A worktree
+checkout has its own file and its own `seq`; the stream identity is the host registry entry (host,
+checkout path), and `mission_id` groups streams of one mission.
+
+**Line fields** (all required; order free; unknown fields are kept and ignored).
+
+| Field | Type | Description |
+|---|---|---|
+| `schema_version` | string | `"1.0"`. Bumped only additively; a consumer never rejects a newer minor. |
+| `mission_id` | string | The mission id from `.mission/mission.yaml`. |
+| `host_id` | string | Opaque, stable per host: a UUID minted once into `~/.vanguard/host-id` by the first `install.ps1` or `mission init` on that host. Never a hostname or user name. |
+| `seq` | integer ≥ 1 | Monotonic per file, allocated under an exclusive lock on the file (named mutex per path). A gap means loss; a duplicate is rejected at ingest. Never derived from line count without the lock (v2.3 §12.3; Registered decisions N-e in this document). |
+| `ts` | string | UTC, ISO-8601 with milliseconds, `Z` suffix. |
+| `kind` | string | One of the kinds below. Unknown kinds are kept, counted and shown as "unknown kind", never dropped. |
+| `payload` | object | Per-kind fields below; additive. |
+| `source_path` | string | Repo-relative path of the artifact the event derives from (the evidence log, the ledger, the gate file, the spec file, …). |
+| `sha256` | string | Lowercase hex sha256 of that file's raw bytes after the write that caused the event. A line without it is rejected at ingest. |
+| `commit` | string or null | `git rev-parse HEAD` of the checkout at emit time; null only when git is unavailable, shown as "no commit". |
+
+**Kinds and payloads (v1).**
+
+| Kind | Emitter | Payload fields |
+|---|---|---|
+| `tool_call` | PostToolUse hook | `tool`, `exit_code` (integer or null — null where the harness supplies none, E5-i), `paths` (list of paths the call touched, from the hook's captured arguments), `session_id`, `dispatch_id`. No stdout, no stderr, no command text. |
+| `session_start` | first PostToolUse of a session | `session_id`, `dispatch_id` or null, `role` if known. |
+| `session_stop` | Stop hook | `session_id`, `dispatch_id`, `manifest_state` (`ABSENT`/`PARTIAL`/`FINALIZED`/`TAMPERED`), `entry_count`. |
+| `compact` | PreCompact hook | `session_id`, `transcript_sha256`. |
+| `dispatch_opened` | dispatch verb / runner | `dispatch_id`, `kind`, `feature`, `assertion_targets`. |
+| `dispatch_finalized` | Stop hook at finalize | `dispatch_id`, `manifest_state`, `partial` (bool). |
+| `spec_bumped` | spec-bump / spec-accept verb | `from_version`, `to_version`, `amendment_id`. |
+| `ledger_row` | commit-ledger / ledger verbs | `entry`, `row` (register row if any), `type`. |
+| `gate_minted` / `gate_consumed` / `gate_expired` | gate verbs and the push hook | `gate_id`, `kind`, `expires_at`, `consumed_at` (consumed only), `tip_sha` (push gates). |
+| `halt_raised` / `halt_resolved` | HALT verbs | `halt_id`, `severity`, `resolution` (resolved only: `ANSWERED`/`RESOLVED`/`WITHDRAWN`). |
+| `assertion_result` | validator result writer | `assertion_id`, `feature`, `result` (`green`/`red`/`skipped`), `round`, `validator_kind` (`narrow`/`qa`). |
+| `verify_result` | `mission verify` | `verdict`, `arms_run` (list), `against` (prior report path), `divergences` (count). |
+| `tip_observed` | push hook / verify | `local_tip`, `origin_tip` or null, `ahead`, `behind` (null when unknown — an ahead/behind read without fetch is a cache read and is marked `cached: true`). |
+| `mission_snapshot` | any stage-level verb, on change only | `state` (lifecycle stage), `current_milestone`, `features` (id → status), `assertions` (id → status), `counts` (features, assertions, open_halts, open_dispatches), `snapshot_sha256` (hash of the derived state; emitted only when it changes). Additively (UI-1 S2-AM1), `milestones`: milestone id → `title`, `status`, `assertions_total`, `assertions_green`, `started_ts`, `done_ts`, derived from the spec's milestones and the contract's `milestone_id`, the two timestamps null until the writer observes the milestone leave `pending` or reach `passed` and kept out of the hashed state. |
+
+**Rules.**
+- Additive only: kinds and fields are added, never removed or renamed. A consumer validates each
+  line against the published JSON Schema at load; a rejected line (missing `sha256`, bad shape,
+  duplicate `seq`) is counted and shown, never silently dropped.
+- The append never blocks and never fails the tool call or verb that triggered it: a single
+  buffered write under the lock with a bounded wait; on any failure the emitter returns without
+  error. A failed append leaves no line and no gap; its only trace is the hook's own
+  `hook-errors.log` in the evidence plane.
+- Network is absent in v1. No emitter opens a socket.
+- Nothing in `payload` carries file contents, command text, stdout or model output. The feed is
+  safe to leave on a shared workstation; the artifacts it points to are governed as before.
+- The published JSON Schema file for this artifact (UI-1 S0) follows the Evidence Manifest
+  precedent (`docs/framework/evidence-manifest.schema.json`) and does not pre-empt brief §12.4's
+  open refinement.
+
+**What this artifact is not.** Not the trace store (brief §12.7): no LLM-call content. Not evidence
+(v2.3 §4): nothing is consumed from it as proof. Not a message channel (brief §2 P1): no agent reads
+it; only `vanguard ui` does.

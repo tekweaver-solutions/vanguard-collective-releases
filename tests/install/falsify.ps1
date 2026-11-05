@@ -27,6 +27,15 @@
   independently of install.ps1, so a check never grades the installer with its own function -- except case
   g's unit probes, which lift Get-JudgedForm out of the installer on purpose.
 
+  THE RELEASE (UI-1 S4): release.ps1 builds the dashboard (npm ci --offline, npm run build) and reads its notices with
+  pip-licenses, so a case that builds the ZIP (d, e, f, g, u7, u10, k1, k4) needs -LicensePython, the interpreter of an
+  environment holding pip-licenses, and reads the pinned Python set's licences in -ServicePython's environment (by
+  default -Repo's tools\.venv). The ZIP is HEAD's files less the dashboard's private source and the service's tests, plus
+  ui/dist/**, THIRD-PARTY-NOTICES and RELEASE; its manifest names the generated members, so an install from it holds
+  more files than one from a clone of the development repository: e, f and g read the expanded release's own set.
+  THE PYTHON SET: every install a case runs is the files and the lock only (Run adds -SkipPythonSet); case py measures
+  the step with no network. Run every case with a scratch VANGUARD_HOME: a fresh install mints a host-id there.
+
   A transcript is written to <Out>\falsifier-<case>.txt. Exit 0 iff every check passes.
     a   a fresh install from the tagged clone into an empty folder: every file written; lock format 2, source_kind
         clone, source_tag v<VERSION>, source_commit HEAD; -Verify 0; INSTALL.md's counts;
@@ -36,14 +45,19 @@
         by a fresh install; b3 a MOVE file present with no lock REFUSED, planned counts, nothing written
     c   a same-version run over (a): already installed; the tree and the lock byte-identical
     d   release.ps1 twice in a clone: the ZIP, MEMBERS.sha256 and SHA256SUMS byte-equal across the two; the
-        members every path git ls-tree -r --full-tree HEAD lists + RELEASE, the notes, the acceptance wrapper and
-        the pinned base fixtures among them; MEMBERS.sha256 one line per member, each the member's sha256;
-        SHA256SUMS the ZIP's line, then MEMBERS.sha256's
-    e   expand the ZIP, install -ReleaseZip, mission init; the target committed as a git repository, and the
+        members every path git ls-tree -r --full-tree HEAD lists but the dashboard's private source and the service's
+        tests, + ui/dist/** + THIRD-PARTY-NOTICES + RELEASE, the notes, the acceptance wrapper and the pinned base
+        fixtures among them, no ui/ source, .ts/.tsx/.map or node_modules among them; the ZIP's manifest HEAD's header
+        and released rows byte for byte, then a generated MOVE row per generated member; THIRD-PARTY-NOTICES naming every
+        pinned Python package and the two OFL-1.1 font packages, no local path; MEMBERS.sha256 one line per member, each
+        the member's sha256; SHA256SUMS the ZIP's line, then MEMBERS.sha256's
+    e   expand the ZIP (every member taken from HEAD its blob, every other RELEASE, the manifest or generated), install
+        -ReleaseZip -- the counts INSTALL.md and README.md state held to it -- mission init; the target committed as a git repository, and the
         installed spec-accept takes the draft v001 init wrote -- refusing a non-draft v001, a second version
         and -ProposalVersion v002 first, and a second acceptance after; mission smoke MET; a re-run is
         already installed. init's root .gitignore: the target had none, init created it -- a comment line
-        and /.claude/settings.local.json and /.claude/worktrees/, LF -- and, committed, git check-ignore
+        and /.claude/settings.local.json, /.claude/worktrees/ and /.mission-runtime/telemetry/ (UI-1 S1, the
+        mission-event feed; .mission-runtime/ already in the file counts as that rule), LF -- and, committed, git check-ignore
         --no-index reads both ignored and .claude/settings.json not (WP-1 H-26's reading); a refused second
         init leaves it byte for byte; e3 init over a project's own .gitignore: lacking a rule, the bytes
         there kept as a prefix and only the missing rules appended after one comment line in the file's
@@ -62,6 +76,17 @@
         of one that has none, and a later upgrade after it, does not write it (the line, not-written=1, the
         not-written lock row, -Verify and a same-version run passing over it); nor does a first install into a
         repository with a tracked file of its own, or below a repository's top that tracks one there
+    gh  the zero-host-data gate, tools/lam/gate-host-data.ps1 (UI-1 S4 P-7), an installer-owned MOVE file, over scratch trees,
+        a synthetic host repository and a synthetic pattern word: a clean tree HARD 0 (the framework's own commit id no hit;
+        a bare HALT number and a fixture id SOFT, listed); one pattern word planted in a doc HARD 1 (H1, path:line); a
+        host-only commit id in a provenance row H3 and H5; the host's owner/repository H2 and H1; a pinned base the
+        framework never recorded, in an expanded ZIP, H4; -Root and -Zip together, the hit in the ZIP scope; a report
+        inside the scope and a missing pattern file exit 2; no -HostRepo, H3 not evaluated
+    py  the Python set (UI-1 S4 P-5) with no network: -WhatIf with no interpreter exit 4, NOT INSTALLED, the vanguard
+        command, the host-id to be minted, the ignore rule mission init's, nothing written; the install itself exit 4, every
+        file and the lock written, the pip command named, -Verify 0; a tools\.venv with no interpreter left untouched;
+        -SkipPythonSet exit 0; this host's CPython 3.14 named: the venv made with it and the hash-checked pip install
+        planned; a mission with the feed folder: the registry row planned, mission.ps1 register named for the ignore rule
     u   upgrade over a 0.1.1-locked target (the real host's header) to a synthetic 0.1.2; a hard-linked file
     u2  a downgrade refused: planned counts, nothing written; versions ordered as numbers (0.9.0 < 0.10.0)
         both ways; a pre-release lock and a pre-release VERSION refused
@@ -74,7 +99,7 @@
         junction, the read bound, 260 characters, a file where a folder goes, a drive root, an 8.3 short name
         for .mission -- each refused before anything is written -- and -Verify through the same guard
     u7  the ZIP release.ps1 builds carries the release notes and the member count INSTALL.md states: the tagged
-        commit's files + RELEASE
+        commit's released files + ui/dist's + THIRD-PARTY-NOTICES + RELEASE, and the installed count its manifest's
     u8  a format-2 upgrade: a retired path left in place, a drifted template kept, an absent host-config
         written, a path whose case changed upgraded
     u9  a move that fails part-way (a file held open): whole files only, the old lock; the same run again
@@ -93,10 +118,11 @@
         edited-since-install (B), one the host had made its own is refused host-instance (C); made MOVE with
         its bytes unchanged, already-identical; and a MOVE made HOST-CONFIG, kept and not rewritten (D)
     k1  a clone at its tag installs into a fresh git-init project: exit 0; the lock source_kind clone, source_tag
-        v<VERSION>, source_commit and framework_repo_tip the clone's HEAD; -Verify 0; and the lock equal to a ZIP
-        install's (built from the same HEAD, -ReleaseZip, into a second fresh project) but for source_kind,
-        source_tag, source_commit, zip_sha256, installed_at and upgraded_at -- every file line byte for byte; the
-        ZIP install's -Verify 0
+        v<VERSION>, source_commit and framework_repo_tip the clone's HEAD; -Verify 0; and the lock a ZIP install's
+        (built from the same HEAD, -ReleaseZip, into a second fresh project) less the generated members the ZIP alone
+        carries -- every file line of the clone's the ZIP lock's line, byte for byte, the ZIP's other lines the generated
+        members installed -- and its header the ZIP's but for source_kind, source_tag, source_commit, zip_sha256,
+        manifest_sha256, installer_owned, installed_at and upgraded_at; the ZIP install's -Verify 0
     k2  a clone off its tag -- the tag absent, then the tag on another commit -- is REFUSED, exit 1, the reason
         named; -WhatIf too; the target untouched; and -Verify, which never reads the source, runs from it
     k3  a clone at its tag with a local change -- a tracked file modified, then an untracked file -- is REFUSED,
@@ -110,11 +136,13 @@
         source_commit is its own HEAD and whose framework_repo_tip is RELEASE's
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('a', 'b', 'c', 'd', 'e', 'f', 'g', 'gu', 'ga', 'u', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'v', 'k1', 'k2', 'k3', 'k4')][string]$Case,
+    [Parameter(Mandatory)][ValidateSet('a', 'b', 'c', 'd', 'e', 'f', 'g', 'gu', 'ga', 'gh', 'py', 'u', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'v', 'k1', 'k2', 'k3', 'k4')][string]$Case,
     [Parameter(Mandatory)][string]$Repo,
     [Parameter(Mandatory)][string]$Out,
     [string]$Tag = 'vc-r1',
-    [switch]$Keep
+    [switch]$Keep,
+    [string]$LicensePython,
+    [string]$ServicePython
 )
 $ErrorActionPreference = 'Stop'
 $log = New-Object System.Collections.Generic.List[string]
@@ -133,7 +161,15 @@ function EolOf { param([byte[]]$B)
     $s = $L1.GetString($B); $pairs = ($s.Length - $s.Replace("`r`n", '').Length) / 2; $lfs = $s.Length - $s.Replace("`n", '').Length
     if ($pairs -eq 0) { return 'lf' }; if ($lfs -gt $pairs) { return 'mixed' }; return 'crlf'
 }
+$script:SkipCapable = @{}
 function Run { param([string]$Script, [string[]]$A)
+    # THE PYTHON SET (install.ps1's header) reaches PyPI: every install a case runs is the files and the lock only
+    # (-SkipPythonSet, added where the installer has it and the case names none of -Verify, -SkipPythonSet, -Python);
+    # case py measures the step itself, with no network.
+    if ((Split-Path -Leaf $Script) -eq 'install.ps1') {
+        if (-not $script:SkipCapable.ContainsKey($Script)) { $script:SkipCapable[$Script] = ([System.IO.File]::ReadAllText($Script) -match '\[switch\]\$SkipPythonSet') }
+        if ($script:SkipCapable[$Script] -and -not (@($A) | Where-Object { $_ -in '-Verify', '-SkipPythonSet', '-Python' })) { $A = @($A) + @('-SkipPythonSet') }
+    }
     $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try { $o = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $Script @A 2>&1); $c = $LASTEXITCODE } finally { $ErrorActionPreference = $p }
     return [pscustomobject]@{ code = $c; out = @($o | ForEach-Object { "$_" }) }
@@ -287,11 +323,31 @@ function SourceUnchanged { param($Clone)
     return (($s.code -eq 0) -and (@($s.out | Where-Object { $_ }).Count -eq 0))
 }
 function Build-Zip { param([string]$Clone)
-    $r = Run (Join-Path $Clone 'release.ps1') @()
+    # release.ps1 reads its notices with pip-licenses from -LicensePython (a scratch environment) over -ServicePython's
+    # environment (by default -Repo's tools\.venv, which a clone has not got).
+    if (-not $LicensePython) { throw 'a case that builds the release ZIP needs -LicensePython, the interpreter of an environment holding pip-licenses' }
+    $svc = if ($ServicePython) { $ServicePython } else { Join-Path $Repo 'tools\.venv\Scripts\python.exe' }
+    $r = Run (Join-Path $Clone 'release.ps1') @('-LicensePython', $LicensePython, '-ServicePython', $svc)
     L "release.ps1 in the clone: exit $($r.code)"; $r.out | ForEach-Object { L "  | $_" }
     if ($r.code -ne 0) { throw 'release.ps1 refused in the clone' }
     $v = ([System.IO.File]::ReadAllText((Join-Path $Clone 'VERSION'))).Trim()
     return [pscustomobject]@{ zip = (Join-Path $Clone "dist\vanguard-collective-v$v.zip"); name = "vanguard-collective-v$v.zip"; sums = (Join-Path $Clone 'dist\SHA256SUMS'); members = (Join-Path $Clone 'dist\MEMBERS.sha256'); version = $v; out = $r.out }
+}
+function Test-NotReleased { param([string]$P)
+    # THE MEMBERS RULE (release.ps1's header), restated here: the dashboard's private source and the service's tests stay
+    # in the development repository -- any ui/ path but ui/dist/, tools/ui/tests/, a .ts/.tsx/.map file, a node_modules path.
+    return ($P.StartsWith('ui/') -and -not $P.StartsWith('ui/dist/')) -or $P.StartsWith('tools/ui/tests/') -or ($P -match '\.(ts|tsx|map)$') -or ($P -match '(^|/)node_modules(/|$)')
+}
+function Use-ReleaseSet { param([string]$X)
+    # The installer-owned set of an expanded release -- its own manifest's, ui/dist and THIRD-PARTY-NOTICES among them --
+    # made the set every check below reads ($owned, $N, $srcFold, $srcEol, $crlfSources, $templateHost).
+    $script:owned = OwnedSet (Join-Path $X 'provenance\manifest.jsonl')
+    $script:N = $script:owned.Count
+    $script:srcFold = @{}; $script:srcEol = @{}
+    foreach ($k in $script:owned.Keys) { $b = [System.IO.File]::ReadAllBytes((Join-Path $X ($k -replace '/', '\'))); $script:srcFold[$k] = FoldSha $b; $script:srcEol[$k] = EolOf $b }
+    $script:crlfSources = @($script:owned.Keys | Where-Object { $script:srcEol[$_] -notin 'lf', 'binary' })
+    $script:templateHost = @($script:owned.Keys | Where-Object { $script:owned[$_].class -ne 'MOVE' }).Count
+    L "the release's installer-owned set (its own manifest): $($script:N), binary $(@($script:srcEol.Values | Where-Object { $_ -eq 'binary' }).Count)"
 }
 function Copy-Owned { param([string]$From, [string]$To, $Set)
     $null = New-Item -ItemType Directory -Force -Path $To
@@ -407,7 +463,7 @@ $N = $owned.Count
 L "manifest-derived installer-owned set: $N"
 $srcFold = @{}; $srcEol = @{}
 foreach ($k in $owned.Keys) { $b = [System.IO.File]::ReadAllBytes((Join-Path $Repo ($k -replace '/', '\'))); $srcFold[$k] = FoldSha $b; $srcEol[$k] = EolOf $b }
-$crlfSources = @($owned.Keys | Where-Object { $srcEol[$_] -ne 'lf' })
+$crlfSources = @($owned.Keys | Where-Object { $srcEol[$_] -notin 'lf', 'binary' })
 L "source files whose own bytes are not lf (by this script's EolOf): $(if ($crlfSources.Count) { ($crlfSources | ForEach-Object { "$_ ($($srcEol[$_]))" }) -join ', ' } else { 'none' })"
 $mv = 'docs/framework/LAM-INSTALL.md'
 $changedPaths = [string[]]@($U.changed | ForEach-Object { $_.path })
@@ -434,6 +490,141 @@ function CheckRows2 { param($Lk, [string]$Label, [string]$Disposition)
 
 try {
 switch ($Case) {
+'gh' {
+    # THE ZERO-HOST-DATA GATE (UI-1 S4 P-7, F2), the tagged clone's tools\lam\gate-host-data.ps1, over a scratch tree, a
+    # synthetic host repository and a synthetic pattern word -- no host word of any real project is written here.
+    $gate = Join-Path $Tagged.root 'tools\lam\gate-host-data.ps1'
+    Check 'the tagged clone carries tools/lam/gate-host-data.ps1, an installer-owned MOVE file' ((Test-Path -LiteralPath $gate -PathType Leaf) -and $owned.ContainsKey('tools/lam/gate-host-data.ps1') -and ($owned['tools/lam/gate-host-data.ps1'].class -ceq 'MOVE'))
+    $word = 'qzhostword'
+    $pf = Join-Path $Work 'patterns.txt'
+    [System.IO.File]::WriteAllText($pf, "# a synthetic HARD pattern file`n$word`n", $NoBom)
+    $hr = Join-Path $Work 'qzhostrepo'
+    $null = New-Item -ItemType Directory -Path $hr
+    $null = RunGit $hr @('init', '-q'); $null = RunGit $hr @('config', 'user.name', 'falsifier-fixture'); $null = RunGit $hr @('config', 'user.email', 'falsifier-fixture@localhost')
+    $null = RunGit $hr @('remote', 'add', 'origin', 'https://example.invalid/qzowner/qzhostrepo.git')
+    WriteBytes (Join-Path $hr 'host.txt') (Bytes "a file only the synthetic host holds`n")
+    $null = RunGit $hr @('add', '-A'); $null = RunGit $hr @('commit', '-q', '-m', 'the synthetic host')
+    $hostId = ((RunGit $hr @('rev-parse', 'HEAD')).out -join '').Trim().Substring(0, 12)
+    $fwId = $Tagged.head.Substring(0, 12)
+    function New-GhTree { param([string]$Name)
+        # A clean scratch tree: a document, a provenance line, an instrument line with a fixture id and a bare HALT number.
+        $d = Join-Path $Work $Name
+        Remove-Tree $d
+        WriteBytes (Join-Path $d 'docs\guide.md') (Bytes "# A guide`n`nThe framework's own commit $fwId is cited here.`n")
+        WriteBytes (Join-Path $d 'provenance\rows.jsonl') (Bytes "{`"path`":`"docs/guide.md`",`"reason`":`"authored`"}`n")
+        WriteBytes (Join-Path $d 'tests\lam\member.ps1') (Bytes "# HALT-12 is a sample; fixture id 5e1fb11d0b5e`n")
+        return $d
+    }
+    function Invoke-Gh { param([string]$Label, [string[]]$A)
+        $rep = Join-Path $Work ("gh-$Label.txt")
+        $r = Run $gate (@($A) + @('-PatternFile', $pf, '-HostRepo', $hr, '-FrameworkRepo', $Tagged.root, '-Report', $rep))
+        L "($Label) gate exit=$($r.code)"; $r.out | ForEach-Object { L "  | $_" }
+        $txt = if (Test-Path -LiteralPath $rep) { [System.IO.File]::ReadAllText($rep) } else { '' }
+        $hardN = if ($txt -match '(?m)^HARD (\d+)$') { [int]$Matches[1] } else { -1 }
+        return [pscustomobject]@{ code = $r.code; out = $r.out; report = $txt; hard = $hardN }
+    }
+    $clean = New-GhTree 'ghclean'
+    $g0 = Invoke-Gh 'clean' @('-Root', $clean)
+    Check '(clean) exit 0, HARD 0; the framework''s own commit id is no hit; the bare HALT number and the fixture id are SOFT, listed' (
+        ($g0.code -eq 0) -and ($g0.hard -eq 0) -and ($g0.report -match '\[B3-TESTS\] ROOT:tests/lam/member\.ps1:1  HALT-12') -and ($g0.report -match '\[FIXTURE-ID\] ROOT:tests/lam/member\.ps1:1  5e1fb11d0b5e') -and ($g0.report -notmatch [regex]::Escape($fwId)))
+    Check '(clean) the report names its pattern file by sha256 and count, never by its words' (($g0.report -match "pattern file: .+ \(1 literal\(s\), sha256 $(FileSha $pf)\)") -and ($g0.report -notmatch $word))
+    $p1 = New-GhTree 'ghword'
+    WriteBytes (Join-Path $p1 'docs\guide.md') (Bytes "# A guide`n`nThe framework's own commit $fwId is cited here.`nWritten for $word.`n")
+    $g1 = Invoke-Gh 'word' @('-Root', $p1)
+    Check '(one host word planted in a doc) exit 1, HARD 1: H1 at docs/guide.md:4' (($g1.code -eq 1) -and ($g1.hard -eq 1) -and ($g1.report -match "\[H1 host-name\] ROOT:docs/guide\.md:4  $word"))
+    $p2 = New-GhTree 'ghid'
+    WriteBytes (Join-Path $p2 'provenance\rows.jsonl') (Bytes "{`"path`":`"docs/guide.md`",`"reason`":`"from host commit $hostId`"}`n")
+    $g2 = Invoke-Gh 'id' @('-Root', $p2)
+    Check '(a host-only commit id planted in a provenance row) exit 1: H3 and H5 at provenance/rows.jsonl:1, nothing else' (($g2.code -eq 1) -and ($g2.hard -eq 2) -and
+        ($g2.report -match "\[H3 host-id:commit\] ROOT:provenance/rows\.jsonl:1  $hostId") -and ($g2.report -match "\[H5 provenance-cites-host\] ROOT:provenance/rows\.jsonl:1  $hostId"))
+    $p3 = New-GhTree 'ghpath'
+    WriteBytes (Join-Path $p3 'docs\guide.md') (Bytes "# A guide`n`nSee qzowner/qzhostrepo for the source.`n")
+    $g3 = Invoke-Gh 'path' @('-Root', $p3)
+    Check '(the host''s origin owner/repository planted) exit 1: H2 host-repo-name at docs/guide.md:3, with the derived names (H1)' (($g3.code -eq 1) -and ($g3.report -match '\[H2 host-path:host-repo-name\] ROOT:docs/guide\.md:3  qzowner/qzhostrepo') -and ($g3.report -match '\[H1 host-name\] ROOT:docs/guide\.md:3  qzowner'))
+    $p4 = New-GhTree 'ghbase'
+    WriteBytes (Join-Path $p4 'tests\lam\fixtures\base-0000aaaa\tools\x.ps1.base') (Bytes "# bytes the framework never recorded at tools/x.ps1`n")
+    $g4 = Invoke-Gh 'base' @('-Zip', $p4)
+    Check '(a pinned base whose bytes the framework never recorded, in an expanded ZIP) exit 1: H4 at ZIP:tests/lam/fixtures/base-0000aaaa/tools/x.ps1.base' (($g4.code -eq 1) -and ($g4.hard -eq 1) -and ($g4.report -match '\[H4 pinned-host-copy\] ZIP:tests/lam/fixtures/base-0000aaaa/tools/x\.ps1\.base:0'))
+    $g5 = Invoke-Gh 'both' @('-Root', $clean, '-Zip', $p1)
+    Check '(-Root clean and -Zip with the word) exit 1, HARD 1, the hit named in the ZIP scope' (($g5.code -eq 1) -and ($g5.hard -eq 1) -and ($g5.report -match "\[H1 host-name\] ZIP:docs/guide\.md:4  $word"))
+    $r = Run $gate @('-Root', $clean, '-PatternFile', $pf, '-Report', (Join-Path $clean 'inside.txt'))
+    Check '(a report inside the scope) exit 2, nothing written there' (($r.code -eq 2) -and -not (Test-Path -LiteralPath (Join-Path $clean 'inside.txt')))
+    $r = Run $gate @('-Root', $clean, '-PatternFile', (Join-Path $Work 'no-such-file.txt'))
+    Check '(no pattern file) exit 2' ($r.code -eq 2)
+    $gN = Run $gate @('-Root', $clean, '-PatternFile', $pf, '-FrameworkRepo', $Tagged.root, '-Report', (Join-Path $Work 'gh-nohost.txt'))
+    Check '(no -HostRepo) exit 0; the report says H3 was not evaluated' (($gN.code -eq 0) -and ([System.IO.File]::ReadAllText((Join-Path $Work 'gh-nohost.txt')) -match 'H3: NOT EVALUATED \(no -HostRepo\)'))
+}
+'py' {
+    # THE PYTHON SET (install.ps1's header) and -WhatIf's readings of what it does not write, with NO NETWORK: every run
+    # here names -Python (an interpreter that does not exist, or this host's CPython 3.14 under -WhatIf alone) or
+    # -SkipPythonSet, so pip never reaches PyPI. A scratch VANGUARD_HOME for the host registration.
+    $vgPrev = $env:VANGUARD_HOME
+    $vh = Join-Path $Work 'vghome'
+    $env:VANGUARD_HOME = $vh
+    try {
+        $bogus = Join-Path $Work 'no-python\python.exe'
+        $pins = [regex]::Matches([System.IO.File]::ReadAllText((Join-Path $Repo 'tools\ui\requirements.txt')), '(?m)^[A-Za-z0-9][A-Za-z0-9._-]*==\S+').Count
+        $t = Join-Path $Work 't'
+        $w = Run $installer @('-Target', $t, '-WhatIf', '-Python', $bogus)
+        L "(-WhatIf, no interpreter) exit=$($w.code)"; $w.out | Where-Object { $_ -match 'planned|WhatIf' } | ForEach-Object { L "  | $_" }
+        Check "(-WhatIf, -Python naming no interpreter) exit 4, the real run's; planned python set NOT INSTALLED naming -Python; the vanguard command tools\ui\vanguard.cmd (install); a host-id to be minted in the scratch home, no registry row (no mission); the ignore rule mission init's; nothing written" (
+            ($w.code -eq 4) -and ((Count $w.out ('^install\.ps1: planned python set: NOT INSTALLED -- no CPython 3\.14 win-amd64 interpreter to make tools\\\.venv with \(-Python ' + [regex]::Escape($bogus) + ': does not run\)')) -eq 1) -and
+            ((Count $w.out '^install\.ps1: planned vanguard command: tools\\ui\\vanguard\.cmd \(install\) -- ') -eq 1) -and
+            (Has $w.out "install.ps1: planned host registration: a host-id would be minted in $vh; no registry row (the target carries no mission yet: mission init adds it)") -and
+            ((Count $w.out '^install\.ps1: planned telemetry ignore rule: no mission yet: mission init writes the rule') -eq 1) -and (Has $w.out 'install.ps1: WhatIf: nothing was written.') -and
+            (-not (Test-Path -LiteralPath $t)) -and (-not (Test-Path -LiteralPath (Join-Path $vh 'host-id'))))
+        $r = Run $installer @('-Target', $t, '-Python', $bogus)
+        L "(install, no interpreter) exit=$($r.code)"; $r.out | Where-Object { $_ -notmatch '^install\.ps1:   install ' } | ForEach-Object { L "  | $_" }
+        Check "(an install, -Python naming no interpreter) exit 4: done: written=$N, framework.lock written, one PYTHON SET NOT INSTALLED line naming the pip command to run, no tools\.venv made" (
+            ($r.code -eq 4) -and (Has $r.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0") -and (Test-Path -LiteralPath (Join-Path $t 'framework.lock')) -and
+            ((Count $r.out '^install\.ps1: PYTHON SET NOT INSTALLED: .+ -m pip install --require-hashes --only-binary :all: -r .+tools\\ui\\requirements\.txt$') -eq 1) -and (-not (Test-Path -LiteralPath (Join-Path $t 'tools\.venv'))))
+        $v = Run $installer @('-Target', $t, '-Verify')
+        Check '(after it) -Verify exit 0, 0 difference(s): every file stands' (($v.code -eq 0) -and ((Count $v.out "^install\.ps1: verify: $N file\(s\) listed, 0 difference\(s\); ") -eq 1))
+        $hid = if (Test-Path -LiteralPath (Join-Path $vh 'host-id')) { ([System.IO.File]::ReadAllText((Join-Path $vh 'host-id'))).Trim() } else { '' }
+        $t2 = Join-Path $Work 't2'
+        $null = New-Item -ItemType Directory -Path (Join-Path $t2 'tools\.venv')
+        $w2 = Run $installer @('-Target', $t2, '-WhatIf', '-Python', $bogus)
+        Check "(a tools\.venv with no Scripts\python.exe) -WhatIf exit 4, NOT INSTALLED: it stands without an interpreter and is left untouched; the host-id the install minted ($hid) read as kept" (
+            ($w2.code -eq 4) -and ((Count $w2.out '^install\.ps1: planned python set: NOT INSTALLED -- tools\\\.venv stands in the target without Scripts\\python\.exe; it is left untouched') -eq 1) -and
+            ($hid -match '^[0-9a-f-]{36}$') -and ((Count $w2.out ('^install\.ps1: planned host registration: host-id ' + [regex]::Escape($hid) + ' in ' + [regex]::Escape($vh) + ', kept; ')) -eq 1))
+        $t3 = Join-Path $Work 't3'
+        $r3 = Run $installer @('-Target', $t3, '-SkipPythonSet')
+        Check "(-SkipPythonSet) exit 0, done: written=$N, the line 'python set: skipped (-SkipPythonSet)', no tools\.venv" (($r3.code -eq 0) -and (Has $r3.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0") -and
+            ((Count $r3.out '^install\.ps1: python set: skipped \(-SkipPythonSet\)') -eq 1) -and (-not (Test-Path -LiteralPath (Join-Path $t3 'tools\.venv'))))
+        # A CPython 3.14 on this host, named with -Python, under -WhatIf: the plan makes tools\.venv with it and names pip's
+        # hash-checked install of the pinned set. Nothing runs pip.
+        $py = $null
+        foreach ($c in @(@('py', '-3.14'), @('python'))) {
+            if (-not (Get-Command $c[0] -ErrorAction SilentlyContinue)) { continue }
+            $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try { $o = @(& $c[0] @($c | Select-Object -Skip 1) -I -c 'import sys,sysconfig;print(sys.implementation.name,sys.version_info[0],sys.version_info[1],sysconfig.get_platform(),sys.executable)' 2>$null) } finally { $ErrorActionPreference = $p }
+            $f = @(([string]($o | Select-Object -Last 1)).Trim() -split ' ', 5)
+            if ($f.Count -eq 5 -and $f[0] -eq 'cpython' -and $f[1] -eq '3' -and $f[2] -eq '14' -and $f[3] -eq 'win-amd64') { $py = $f[4]; break }
+        }
+        L "a CPython 3.14 win-amd64 on this host: $(if ($py) { $py } else { 'NONE' })"
+        $t4 = Join-Path $Work 't4'
+        $w4 = if ($py) { Run $installer @('-Target', $t4, '-WhatIf', '-Python', $py) } else { $null }
+        Check "(this host's CPython 3.14, -WhatIf) exit 0; planned python set: tools\.venv made by -Python, then pip install --require-hashes --only-binary :all: -r tools\ui\requirements.txt ($pins pinned package(s), from PyPI); nothing written" (
+            ($null -ne $w4) -and ($w4.code -eq 0) -and ((Count $w4.out ('^install\.ps1: planned python set: tools\\\.venv made by -Python: ' + [regex]::Escape($py) + ' \(CPython 3\.14\.\d+, win-amd64\); then pip install --require-hashes --only-binary :all: -r tools\\ui\\requirements\.txt \(' + $pins + ' pinned package\(s\), from PyPI\)$')) -eq 1) -and
+            (-not (Test-Path -LiteralPath $t4)))
+        # The registry row and the ignore rule over a target that carries a mission and the feed folder.
+        $t5 = Join-Path $Work 't5'
+        WriteBytes (Join-Path $t5 '.mission\mission.yaml') (Bytes "id: m-falsifier`nstate: Created`n")
+        $null = New-Item -ItemType Directory -Path (Join-Path $t5 '.mission-runtime\telemetry')
+        $w5 = Run $installer @('-Target', $t5, '-WhatIf', '-SkipPythonSet')
+        Check '(a mission with the feed folder) -WhatIf: a row for the target (mission m-falsifier) to be added to projects.yaml; the .gitignore does not ignore the feed, and mission.ps1 register adds the rule; the python set skipped' (
+            ($w5.code -eq 0) -and ((Count $w5.out ('^install\.ps1: planned host registration: .+; a row for the target \(mission m-falsifier\) would be added to ' + [regex]::Escape((Join-Path $vh 'projects.yaml')) + '$')) -eq 1) -and
+            ((Count $w5.out '^install\.ps1: planned telemetry ignore rule: the target''s \.gitignore does not ignore /\.mission-runtime/telemetry/; install\.ps1 writes no \.gitignore -- mission\.ps1 register -Target .+ adds the rule$') -eq 1) -and
+            ((Count $w5.out '^install\.ps1: planned python set: skipped \(-SkipPythonSet\)') -eq 1))
+        WriteBytes (Join-Path $t5 '.gitignore') (Bytes ".mission-runtime/`n")
+        $null = [System.IO.Directory]::Delete((Join-Path $t5 '.mission-runtime\telemetry'))
+        $w6 = Run $installer @('-Target', $t5, '-WhatIf', '-SkipPythonSet')
+        Check '(the same mission, no feed folder, a .gitignore with .mission-runtime/) -WhatIf: no registry row, mission.ps1 register named; the ignore rule already held' (
+            ($w6.code -eq 0) -and ((Count $w6.out '^install\.ps1: planned host registration: .+; no registry row: the target''s mission m-falsifier is not registered for the mission-event feed') -eq 1) -and
+            ((Count $w6.out '^install\.ps1: planned telemetry ignore rule: the target''s \.gitignore already ignores /\.mission-runtime/telemetry/$') -eq 1))
+        Check 'no -WhatIf wrote a registry' (-not (Test-Path -LiteralPath (Join-Path $vh 'projects.yaml')))
+    } finally { $env:VANGUARD_HOME = $vgPrev }
+}
 'a' {
     $t = Join-Path $Work 't'
     $null = New-Item -ItemType Directory -Path $t
@@ -514,25 +705,12 @@ switch ($Case) {
     $vline = "install.ps1: verify: $N file(s) listed, 0 difference(s); eol lf=$($ec.lf) crlf=$($ec.crlf) mixed=$($ec.mixed) binary=$($ec.binary)."
     Check "-Verify exit 0, it says it read lock_format 2, and its last line reads: $vline" (($v.code -eq 0) -and (Has $v.out 'install.ps1: verify: read lock_format 2') -and (Has $v.out $vline))
     Check '-Verify wrote nothing (whole-tree hash unchanged)' ((TreeHashes $t).aggregate -eq $tree.aggregate)
-    L '--- the counts INSTALL.md and README.md state, against what this case produced'
-    $im = DocText (Join-Path $Repo 'INSTALL.md'); $rm = DocText (Join-Path $Repo 'README.md')
+    # The counts INSTALL.md and README.md state are the release's -- an install from the ZIP, ui/dist and the notices
+    # among its files -- and case e holds them to one; the longest installed path is a path of this set.
+    $im = DocText (Join-Path $Repo 'INSTALL.md')
     $longest = (@($owned.Keys | ForEach-Object { $_.Length }) | Measure-Object -Maximum).Maximum
     $dl = DocInt $im 'the longest installed path is (\d+) characters'
     Check "INSTALL.md: the longest installed path is $dl characters = $longest, measured" ($dl -eq $longest)
-    $m = [regex]::Match($im, 'installer-owned (\d+) \(MOVE (\d+), TEMPLATE (\d+), HOST-CONFIG (\d+)\); framework\.lock absent')
-    Check "INSTALL.md's expected output: installer-owned $($m.Groups[1].Value) (MOVE $($m.Groups[2].Value), TEMPLATE $($m.Groups[3].Value), HOST-CONFIG $($m.Groups[4].Value)) = the installer's own line" ($m.Success -and ($mline -cmatch [regex]::Escape($m.Value)))
-    $dd = [regex]::Match($im, 'done: written=\d+ already-identical=\d+ kept=\d+ retired=\d+ refused=\d+')
-    Check "INSTALL.md's expected output: '$($dd.Value)' = this install's counts line" ($dd.Success -and ($done -ceq ('install.ps1: ' + $dd.Value)))
-    $wl = [regex]::Match($im, 'framework\.lock written: (\d+) line\(s\) for (\d+) file\(s\)')
-    Check "INSTALL.md: framework.lock written: $($wl.Groups[1].Value) line(s) for $($wl.Groups[2].Value) file(s) = this install's lock ($($lk.lines.Count) for $N)" ($wl.Success -and ([int]$wl.Groups[1].Value -eq $lk.lines.Count) -and ([int]$wl.Groups[2].Value -eq $N) -and ((Count $r.out ('^install\.ps1: ' + [regex]::Escape($wl.Value) + ', sha256 [0-9a-f]{64}$')) -eq 1))
-    $vm = [regex]::Match($im, 'verify: \d+ file\(s\) listed, 0 difference\(s\); eol lf=\d+ crlf=\d+ mixed=\d+ binary=\d+\.')
-    Check "INSTALL.md: '$($vm.Value)' = this -Verify's last line" ($vm.Success -and ($vline -ceq ('install.ps1: ' + $vm.Value)))
-    $tw = DocInt $im '(\w+) TEMPLATE and (\w+) HOST-CONFIG lines' 1; $hw = DocInt $im '(\w+) TEMPLATE and (\w+) HOST-CONFIG lines' 2
-    Check "INSTALL.md: the $tw TEMPLATE and $hw HOST-CONFIG lines = the manifest's $($classes[1]) and $($classes[2])" (($tw -eq $classes[1]) -and ($hw -eq $classes[2]))
-    $ll = DocInt $im '(\d+) lines for the (\d+)' 1; $lf2 = DocInt $im '(\d+) lines for the (\d+)' 2
-    Check "INSTALL.md: $ll lines for the $lf2 = this install's lock" (($ll -eq $lk.lines.Count) -and ($lf2 -eq $N))
-    $rn = DocInt $rm '\((\d+) files at '
-    Check "README.md: ($rn files at ...) = the manifest-derived set, $N" ($rn -eq $N)
 }
 'b' {
     $t = Join-Path $Work 't'
@@ -627,13 +805,35 @@ switch ($Case) {
     L "build 1: zip $($shas[0]) MEMBERS.sha256 $($msums[0]) SHA256SUMS $($ssums[0]); build 2: zip $($shas[1]) MEMBERS.sha256 $($msums[1]) SHA256SUMS $($ssums[1])"
     Check 'THE TWO BUILDS ARE EQUAL: the ZIP, MEMBERS.sha256 and SHA256SUMS, byte for byte' (($shas[0] -eq $shas[1]) -and ($msums[0] -eq $msums[1]) -and ($ssums[0] -eq $ssums[1]))
     $trackedAll = Sorted @((RunGit $clone @('-c', 'core.quotePath=false', 'ls-tree', '-r', '--full-tree', '--name-only', 'HEAD')).out | Where-Object { $_ })
+    $fromHead = Sorted @($trackedAll | Where-Object { -not (Test-NotReleased $_) })
     $zi = Inspect-Zip $z.zip
-    L "zip: $($zi.count) entries; HEAD tracks $($trackedAll.Count); sorted $($zi.sorted); backslash $($zi.backslash); directories $($zi.dirs); timestamps not the epoch $($zi.badTime); attributes $($zi.attrs); extra fields $($zi.extras); comments $($zi.comments)"
-    Check "the ZIP holds $($trackedAll.Count + 1) entries = HEAD's $($trackedAll.Count) tracked paths (git ls-tree -r --full-tree HEAD) + RELEASE, sorted, epoch timestamps, no attributes, no extra fields, no backslash, no directory entry, no comment" (
-        ($zi.count -eq $trackedAll.Count + 1) -and $zi.sorted -and ($zi.backslash + $zi.dirs + $zi.badTime + $zi.attrs + $zi.extras + $zi.comments -eq 0))
+    $gen = Sorted @($zi.names | Where-Object { $_.StartsWith('ui/dist/') -or $_ -ceq 'THIRD-PARTY-NOTICES' })
+    L "zip: $($zi.count) entries; HEAD tracks $($trackedAll.Count), $($fromHead.Count) of them released; generated $($gen.Count); sorted $($zi.sorted); backslash $($zi.backslash); directories $($zi.dirs); timestamps not the epoch $($zi.badTime); attributes $($zi.attrs); extra fields $($zi.extras); comments $($zi.comments)"
+    Check "the ZIP holds $($fromHead.Count + $gen.Count + 1) entries = HEAD's $($fromHead.Count) released paths + $($gen.Count) generated (ui/dist/**, THIRD-PARTY-NOTICES) + RELEASE, sorted, epoch timestamps, no attributes, no extra fields, no backslash, no directory entry, no comment" (
+        ($zi.count -eq $fromHead.Count + $gen.Count + 1) -and $zi.sorted -and ($zi.backslash + $zi.dirs + $zi.badTime + $zi.attrs + $zi.extras + $zi.comments -eq 0))
     $notes = "docs/RELEASE-NOTES-v$($z.version).md"
-    $expect = @($trackedAll) + @('RELEASE')
-    Check "the entry list equals every tracked path at HEAD + RELEASE, in ordinal order; the installer-owned set ($($cOwned.Count)) is among them" ((Same $zi.names (Sorted $expect)) -and (@($cOwned.Keys | Where-Object { $zi.names -cnotcontains $_ }).Count -eq 0))
+    $expect = @($fromHead) + @($gen) + @('RELEASE')
+    Check "the entry list equals HEAD's tracked paths less the dashboard's private source and the service's tests, + ui/dist/** + THIRD-PARTY-NOTICES + RELEASE, in ordinal order; the installer-owned set ($($cOwned.Count)) is among them" ((Same $zi.names (Sorted $expect)) -and (@($cOwned.Keys | Where-Object { $zi.names -cnotcontains $_ }).Count -eq 0))
+    $leak = @($zi.names | Where-Object { Test-NotReleased $_ })
+    Check "no member is private source or a service test: no ui/ path but ui/dist/, no tools/ui/tests/, no .ts/.tsx/.map, no node_modules ($($leak.Count))" (($leak.Count -eq 0) -and (@($gen | Where-Object { $_.StartsWith('ui/dist/') }).Count -gt 0) -and ($gen -ccontains 'THIRD-PARTY-NOTICES'))
+    # The ZIP's manifest: HEAD's header and released rows, byte for byte and in order, then one generated MOVE row per generated member.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zr = [System.IO.Compression.ZipFile]::OpenRead($z.zip)
+    try {
+        $ms = New-Object System.IO.MemoryStream; $es = $zr.GetEntry('provenance/manifest.jsonl').Open(); try { $es.CopyTo($ms) } finally { $es.Dispose() }; $zmText = $NoBom.GetString($ms.ToArray())
+        $ms = New-Object System.IO.MemoryStream; $es = $zr.GetEntry('THIRD-PARTY-NOTICES').Open(); try { $es.CopyTo($ms) } finally { $es.Dispose() }; $tpn = $NoBom.GetString($ms.ToArray())
+    } finally { $zr.Dispose() }
+    $hmLines = @([System.IO.File]::ReadAllText((Join-Path $clone 'provenance\manifest.jsonl')).Split([char]10) | Where-Object { $_ })
+    $keptH = @($hmLines[0]) + @($hmLines | Select-Object -Skip 1 | Where-Object { -not (Test-NotReleased ([string](($_ | ConvertFrom-Json).destination))) })
+    $zmLines = @($zmText.Split([char]10) | Where-Object { $_ })
+    $zmGen = @($zmLines | Select-Object -Skip $keptH.Count | ForEach-Object { $_ | ConvertFrom-Json })
+    $genBad = @($zmGen | Where-Object { ($_.source -cne 'host') -or ($_.class -cne 'MOVE') -or ((@($_.flags) -join ',') -cne 'generated') -or ($_.destination -cne $_.path) -or ($gen -cnotcontains [string]$_.destination) })
+    Check "the ZIP's manifest is HEAD's -- its header and its $($keptH.Count - 1) released rows, byte for byte, in order -- then one row per generated member ($($zmGen.Count) = $($gen.Count)), each source host, class MOVE, flags generated" (
+        (Same @($zmLines | Select-Object -First $keptH.Count) $keptH) -and ($zmGen.Count -eq $gen.Count) -and ($genBad.Count -eq 0) -and $zmText.EndsWith("`n"))
+    $pins = @([regex]::Matches([System.IO.File]::ReadAllText((Join-Path $clone 'tools\ui\requirements.txt')), '(?m)^([A-Za-z0-9][A-Za-z0-9._-]*)==(\S+)') | ForEach-Object { "$($_.Groups[1].Value.ToLowerInvariant().Replace('_', '-')) $($_.Groups[2].Value)" })
+    $pinMissing = @($pins | Where-Object { $tpn -notmatch ("(?m)^" + [regex]::Escape($_) + "$") })
+    Check "THIRD-PARTY-NOTICES: LF, names every package tools/ui/requirements.txt pins ($($pins.Count), $($pinMissing.Count) missing) and the two OFL-1.1 font packages, and no local path" (
+        (-not $tpn.Contains("`r")) -and ($pins.Count -gt 0) -and ($pinMissing.Count -eq 0) -and ([regex]::Matches($tpn, '(?m)^Licence: OFL-1\.1$').Count -eq 2) -and ($tpn -notmatch '[A-Za-z]:\\'))
     # MEMBERS.sha256 against the archive itself, each member's bytes read out of the ZIP and hashed here.
     $mText = $NoBom.GetString([System.IO.File]::ReadAllBytes($z.members))
     $mLines = @($mText.Split([char]10) | Select-Object -SkipLast 1)
@@ -697,22 +897,34 @@ switch ($Case) {
     $t2 = Join-Path $Work 'p2'
     $null = New-Item -ItemType Directory -Path $t2
     Check 'git init in the second fresh project' ((RunGit $t2 @('init', '-q')).code -eq 0)
+    # THE ZIP CARRIES MORE: the generated members (ui/dist/**, THIRD-PARTY-NOTICES) its own manifest names and a clone
+    # of the development repository has not got. A clone of the PUBLIC repository is the expanded ZIP (k4).
+    $zOwned = OwnedSet (Join-Path $x 'provenance\manifest.jsonl')
+    $genOwned = Sorted @($zOwned.Keys | Where-Object { -not $owned.ContainsKey($_) })
+    $NZ = $zOwned.Count
+    $doneZ = "install.ps1: done: written=$NZ already-identical=0 kept=0 retired=0 refused=0"
+    Check "the ZIP's installer-owned set is the clone's $N and the $($genOwned.Count) generated members, every one under ui/dist/ or THIRD-PARTY-NOTICES" (
+        (@($owned.Keys | Where-Object { -not $zOwned.ContainsKey($_) }).Count -eq 0) -and ($genOwned.Count -gt 1) -and (@($genOwned | Where-Object { -not ($_.StartsWith('ui/dist/') -or $_ -ceq 'THIRD-PARTY-NOTICES') }).Count -eq 0))
     $r2 = Run (Join-Path $x 'install.ps1') @('-Target', $t2, '-ReleaseZip', $z.zip)
     L "install from the expanded ZIP: exit=$($r2.code)"; $r2.out | Where-Object { $_ -notmatch '^install\.ps1:   install ' } | ForEach-Object { L "  | $_" }
-    Check "the ZIP install: exit 0, $done" (($r2.code -eq 0) -and (Has $r2.out $done))
+    Check "the ZIP install: exit 0, $doneZ" (($r2.code -eq 0) -and (Has $r2.out $doneZ))
     $lk2 = ReadLock $t2; $h2 = $lk2.header
     L "ZIP install lock header: $($lk2.lines[0])"
-    Check "the ZIP install's header: source_kind release, source_tag null, source_commit null, zip_sha256 the ZIP's ($zsha), framework_repo_tip HEAD; the columns in order" (
-        ($h2.source_kind -ceq 'release') -and ($null -eq $h2.source_tag) -and ($null -eq $h2.source_commit) -and ($h2.zip_sha256 -ceq $zsha) -and ($h2.framework_repo_tip -ceq $Tagged.head) -and ((Names $h2) -ceq $HeaderColumns))
-    function AfterHeader { param([byte[]]$B) $i = [System.Array]::IndexOf($B, [byte]10); $o = New-Object byte[] ($B.Length - $i - 1); [System.Array]::Copy($B, $i + 1, $o, 0, $o.Length); return , $o }
-    $b1 = AfterHeader $lk1.raw; $b2 = AfterHeader $lk2.raw
-    Check "every file line of the two locks is the same, byte for byte ($($lk1.rows.Count) and $($lk2.rows.Count) lines, $($b1.Length) and $($b2.Length) bytes)" (($b1.Length -eq $b2.Length) -and ((Sha $b1) -eq (Sha $b2)) -and ($lk1.rows.Count -eq $N))
-    $skip = @('source_kind', 'source_tag', 'source_commit', 'zip_sha256', 'installed_at', 'upgraded_at')
+    Check "the ZIP install's header: source_kind release, source_tag null, source_commit null, zip_sha256 the ZIP's ($zsha), framework_repo_tip HEAD, manifest_sha256 the ZIP's manifest's, installer_owned $NZ; the columns in order" (
+        ($h2.source_kind -ceq 'release') -and ($null -eq $h2.source_tag) -and ($null -eq $h2.source_commit) -and ($h2.zip_sha256 -ceq $zsha) -and ($h2.framework_repo_tip -ceq $Tagged.head) -and ((Names $h2) -ceq $HeaderColumns) -and
+        ($h2.manifest_sha256 -ceq (FileSha (Join-Path $x 'provenance\manifest.jsonl'))) -and ($h2.installer_owned -eq $NZ))
+    $l1 = @($lk1.lines | Select-Object -Skip 1)
+    $l2 = @($lk2.lines | Select-Object -Skip 1)
+    $l2Shared = @($l2 | Where-Object { $p = ($_ | ConvertFrom-Json).path; $owned.ContainsKey($p) })
+    $l2Gen = @($l2 | Where-Object { $p = ($_ | ConvertFrom-Json).path; -not $owned.ContainsKey($p) })
+    Check "every file line of the clone's lock is the ZIP lock's line for that path, byte for byte and in order ($($l1.Count) and $($l2Shared.Count)); the ZIP lock's other $($l2Gen.Count) lines are the generated members, installed" (
+        (Same $l1 $l2Shared) -and ($l1.Count -eq $N) -and ($l2Gen.Count -eq $genOwned.Count) -and (@($l2Gen | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { ($_.disposition -cne 'installed') -or ($_.kind -cne 'move') -or ($genOwned -cnotcontains $_.path) }).Count -eq 0))
+    $skip = @('source_kind', 'source_tag', 'source_commit', 'zip_sha256', 'installed_at', 'upgraded_at', 'manifest_sha256', 'installer_owned')
     $hDiff = @(@($h1.PSObject.Properties | ForEach-Object { $_.Name }) | Where-Object { $skip -cnotcontains $_ } | Where-Object { (ConvertTo-Json -Compress $h1.$_) -cne (ConvertTo-Json -Compress $h2.$_) })
     Check "the two headers: the same columns in order, and every field but $($skip -join ', ') equal$(if ($hDiff.Count) { ' -- differ: ' + ($hDiff -join ', ') })" (((Names $h1) -ceq (Names $h2)) -and ($hDiff.Count -eq 0))
     $v2 = Run (Join-Path $x 'install.ps1') @('-Target', $t2, '-Verify')
     L "verify (ZIP install): exit=$($v2.code)"; $v2.out | ForEach-Object { L "  | $_" }
-    Check '-Verify of the ZIP install: exit 0, 0 difference(s)' (($v2.code -eq 0) -and ((Count $v2.out "^install\.ps1: verify: $N file\(s\) listed, 0 difference\(s\); ") -eq 1))
+    Check '-Verify of the ZIP install: exit 0, 0 difference(s)' (($v2.code -eq 0) -and ((Count $v2.out "^install\.ps1: verify: $NZ file\(s\) listed, 0 difference\(s\); ") -eq 1))
     $x1 = Run (Join-Path $x 'install.ps1') @('-Target', $t1, '-Verify'); $x2 = Run $installer @('-Target', $t2, '-Verify')
     Check '-Verify never reads the source: the expanded ZIP''s installer verifies the clone install, and the clone''s the ZIP install, each exit 0' (($x1.code -eq 0) -and ($x2.code -eq 0))
     Check "-Repo's tags are as they were (the tag $tag was made in the clone only)" ((((RunGit $Repo @('tag', '-l')).out) -join ',') -ceq $repoTags)
@@ -916,12 +1128,13 @@ switch ($Case) {
     $clone = New-Clone (Join-Path $Work 'clone')
     $z = Build-Zip $clone
     $cOwned = OwnedSet (Join-Path $clone 'provenance\manifest.jsonl')
-    # The members: every path HEAD tracks, and RELEASE.
-    $memberCount = @((RunGit $clone @('ls-tree', '-r', '--full-tree', '--name-only', 'HEAD')).out | Where-Object { $_ }).Count + 1
+    # The members (case d holds them to the rule): HEAD's released paths, the generated ones and RELEASE.
+    $releasedHead = @((RunGit $clone @('-c', 'core.quotePath=false', 'ls-tree', '-r', '--full-tree', '--name-only', 'HEAD')).out | Where-Object { $_ -and -not (Test-NotReleased $_) }).Count
+    $memberCount = (Inspect-Zip $z.zip).count
     $zsha = FileSha $z.zip
-    L "zip $($z.zip) sha256 $zsha; members $memberCount (HEAD's tracked paths + RELEASE)"
+    L "zip $($z.zip) sha256 $zsha; members $memberCount ($releasedHead of HEAD's paths, the generated ones and RELEASE)"
     $x = Join-Path $Work 'x'
-    if ($Case -ne 'u7') { Expand-Archive -LiteralPath $z.zip -DestinationPath $x }
+    if ($Case -ne 'u7') { Expand-Archive -LiteralPath $z.zip -DestinationPath $x; Use-ReleaseSet $x }
 }
 }
 
@@ -930,22 +1143,49 @@ switch ($Case) {
     $sums = [System.IO.File]::ReadAllText($z.sums)
     Check 'the ZIP matches its SHA256SUMS (the first line, the ZIP''s)' ($sums.StartsWith($zsha + "  $($z.name)" + "`n", [System.StringComparison]::Ordinal))
     $xt = TreeHashes $x
-    Check "the expansion holds $memberCount files (HEAD's tracked paths + RELEASE)" ($xt.count -eq $memberCount)
+    Check "the expansion holds $memberCount files, the ZIP's entries ($releasedHead of HEAD's paths, the generated ones and RELEASE)" ($xt.count -eq $memberCount)
     $rel = [System.IO.File]::ReadAllText((Join-Path $x 'RELEASE'))
     L "RELEASE:`n$rel"
-    Check "RELEASE names version $($z.version), this HEAD and the manifest's sha256" (($rel -match "(?m)^version: $([regex]::Escape($z.version))$") -and ($rel -match "framework_repo_tip: $head") -and ($rel -match ('manifest_sha256: ' + (FileSha (Join-Path $x 'provenance\manifest.jsonl')))))
+    Check "RELEASE names version $($z.version), this HEAD and the sha256 of the ZIP's manifest" (($rel -match "(?m)^version: $([regex]::Escape($z.version))$") -and ($rel -match "framework_repo_tip: $head") -and ($rel -match ('manifest_sha256: ' + (FileSha (Join-Path $x 'provenance\manifest.jsonl')))))
     $blobAt = @{}; foreach ($ent in ((RunGit $clone @('ls-tree', '-r', '--full-tree', 'HEAD')).out)) { if ($ent -match '^\d{6} blob ([0-9a-f]{40})\t(.+)$') { $blobAt[$Matches[2]] = $Matches[1] } }
-    $badBlob = @($xt.map.Keys | Where-Object { $_ -ne 'RELEASE' } | Where-Object { (BlobId ([System.IO.File]::ReadAllBytes((Join-Path $x ($_ -replace '/', '\'))))) -ne $blobAt[$_] })
-    Check 'every expanded member equals the blob at HEAD, by git blob id computed here (RELEASE aside)' ($badBlob.Count -eq 0)
+    $fromHeadX = @($xt.map.Keys | Where-Object { $blobAt.ContainsKey($_) -and $_ -ne 'provenance/manifest.jsonl' })
+    $badBlob = @($fromHeadX | Where-Object { (BlobId ([System.IO.File]::ReadAllBytes((Join-Path $x ($_ -replace '/', '\'))))) -ne $blobAt[$_] })
+    $notHead = @($xt.map.Keys | Where-Object { -not $blobAt.ContainsKey($_) -and $_ -cne 'RELEASE' -and -not ($_.StartsWith('ui/dist/') -or $_ -ceq 'THIRD-PARTY-NOTICES') })
+    Check "every expanded member taken from HEAD ($($fromHeadX.Count)) equals its blob, by git blob id computed here; every other is RELEASE, the manifest or generated ($($notHead.Count) else)" (($badBlob.Count -eq 0) -and ($notHead.Count -eq 0) -and ($fromHeadX.Count -eq $releasedHead - 1))
     $t = Join-Path $Work 't'
     $r = Run (Join-Path $x 'install.ps1') @('-Target', $t, '-ReleaseZip', $z.zip)
     L "install from the expanded ZIP: exit=$($r.code)"; $r.out | Where-Object { $_ -notmatch '^install\.ps1:   install ' } | ForEach-Object { L "  | $_" }
-    Check "install exit 0, done: written=$N" (($r.code -eq 0) -and (Has $r.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0"))
+    $done = "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0"
+    Check "install exit 0, done: written=$N" (($r.code -eq 0) -and (Has $r.out $done))
     $lk = ReadLock $t
     L "lock header: $($lk.lines[0])"
     Check "lock: lock_format 2, source_kind release, framework_repo_tip = HEAD, zip_sha256 = the ZIP, eol_rule, $N rows" (($lk.header.lock_format -eq 2) -and ($lk.header.source_kind -eq 'release') -and ($lk.header.framework_repo_tip -eq $head) -and ($lk.header.zip_sha256 -eq $zsha) -and ($lk.header.eol_rule -ceq 'fold-crlf-text') -and ($lk.rows.Count -eq $N))
     CheckRows2 $lk '(e)' 'installed'
     CheckLockAgainstSource $lk '(e)'
+    L '--- the counts INSTALL.md and README.md state, against this install from the ZIP'
+    $ve = Run (Join-Path $x 'install.ps1') @('-Target', $t, '-Verify')
+    $ec = EolCensus $lk.rows
+    $vline = "install.ps1: verify: $N file(s) listed, 0 difference(s); eol lf=$($ec.lf) crlf=$($ec.crlf) mixed=$($ec.mixed) binary=$($ec.binary)."
+    Check "-Verify exit 0, its last line: $vline" (($ve.code -eq 0) -and (Has $ve.out $vline))
+    $im = DocText (Join-Path $Repo 'INSTALL.md'); $rm = DocText (Join-Path $Repo 'README.md')
+    $classes = @(@('MOVE', 'TEMPLATE', 'HOST-CONFIG') | ForEach-Object { $c = $_; @($owned.Values | Where-Object { $_.class -eq $c }).Count })
+    $mline = @($r.out | Where-Object { $_ -match '^install\.ps1: manifest sha256 ' }) -join ''
+    $longest = (@($owned.Keys | ForEach-Object { $_.Length }) | Measure-Object -Maximum).Maximum
+    Check "INSTALL.md: the longest installed path is $(DocInt $im 'the longest installed path is (\d+) characters') characters = $longest, measured over the release's set" ((DocInt $im 'the longest installed path is (\d+) characters') -eq $longest)
+    $m = [regex]::Match($im, 'installer-owned (\d+) \(MOVE (\d+), TEMPLATE (\d+), HOST-CONFIG (\d+)\); framework\.lock absent')
+    Check "INSTALL.md's expected output: installer-owned $($m.Groups[1].Value) (MOVE $($m.Groups[2].Value), TEMPLATE $($m.Groups[3].Value), HOST-CONFIG $($m.Groups[4].Value)) = the installer's own line" ($m.Success -and ($mline -cmatch [regex]::Escape($m.Value)))
+    $dd = [regex]::Match($im, 'done: written=\d+ already-identical=\d+ kept=\d+ retired=\d+ refused=\d+')
+    Check "INSTALL.md's expected output: '$($dd.Value)' = this install's counts line" ($dd.Success -and ($done -ceq ('install.ps1: ' + $dd.Value)))
+    $wl = [regex]::Match($im, 'framework\.lock written: (\d+) line\(s\) for (\d+) file\(s\)')
+    Check "INSTALL.md: framework.lock written: $($wl.Groups[1].Value) line(s) for $($wl.Groups[2].Value) file(s) = this install's lock ($($lk.lines.Count) for $N)" ($wl.Success -and ([int]$wl.Groups[1].Value -eq $lk.lines.Count) -and ([int]$wl.Groups[2].Value -eq $N) -and ((Count $r.out ('^install\.ps1: ' + [regex]::Escape($wl.Value) + ', sha256 [0-9a-f]{64}$')) -eq 1))
+    $vm = [regex]::Match($im, 'verify: \d+ file\(s\) listed, 0 difference\(s\); eol lf=\d+ crlf=\d+ mixed=\d+ binary=\d+\.')
+    Check "INSTALL.md: '$($vm.Value)' = this -Verify's last line" ($vm.Success -and ($vline -ceq ('install.ps1: ' + $vm.Value)))
+    $tw = DocInt $im '(\w+) TEMPLATE and (\w+) HOST-CONFIG lines' 1; $hw = DocInt $im '(\w+) TEMPLATE and (\w+) HOST-CONFIG lines' 2
+    Check "INSTALL.md: the $tw TEMPLATE and $hw HOST-CONFIG lines = the manifest's $($classes[1]) and $($classes[2])" (($tw -eq $classes[1]) -and ($hw -eq $classes[2]))
+    $ll = DocInt $im '(\d+) lines for the (\d+)' 1; $lf2 = DocInt $im '(\d+) lines for the (\d+)' 2
+    Check "INSTALL.md: $ll lines for the $lf2 = this install's lock" (($ll -eq $lk.lines.Count) -and ($lf2 -eq $N))
+    $rn = DocInt $rm '\((\d+) files in the release'
+    Check "README.md: ($rn files in the release ...) = the release's installer-owned set, $N" ($rn -eq $N)
     # THE ROOT .gitignore init makes ignore Claude Code's per-checkout files (mission.ps1's header): the target has none.
     $giT = Join-Path $t '.gitignore'
     $giBefore = Test-Path -LiteralPath $giT
@@ -962,10 +1202,10 @@ switch ($Case) {
     $giLines = @($r.out | Where-Object { $_ -match '^mission\.ps1:   \.gitignore ' })
     $giS = if (Test-Path -LiteralPath $giT -PathType Leaf) { $L1.GetString([System.IO.File]::ReadAllBytes($giT)) } else { '' }
     $giRows = @($giS.TrimEnd("`n").Split([char]10))
-    Check 'the target had no .gitignore; init CREATED it, its one .gitignore line saying so: a "# " comment line, then /.claude/settings.local.json and /.claude/worktrees/, LF, no BOM, nothing else' (
-        (-not $giBefore) -and ($giLines.Count -eq 1) -and ($giLines[0] -cmatch '^mission\.ps1:   \.gitignore created: it ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ \(') -and
-        $giS.EndsWith("`n") -and (-not $giS.Contains("`r")) -and (-not $giS.StartsWith([string][char]0xEF)) -and ($giRows.Count -eq 3) -and $giRows[0].StartsWith('# ') -and
-        ($giRows[1] -ceq '/.claude/settings.local.json') -and ($giRows[2] -ceq '/.claude/worktrees/'))
+    Check 'the target had no .gitignore; init CREATED it, its one .gitignore line saying so: a "# " comment line, then /.claude/settings.local.json, /.claude/worktrees/ and /.mission-runtime/telemetry/ (UI-1 S1), LF, no BOM, nothing else' (
+        (-not $giBefore) -and ($giLines.Count -eq 1) -and ($giLines[0] -cmatch '^mission\.ps1:   \.gitignore created: it ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/telemetry/ \(') -and
+        $giS.EndsWith("`n") -and (-not $giS.Contains("`r")) -and (-not $giS.StartsWith([string][char]0xEF)) -and ($giRows.Count -eq 4) -and $giRows[0].StartsWith('# ') -and
+        ($giRows[1] -ceq '/.claude/settings.local.json') -and ($giRows[2] -ceq '/.claude/worktrees/') -and ($giRows[3] -ceq '/.mission-runtime/telemetry/'))
     $curBytes = [System.IO.File]::ReadAllBytes([System.IO.Path]::Combine($t, '.mission', 'spec', 'current.txt'))
     Check 'spec/current.txt is the token v001 (4 bytes) and spec/v001.yaml exists' (([System.Text.Encoding]::ASCII.GetString($curBytes) -ceq 'v001') -and (Test-Path -LiteralPath ([System.IO.Path]::Combine($t, '.mission', 'spec', 'v001.yaml')) -PathType Leaf))
     # THE FIRST DRAFT ACCEPTED. spec-accept runs at the project root of a git repository with a clean tree, so the
@@ -1050,12 +1290,13 @@ switch ($Case) {
     # here as ISO-8859-1 (a byte per char), so the bytes there must survive as a prefix and the tail is matched exactly.
     L '--- e3 mission init over a project''s own root .gitignore: only the missing rules appended, in its line ending; a file holding both left byte for byte'
     $giFix = @(
-        @('crlf-one-held', [byte[]](Bytes "build/`r`n.claude/settings.local.json  `r`n*.log"), '^mission\.ps1:   \.gitignore appended 1 rule\(s\): /\.claude/worktrees/ \(',
-          '\A\r\n# [^\r\n]+\r\n/\.claude/worktrees/\r\n\z', 'CRLF with no final line break, holding .claude/settings.local.json unanchored with trailing spaces'),
-        @('lf-none-held', [byte[]](Bytes "dist/`n"), '^mission\.ps1:   \.gitignore appended 2 rule\(s\): /\.claude/settings\.local\.json and /\.claude/worktrees/ \(',
-          '\A# [^\r\n]+\n/\.claude/settings\.local\.json\n/\.claude/worktrees/\n\z', 'LF with a final line break, holding neither rule'),
-        @('bom-both-held', [byte[]](@([byte]0xEF, [byte]0xBB, [byte]0xBF) + (Bytes "# the project's own rules`n/.claude/worktrees/`n.claude/settings.local.json`n")),
-          '^mission\.ps1:   \.gitignore unchanged: it already ignores /\.claude/settings\.local\.json and /\.claude/worktrees/$', $null, 'UTF-8 with a BOM, holding both rules, reordered, one unanchored')
+        @('crlf-one-held', [byte[]](Bytes "build/`r`n.claude/settings.local.json  `r`n*.log"), '^mission\.ps1:   \.gitignore appended 2 rule\(s\): /\.claude/worktrees/ and /\.mission-runtime/telemetry/ \(',
+          '\A\r\n# [^\r\n]+\r\n/\.claude/worktrees/\r\n/\.mission-runtime/telemetry/\r\n\z', 'CRLF with no final line break, holding .claude/settings.local.json unanchored with trailing spaces'),
+        @('lf-none-held', [byte[]](Bytes "dist/`n"), '^mission\.ps1:   \.gitignore appended 3 rule\(s\): /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/telemetry/ \(',
+          '\A# [^\r\n]+\n/\.claude/settings\.local\.json\n/\.claude/worktrees/\n/\.mission-runtime/telemetry/\n\z', 'LF with a final line break, holding no rule'),
+        # UI-1 S1: the telemetry rule counts as held where the project already ignores the whole runtime plane.
+        @('bom-both-held', [byte[]](@([byte]0xEF, [byte]0xBB, [byte]0xBF) + (Bytes "# the project's own rules`n/.claude/worktrees/`n.claude/settings.local.json`n.mission-runtime/`n")),
+          '^mission\.ps1:   \.gitignore unchanged: it already ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/telemetry/$', $null, 'UTF-8 with a BOM, holding every rule, reordered, one unanchored, the telemetry one as .mission-runtime/')
     )
     foreach ($gf in $giFix) {
         $gd = Join-Path $Work ('e3-' + $gf[0])
@@ -1084,7 +1325,7 @@ switch ($Case) {
     L '--- e3 mission init over a .gitignore it cannot append to, that is a folder, or that it cannot read: exit 1, nothing written'
     $giRo = @(
         @('ro-lacking', [byte[]](Bytes "dist/`n"), 1, '^mission\.ps1: .*\\\.gitignore cannot be appended to \(.*\) -- init cannot make it ignore Claude Code''s per-checkout files\. Nothing was written\.$', 'read-only, lacking both rules'),
-        @('ro-both-held', [byte[]](Bytes "/.claude/settings.local.json`n/.claude/worktrees/`n"), 0, '^mission\.ps1:   \.gitignore unchanged: it already ignores /\.claude/settings\.local\.json and /\.claude/worktrees/$', 'read-only, already holding both rules')
+        @('ro-both-held', [byte[]](Bytes "/.claude/settings.local.json`n/.claude/worktrees/`n/.mission-runtime/telemetry/`n"), 0, '^mission\.ps1:   \.gitignore unchanged: it already ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/telemetry/$', 'read-only, already holding every rule')
     )
     foreach ($gf in $giRo) {
         $gd = Join-Path $Work ('e3-' + $gf[0])
@@ -1188,12 +1429,13 @@ switch ($Case) {
     $eolLines = (RunGit $H @('ls-files', '--eol')).out
     $wcrlf = @($eolLines | Where-Object { $_ -match '\sw/crlf\s' }).Count
     $diskEol = @{}; foreach ($k in $owned.Keys) { $diskEol[$k] = EolOf ([System.IO.File]::ReadAllBytes((Join-Path $H ($k -replace '/', '\')))) }
-    $withEnd = @($owned.Keys | Where-Object { $diskEol[$_] -ne 'lf' }).Count
+    $withEnd = @($owned.Keys | Where-Object { $diskEol[$_] -notin 'lf', 'binary' }).Count
     $unset = TextUnset $H @($owned.Keys)
-    $convertible = @($owned.Keys | Where-Object { -not $unset.Contains($_) })
+    # A binary file (the dashboard's fonts) is never converted, whatever its attributes: git reads it as binary.
+    $convertible = @($owned.Keys | Where-Object { -not $unset.Contains($_) -and $srcEol[$_] -ne 'binary' })
     L "  git ls-files --eol: $($eolLines.Count) tracked, $wcrlf w/crlf; disk eol census: $(@($diskEol.Values | Group-Object | Sort-Object Name | ForEach-Object { "$($_.Name)=$($_.Count)" }) -join ' '); git reads $($unset.Count) as -text"
     Check "git ls-files --eol: $N tracked, $wcrlf w/crlf = every file with a line end ($withEnd); every file git converts ($($convertible.Count)) crlf on disk, but the one with no line end" (($eolLines.Count -eq $N) -and ($wcrlf -eq $withEnd) -and ($withEnd -ge $convertible.Count - 1) -and
-        (@($convertible | Where-Object { $diskEol[$_] -ne 'crlf' }).Count -le 1) -and (@($diskEol.Values | Where-Object { $_ -notin 'crlf', 'lf' }).Count -eq 0))
+        (@($convertible | Where-Object { $diskEol[$_] -ne 'crlf' }).Count -le 1) -and (@($diskEol.Keys | Where-Object { $diskEol[$_] -notin 'crlf', 'lf' -and -not ($diskEol[$_] -eq 'binary' -and $srcEol[$_] -eq 'binary') }).Count -eq 0))
     # THE PINNED BASES ON A CRLF HOST. The instruments hold every file under tests/lam/fixtures/base-<label>/ and
     # legacy-census-halts/ to the sha256 of its exact bytes, read from disk: they must stand at their manifest bytes in this
     # checkout and in a clone of it, whatever core.autocrlf says.
@@ -1223,7 +1465,8 @@ switch ($Case) {
     Check '(g1) the install wrote only framework.lock: no host file was rewritten for its line endings' (($d.Count -eq 1) -and ($d[0] -eq 'new framework.lock'))
     $st = (RunGit $H @('status', '--porcelain')).out
     Check '(g1) git status --porcelain shows only framework.lock, untracked' (($st.Count -eq 1) -and ($st[0] -ceq '?? framework.lock'))
-    $vline = "install.ps1: verify: $N file(s) listed, 0 difference(s); eol lf=$($ec.lf) crlf=$($ec.crlf) mixed=0 binary=0."
+    $vline = "install.ps1: verify: $N file(s) listed, 0 difference(s); eol lf=$($ec.lf) crlf=$($ec.crlf) mixed=$($ec.mixed) binary=$($ec.binary)."
+    $nBin = @($srcEol.Values | Where-Object { $_ -eq 'binary' }).Count
     $t0 = TreeHashes $H
     $v = Run (Join-Path $x 'install.ps1') @('-Target', $H, '-Verify')
     L "(g2) verify exit=$($v.code)"; $v.out | ForEach-Object { L "  | $_" }
@@ -1299,11 +1542,11 @@ switch ($Case) {
     [System.IO.File]::Delete((Join-Path $H 'framework.lock'))
     $r = Run (Join-Path $x 'install.ps1') @('-Target', $H, '-ReleaseZip', $z.zip)
     $lkLf = ReadLock $H
-    Check "(g7) with the lock removed, a fresh install over the LF tree: exit 0, done: written=0 already-identical=$N, and an LF-time lock: eol lf=$N" (($r.code -eq 0) -and (Has $r.out "install.ps1: done: written=0 already-identical=$N kept=0 retired=0 refused=0") -and ((EolCensus $lkLf.rows).lf -eq $N))
+    Check "(g7) with the lock removed, a fresh install over the LF tree: exit 0, done: written=0 already-identical=$N, and an LF-time lock: eol lf=$($N - $nBin) binary=$nBin" (($r.code -eq 0) -and (Has $r.out "install.ps1: done: written=0 already-identical=$N kept=0 retired=0 refused=0") -and ((EolCensus $lkLf.rows).lf -eq $N - $nBin) -and ((EolCensus $lkLf.rows).binary -eq $nBin))
     Check '(g7) the LF-time lock''s path, sha256 and disposition columns are the CRLF-time lock''s: only eol moved' ((@($lkLf.rows | ForEach-Object { "$($_.path)|$($_.sha256)|$($_.disposition)" }) -join "`n") -ceq (@($lock0.rows | ForEach-Object { "$($_.path)|$($_.sha256)|$($_.disposition)" }) -join "`n"))
     $null = RunGit $H @('config', 'core.autocrlf', 'true'); $null = RunGit $H @('rm', '-r', '-q', '--cached', '.'); $null = RunGit $H @('reset', '--hard', '-q')
     $v = Run (Join-Path $x 'install.ps1') @('-Target', $H, '-Verify')
-    Check "(g7) flipped back to CRLF: -Verify with the LF-time lock reads 0 difference(s), eol lf=$N" (($v.code -eq 0) -and (Has $v.out "install.ps1: verify: $N file(s) listed, 0 difference(s); eol lf=$N crlf=0 mixed=0 binary=0."))
+    Check "(g7) flipped back to CRLF: -Verify with the LF-time lock reads 0 difference(s), eol lf=$($N - $nBin) binary=$nBin" (($v.code -eq 0) -and (Has $v.out "install.ps1: verify: $N file(s) listed, 0 difference(s); eol lf=$($N - $nBin) crlf=0 mixed=0 binary=$nBin."))
 }
 'u7' {
     $zi = Inspect-Zip $z.zip
@@ -1315,14 +1558,20 @@ switch ($Case) {
     try { $ms = New-Object System.IO.MemoryStream; $es = $za.GetEntry($notes).Open(); try { $es.CopyTo($ms) } finally { $es.Dispose() }; $nb = $ms.ToArray() } catch { $nb = [byte[]]@() } finally { $za.Dispose() }
     $blob = ((RunGit $clone @('rev-parse', "HEAD:$notes")).out -join '').Trim()
     Check "the member is the file as tracked: its git blob id, computed here, is HEAD's ($blob)" ((BlobId $nb) -eq $blob)
+    $za = [System.IO.Compression.ZipFile]::OpenRead($z.zip)
+    try { $ms = New-Object System.IO.MemoryStream; $es = $za.GetEntry('provenance/manifest.jsonl').Open(); try { $es.CopyTo($ms) } finally { $es.Dispose() }; $zmPath = Join-Path $Work 'zip-manifest.jsonl'; [System.IO.File]::WriteAllBytes($zmPath, $ms.ToArray()) } finally { $za.Dispose() }
+    $zOwned = OwnedSet $zmPath
+    $distN = @($zi.names | Where-Object { $_.StartsWith('ui/dist/') }).Count
     $im = DocText (Join-Path $Repo 'INSTALL.md')
     $dn = DocInt $im 'The archive holds (\d+) files'
     $dc = DocInt $im 'the (\d+) files of the commit the release tag names'
+    $dd = DocInt $im 'the (\d+) files of the dashboard''s build output'
     $di = DocInt $im 'The (\d+) files the framework installs are among them'
-    L "INSTALL.md section 4: the archive holds $dn files; the commit's $dc + RELEASE; the $di installed among them"
+    L "INSTALL.md section 4: the archive holds $dn files; the commit's $dc + ui/dist $dd + THIRD-PARTY-NOTICES + RELEASE; the $di installed among them"
     Check "INSTALL.md section 4's member count, $dn, is the ZIP's entry count, $($zi.count)" ($dn -eq $zi.count)
-    Check "INSTALL.md section 4's commit count, $dc, is HEAD's tracked paths (git ls-tree -r --full-tree HEAD), $($memberCount - 1), and its formula, $dc + RELEASE, is the ZIP's entry count" (($dc -eq $memberCount - 1) -and ($dc + 1 -eq $zi.count))
-    Check "INSTALL.md section 4's installed count, $di, is the installer-owned set the ZIP's manifest defines, $($cOwned.Count)" ($di -eq $cOwned.Count)
+    Check "INSTALL.md section 4's commit count, $dc, is HEAD's released paths (its tracked paths less the dashboard's private source and the service's tests), $releasedHead" ($dc -eq $releasedHead)
+    Check "INSTALL.md section 4's build-output count, $dd, is the ZIP's ui/dist/ entries, $distN, and the formula $dc + $dd + THIRD-PARTY-NOTICES + RELEASE is the ZIP's entry count" (($dd -eq $distN) -and ($dc + $dd + 2 -eq $zi.count))
+    Check "INSTALL.md section 4's installed count, $di, is the installer-owned set the ZIP's manifest defines, $($zOwned.Count)" ($di -eq $zOwned.Count)
     $sums = [System.IO.File]::ReadAllText($z.sums)
     Check 'SHA256SUMS keeps its form: <64 hex>, two spaces, the ZIP name, LF; then <64 hex>, two spaces, MEMBERS.sha256, LF' ($sums -cmatch ('^[0-9a-f]{64}  ' + [regex]::Escape($z.name) + "`n[0-9a-f]{64}  MEMBERS\.sha256`n$"))
 }
@@ -1983,13 +2232,16 @@ switch ($Case) {
     $relOwned = OwnedSet (Join-Path $xr 'provenance\manifest.jsonl')
     $relInstaller = Join-Path $xr 'install.ps1'
     L "the release: $($z.zip) sha256 $zsha, version $($z.version), expanded to $xr"
-    Check "the release is $($z.version) = VERSION; its manifest's installer-owned set is the checkout's ($($owned.Count)), and the expansion holds each of them" (($z.version -ceq $Version) -and (Same @($relOwned.Keys) @($owned.Keys)) -and
+    $relGen = @($relOwned.Keys | Where-Object { -not $owned.ContainsKey($_) })
+    Check "the release is $($z.version) = VERSION; its manifest's installer-owned set is the checkout's ($($owned.Count)) and the $($relGen.Count) generated members (ui/dist/**, THIRD-PARTY-NOTICES), and the expansion holds each of them" (($z.version -ceq $Version) -and
+        (@($owned.Keys | Where-Object { -not $relOwned.ContainsKey($_) }).Count -eq 0) -and ($relGen.Count -gt 1) -and (@($relGen | Where-Object { -not ($_.StartsWith('ui/dist/') -or $_ -ceq 'THIRD-PARTY-NOTICES') }).Count -eq 0) -and
         (@($relOwned.Keys | Where-Object { -not (Test-Path -LiteralPath (Join-Path $xr ($_ -replace '/', '\')) -PathType Leaf) }).Count -eq 0))
     $shippedFold = FoldSha ([System.IO.File]::ReadAllBytes((Join-Path $xr ($census -replace '/', '\'))))
-    # THE PREDICTION, by the release clone's own tool, over the manifest the tag carries and the one the ZIP carries
-    # (held by the tool to HEAD's in the release clone).
+    # THE PREDICTION, by the release clone's own tool, over the manifest the tag carries and HEAD's in the release clone
+    # (the tool holds each to its revision; the ZIP's manifest is HEAD's less the excluded rows and plus the generated
+    # members, which no 0.2.0 project holds: each of those is an install, added to the prediction's written=).
     $predOut = Join-Path $Work 'prediction.md'
-    $pr = RunPy @((Join-Path $rc 'tools\provenance\upgrade-diff.py'), (Join-Path $clone 'provenance\manifest.jsonl'), (Join-Path $xr 'provenance\manifest.jsonl'),
+    $pr = RunPy @((Join-Path $rc 'tools\provenance\upgrade-diff.py'), (Join-Path $clone 'provenance\manifest.jsonl'), (Join-Path $rc 'provenance\manifest.jsonl'),
         '--old-version', $C.lock, '--new-version', $Version, '--repo', $rc, '--old-rev', $C.tag, '--new-rev', 'HEAD', '--out', $predOut)
     L "upgrade-diff.py $($C.lock) -> $($Version): exit=$($pr.code)"; $pr.out | ForEach-Object { L "  | $_" }
     $pt = ''; if (Test-Path -LiteralPath $predOut -PathType Leaf) { $pt = [System.IO.File]::ReadAllText($predOut) }
@@ -2000,8 +2252,8 @@ switch ($Case) {
     if ($pm.Success) {
         L "the prediction: $($pm.Value); retired $($predRetired.Count)"
         $nw = ''; if ($pm.Groups[4].Success) { $nw = $pm.Groups[4].Value }
-        $predA = "install.ps1: done: written=$($pm.Groups[1].Value) already-identical=$($pm.Groups[2].Value) kept=$($pm.Groups[3].Value)$nw retired=$($pm.Groups[6].Value) refused=0"
-        $predB = "install.ps1: done: written=$([int]$pm.Groups[1].Value - 1) already-identical=$($pm.Groups[2].Value) kept=$([int]$pm.Groups[3].Value + 1)$nw retired=$($pm.Groups[6].Value) refused=0"
+        $predA = "install.ps1: done: written=$([int]$pm.Groups[1].Value + $relGen.Count) already-identical=$($pm.Groups[2].Value) kept=$($pm.Groups[3].Value)$nw retired=$($pm.Groups[6].Value) refused=0"
+        $predB = "install.ps1: done: written=$([int]$pm.Groups[1].Value + $relGen.Count - 1) already-identical=$($pm.Groups[2].Value) kept=$([int]$pm.Groups[3].Value + 1)$nw retired=$($pm.Groups[6].Value) refused=0"
     }
     $done = @{}
     foreach ($leg in @(@{ name = 'A'; export = $false }, @{ name = 'B'; export = $true })) {

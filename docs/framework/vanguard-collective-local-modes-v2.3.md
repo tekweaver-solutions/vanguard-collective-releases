@@ -346,7 +346,7 @@ Short-form decisions; full ADR treatment in §11 for the load-bearing ones.
 | ADR-026 | **Native worktrees:** Claude Code `--worktree` + `.worktreeinclude` for fan-out isolation; custom worktree orchestration deleted. Merge sequencing and the conflict scanner remain framework-owned (brief §12.6 stays open — nothing native detects cross-worktree conflicts). | Resolves brief §12.5 |
 | ADR-027 | **Layered sandboxing:** Docker (user-owned, v1 ADR-004/ADR-018) remains the outer boundary; the sandboxed Bash tool is the near-zero-startup inner layer for validator swarms where container spin-up dominates. | Updates brief §12.3 |
 | ADR-028 | **Channels as event transport:** rate-limit resets, validator verdicts, CI events push into the orchestrator session; human replies return via Slack integration. Hard constraint: every channel message carrying a decision is the delivery vehicle for an artifact in `.mission/` — a message with no backing artifact is a Principle-1 violation. Sender gating whitelists exactly one producer per consumer. Workers never consume worker-fed channels. | Updates brief §6.3, §6.7 |
-| ADR-029 | **Mission Control v1 via native surfaces:** agent view (live session board, needs-input flags), channels (escalation inbox), Claude Code Artifacts (shareable status pages). Custom web UI deferred. | Resolves brief §12.9 (v1) |
+| ADR-029 | **Mission Control v1 via native surfaces:** agent view (live session board, needs-input flags), channels (escalation inbox), Claude Code Artifacts (shareable status pages). Custom web UI deferred. | Resolves brief §12.9 (v1). Superseded by ADR-045 for the human-facing Mission Control surface (2026-11-01). |
 | ADR-030 | **Routines for cadence work:** eval-loop archive scans, prompt-regression checks, pre-witness deploy-currency verification run as scheduled routines. Anything a routine produces must land in `.mission/` to count as having happened (routines execute on Anthropic-managed infrastructure). | Updates v1 §13.2.1, brief §12.8 |
 | ADR-031 | **Model routing refresh:** `coding-strong` / `qa-validator` primaries → Opus 5 (Claude Code default; 1M context); evaluate Sonnet 5 for `coding-fast`; advisor tool wired so workers get a strong-reasoner consult at amendment-proposal moments without a role change. One file (`model-routing.yaml`); brief §14.6 demonstrated. Ollama fallbacks re-benchmarked per release. | Updates v1 ADR-005 config |
 | ADR-032 | **Memory hygiene:** Claude Code auto memory disabled (settings-enforced) in worker and validator sandboxes — it is persistent agent state outside the artifact store and can leak implementation history into validators. Orchestrator-side learnings are promoted to the ledger via ceremony or discarded. Fifth technique appended to v1 ADR-016. | Amends ADR-016 |
@@ -449,7 +449,7 @@ status and resumption limitations disqualify it as a foundation today.
 | Orchestrator (agent) | Dedicated Claude Code session at repo root, hook-scoped to brief §4.1: read-only on `src/`, write only under `.mission/` + runner invocation. PreToolUse deny rules enforce this deterministically; documented hook-over-auto-mode precedence makes hooks authoritative regardless of permission mode. |
 | Workers | Headless processes in worktrees + layered sandbox, one per dispatch; visible only through artifacts, evidence, and agent view. |
 | Validators | Dynamic-workflow subagent swarms at milestone boundaries. Precondition (empirically verified before trust): workflow subagents receive only assertion + built artifact — no parent context (brief §4.3 isolation contract). |
-| Mission Control | Agent view (board) + channels→Slack (inbox) + Artifacts (status pages). |
+| Mission Control | Agent view (board) + channels→Slack (inbox) + Artifacts (status pages) + `vanguard ui` (fleet dashboard, read-only; ADR-045). |
 | Host shell | Claude Code Desktop as the container: orchestrator pane, agent view, witness terminal, visual diff review. Desktop is furniture, not an actor. |
 | Cowork | **Read-side only.** The human's leverage surface for artifacts around the mission (escalation packets, status docs, spec review). It never mutates the mission repo: a second uncoordinated mutator on shared state is exactly what brief §10 forbids. |
 
@@ -582,6 +582,125 @@ with the outside world, a push confirmation is a claim an agent can fabricate li
 claim, and the paste-as-gate mechanism this replaced was load-bearing precisely because a human
 act stood between green and origin. **Invariance check:** Local Orchestrator Mode behavior
 unchanged (paste remains the act); only the physical form of the gate varies by topology.
+
+### 11.6 ADR-045 — Control-plane dashboard v1: a read-only local projection (`vanguard ui`)
+
+**Status.** ACCEPTED 2026-11-01 (operator ruling of 2026-10-29, recorded in the operator's host
+ledger). Supersedes ADR-029 for the human-facing Mission Control surface. Resolves brief §12.9 (v1).
+Introduces one additive artifact, `mission-event` (expanded-schemas §14, "Mission Event"). Built by
+batch UI-1. Nothing in Local Orchestrator Mode or Local Autonomous Mode changes beyond one append
+line in each hook and lifecycle verb.
+
+**Context.** ADR-029 answered §12.9 with native surfaces (agent view, channels, Artifacts) and
+deferred a custom web UI. Since then the framework became a product (1.0.0, ZIP and public release
+repository, proprietary evaluation licence) whose users are business and IT people who do not sit
+at the seat. Native surfaces show one session to one operator holding a Claude Code licence; they
+cannot show anyone a fleet of projects, where each stands in its lifecycle, what is blocked, and
+whether the last run passed. Per-project state exists only in files the operator knows how to read.
+The dashboard is the product's face.
+
+**Decision.** Vanguard Collective v1 gets a read-only, local-machine control-plane dashboard,
+started as `vanguard ui`.
+
+Binding principles:
+1. The UI owns no truth. `.mission/` (git), `.mission-runtime/` (evidence) and the trace store
+   remain the record. The dashboard is a projection — deletable and rebuildable from the projects'
+   event feeds at any time; it reconstructs nothing from `.mission/` itself.
+2. Read-only in v1. No commands, no messages to agents, no configuration pulled from the UI. The
+   only thing the UI changes is what a human sees. The touchpoint pen (human-authored artifacts
+   submitted through the UI) is v2, gated on brief §12.11.
+3. Projects stay independent. A project never references another project or the dashboard; it
+   carries no dashboard HOST-CONFIG value in v1.
+4. No sidecar, no adapter. The project itself emits, from the hooks and lifecycle verbs that
+   already hold the pen (v2.3 Principle 11); no extra process runs beside a project.
+5. Additive evolution. Event kinds and fields are added, never removed or renamed; the four API
+   endpoints are the v2 boundary.
+
+The contract — `mission-event`. One append-only, never-committed file per project checkout,
+`.mission-runtime/telemetry/events.jsonl`. Every line carries `schema_version, mission_id, host_id,
+seq, ts, kind, payload, source_path, sha256, commit`; a line without its `source_path@sha256` is
+rejected at ingest and counted. Emitters: PostToolUse / Stop / PreCompact hooks (tool level);
+spec-bump, gate, HALT, `mission verify` and commit-ledger verbs (stage level). The append never
+blocks and never fails the tool call or verb that triggered it. Field-level definition, kinds and
+payloads in the schemas document; the UI-1 S0 contract (falsifiers before code) fixes what this ADR
+leaves to S0 and is the acceptance for S1–S3.
+
+The service — `vanguard ui`. A Typer command starts uvicorn + FastAPI. It reads the host registry
+`~/.vanguard/projects.yaml` (one row per registered checkout, appended by `install.ps1` and
+`mission init`), tails each registered `events.jsonl` into a disposable SQLite projection
+`~/.vanguard/ui.db` (stdlib `sqlite3`, no ORM), serves `/api/missions`, `/api/missions/{id}`,
+`/api/missions/{id}/events`, `/api/missions/{id}/stats`, pushes live updates over SSE, and
+regenerates the projection from the files on `--rebuild`. It serves the built dashboard as static
+files from the same process. No Docker, no daemon, no network beyond localhost. The service holds
+no project-specific knowledge. This API is the v2 boundary: a distributed hub re-implements the
+same four endpoints over a shared store, a shipper tails `events.jsonl`, and the SPA is
+byte-identical.
+
+The dashboard. React + TypeScript + Vite; Tailwind + shadcn/ui components copied into the repo
+(MIT); Recharts; TanStack Query and Table; React Router. Chosen from first principles — most
+hireable stacks, permissive licences throughout, a business-grade look without a designer — not
+inherited from any host. Three screens: Fleet (KPI tiles, then a card per project sorted by
+needs-attention: state, current milestone, last-activity age, assertion donut, error strip naming
+the artifact), Project (five-tile header; milestone progress; feature → assertion; open sessions
+and dispatches; spec timeline; last verify with its scope shown as prominently as its verdict;
+errors panel ranked by severity with a `source_path@sha256` chip per row), Stats (KPI tiles, then
+charts: Green = green ÷ all defined as the headline assertion metric, "pass rate of evaluated" =
+green ÷ (green + red) secondary and always labelled; dispatches finalized vs PARTIAL; validator
+confirmed vs refuted by round; HALTs raised/resolved and mean time to resolve; tool-call non-zero
+exit rate where exit codes are captured, else "not captured"; elapsed per milestone). All stats are
+computed at query time in one metrics module, never stored and never computed twice. The error
+set is closed: open HALT, PARTIAL manifest, testimony conflict, failed verify, expired gate,
+refuted assertion, main ahead of origin beyond N days. Every tile carries a staleness badge ("as of
+seq N / commit X"); stale is never shown as current. Light and dark themes, one accent colour
+reserved for progress and links; the look reproduces the UI-SPIKE 1 reference, not a new design.
+No cost figure in v1 (brief §12.12).
+
+Distribution. The frontend ships as build output only: `dist/` and the Python service are members
+of the release ZIP and of the public releases repository; React/TypeScript source stays in the
+private development repository. Node is a build-time dependency only; a customer never needs it.
+The release build emits `THIRD-PARTY-NOTICES` (frontend via a licence-checker plugin, Python via
+`pip-licenses`) as an installer-owned member, and the byte-equal ×2 build rule extends to the
+bundle (Node version and lockfile pinned). Framework ownership and maintenance stay with tekWeaver
+Solutions Inc. employees only; the public repository holds one commit per release — the
+digest-checked expanded ZIP — beside the release assets; forking tracked files cannot be prevented
+technically, and the licence governs use and modification.
+
+**Alternatives considered, rejected.** Keep ADR-029 (native surfaces): shows no fleet and needs a
+seat licence to look. A Go single binary: a second toolchain and SmartScreen on an unsigned exe.
+Streamlit or Dash: a data-app look that reads as internal tooling. HTMX + Jinja: charts and
+drill-downs hand-written. Svelte or Vue: smaller hiring pool, weaker free component tier. Grafana:
+an IT-only face with a separate install — stays viable later through OTLP from the same file. A
+sidecar or adapter per project: rejected by the operator; the project emits, no extra process.
+
+**Tradeoffs accepted.** Two languages in one repo (the UI is the product's face). SQLite on a single
+machine (v1 scope; the API boundary is what pays for v2). Stats at query time (fine at tens of
+projects; a materialised view is a v2 change behind the same endpoints). A registry file that goes
+stale when a project moves on disk (shown as stale, never hidden). A read-only inbox: a HALT is
+visible on the dashboard, and acting on it still happens in the seat or the console.
+
+**Failure modes named.** `events.jsonl` deleted or truncated: the projection rebuilds to what the
+file holds and shows the earliest surviving `seq`; nothing is reconstructed from `.mission/`.
+Concurrent appenders (hooks in two sessions of one checkout): `seq` is allocated under an exclusive
+lock per file; a gap means loss and is shown; a duplicate is rejected. A failed append leaves no
+line and no gap — its only trace is the hook's own `hook-errors.log` in the evidence plane; the
+staleness badge is the user's tell. Two checkouts of one mission (a worktree): each has its own
+file and `seq`; the stream identity is the registry entry (host, checkout path), and `mission_id`
+groups them on the Fleet screen. Exit codes: the harness does not place one on the PostToolUse
+payload (v2.3 §4.6, E5-i); until that is cured the Stats tile says "not captured" rather than 0 %.
+
+**Invariance check.** No existing artifact's schema changes. No lifecycle, role or touchpoint
+changes. One append line in each hook and verb is the whole footprint inside Local Autonomous Mode.
+Deleting `~/.vanguard/` and the telemetry files leaves every mission exactly as it was.
+
+**Triggers to revisit.** v2 hub (many hosts, one dashboard): same four endpoints over a shared
+store plus a shipper; the SPA unchanged. The touchpoint pen: only after brief §12.11 is designed.
+Cost tiles: only after a `usage_anchor` event kind exists (brief §12.12). Grafana or any OTLP
+consumer: from the same `events.jsonl`, no emitter change.
+
+**Supersession map.** Brief §6.7 gains a pointer to this ADR; brief §12.9 cites it; local-modes v2.3
+§9.3 "Mission Control" row reads "Agent view (board) + channels→Slack (inbox) + Artifacts (status
+pages) + `vanguard ui` (fleet dashboard, read-only; ADR-045)."; the user guide gains a Dashboard section at
+UI-1 S4; expanded-schemas gains §14 "Mission Event".
 
 ---
 

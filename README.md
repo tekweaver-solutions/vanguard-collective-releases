@@ -12,12 +12,14 @@ What the framework says about a session is meant to be checkable on disk rather 
 transcript. Hooks registered in `.claude/settings.json` keep an evidence plane that agents cannot
 write: a PreToolUse guard refuses agent writes to it, a PostToolUse hook captures every tool call,
 and a Stop hook seals a manifest. A pre-push decider refuses a publication no gate authorizes, and
-acceptance instruments exercise the machinery by running it. Version 1.0.0 is the first public
+acceptance instruments exercise the machinery by running it. Version 1.0.0 was the first public
 release: the framework in a repository of its own, with an installer that installs from the release ZIP
 or from a clone of the public repository at its release tag and upgrades a project in place, and agents
 that authenticate with a Claude subscription or an Anthropic API key; it is licensed for evaluation and
-your own internal development work (see Licence). Its release notes are
-[docs/RELEASE-NOTES-v1.0.0.md](docs/RELEASE-NOTES-v1.0.0.md), known limits first.
+your own internal development work (see Licence). Version 1.1.0 adds the dashboard, `vanguard ui`: a
+read-only, local view of every project registered on the machine, fed by the mission-event feed the
+hooks and lifecycle commands now append. Its release notes are
+[docs/RELEASE-NOTES-v1.1.0.md](docs/RELEASE-NOTES-v1.1.0.md), known limits first.
 
 New to the framework? Start with [docs/QUICKSTART.md](docs/QUICKSTART.md), then read the operator's
 guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguard-collective-user-guide.md).
@@ -30,18 +32,22 @@ guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguar
 | `tools/evidence-hooks-next/` | the evidence hooks: the PreToolUse guard, PostToolUse capture, the Stop finalizer, PreCompact, the runner's dispatch-end writer and the pre-push decider |
 | `tools/mission-cli/` | mission configuration: the ADR registry, model routing, expected failures, the MCP tool selection |
 | `docs/framework/` | the design documents, the operator's install procedure (`LAM-INSTALL.md`) and the schemas -- the first host's acceptance record, `LAM-ACCEPT.md`, is not a framework document and is not shipped |
-| `tests/lam/` | the acceptance instruments `instrument-WP-1.ps1` ... `instrument-WP-6.ps1`, and the pinned bases they read under `fixtures/base-700e19e5/`, `fixtures/base-700e19e5-sNN/` (built by the recipe `fixtures/synthetic-bases.json`, which this repository keeps and does not install) and `fixtures/legacy-census-halts/`; the smoke mission they read is built after install, beside the project, by `tools/lam/build-smoke-mission.ps1` |
+| `tools/ui/` | the dashboard's service, `vanguard ui` (FastAPI and uvicorn, its pinned set in `requirements.txt`, the command `vanguard.cmd`) |
+| `ui/dist/` | the dashboard's built files, which the service serves; the release carries them, built from a private source it does not |
+| `tests/lam/` | the acceptance instruments `instrument-WP-1.ps1` ... `instrument-WP-7.ps1` (WP-7: the mission-event feed, the service and the dashboard), and the pinned bases they read under `fixtures/base-700e19e5/`, `fixtures/base-700e19e5-sNN/` (built by the recipe `fixtures/synthetic-bases.json`, which this repository keeps and does not install) and `fixtures/legacy-census-halts/`; the smoke mission they read is built after install, beside the project, by `tools/lam/build-smoke-mission.ps1` |
 | `.claude/settings.json` | the hook registrations Claude Code reads |
 
 Beside these, `tools/framework/` holds the first-generation hooks the next generation delegates to,
 and `tools/mission-*.ps1` are the mission lifecycle commands. What is installed into a project is
-exactly the set `provenance/manifest.jsonl` defines (318 files at this commit); `provenance/` and
-this repository's own files are not installed.
+exactly the set the release's `provenance/manifest.jsonl` defines (373 files in the release, `ui/dist/`
+and `THIRD-PARTY-NOTICES` among them); `provenance/` and this repository's own files are not installed.
 
 ## Prerequisites
 
 - Windows, with Windows PowerShell 5.1
-- Python 3
+- Python 3; for the dashboard, CPython 3.14 for 64-bit Windows, whose wheels the install's hash-checked
+  `pip` takes from PyPI (the network during the install; [INSTALL.md](INSTALL.md) section 5). Node is
+  never needed.
 - git
 - Claude Code Desktop
 - Docker Desktop, only for a product whose test suite needs it
@@ -87,9 +93,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\mission.ps1 init -Target <
 powershell -NoProfile -ExecutionPolicy Bypass -File .\mission.ps1 smoke -Target <folder>
 ```
 
-`init` creates an empty mission in `<folder>`; `smoke` runs the installed goal evaluator over it and
-exits 0 when the verdict is MET. [INSTALL.md](INSTALL.md) walks through all three from the release
-ZIP, with the output to expect.
+`init` creates an empty mission in `<folder>` and registers it for the dashboard; `smoke` runs the
+installed goal evaluator over it and exits 0 when the verdict is MET. [INSTALL.md](INSTALL.md) walks
+through all three from the release ZIP, with the output to expect. Then
+
+```powershell
+<folder>\tools\ui\vanguard.cmd ui
+```
+
+starts the dashboard on `http://127.0.0.1:8765/`, read-only and local to this machine.
 
 ## Licence
 

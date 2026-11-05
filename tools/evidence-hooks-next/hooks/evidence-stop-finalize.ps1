@@ -72,14 +72,40 @@ try {
     $owned = Test-EvidenceRunnerOwned   -Root $root -DispatchId $did
     $ended = Test-EvidenceDispatchEnded -Root $root -DispatchId $did
 
+    # THE MISSION-EVENT FEED (UI-1 S1): session_stop on every Stop, with the manifest as it is on disk after
+    # this hook's own work; dispatch_finalized after it when this Stop is the one that sealed the store (the
+    # manifest's bytes changed across the A1 run). Never fails the hook: Write-MissionEvent does not throw,
+    # and the composition around it is caught.
+    function Send-StopTelemetry {
+        param([string]$ManifestShaBefore, $Sidecar, [bool]$MaySeal)
+        try {
+            if (-not (Test-MissionTelemetryStream -Root $root)) { return }
+            $sf = Get-MissionEvidenceStopFacts -Root $root -DispatchId $did
+            $null = Write-MissionEvent -Root $root -Kind 'session_stop' -SourcePath $sf.source -Hook 'Stop' -SessionId $sessionId -DispatchId $did `
+                        -Payload ([ordered]@{ session_id = $sessionId; dispatch_id = $did; manifest_state = $sf.manifest_state; entry_count = $sf.entry_count; evidence_state = $sf.evidence_state })
+            if ($MaySeal -and $sf.manifest_sha -and ($sf.manifest_sha -ne $ManifestShaBefore)) {
+                $gaps = 0
+                if ($null -ne $Sidecar) { try { $gaps = [int]$Sidecar.count } catch { $gaps = 0 } }
+                $null = Write-MissionEvent -Root $root -Kind 'dispatch_finalized' -SourcePath $sf.source -Hook 'Stop' -SessionId $sessionId -DispatchId $did `
+                            -Payload ([ordered]@{ dispatch_id = $did; manifest_state = $sf.manifest_state; partial = (($sf.manifest_state -ne 'FINALIZED') -or ($gaps -gt 0)); capture_gaps_count = $gaps })
+            }
+        } catch { }
+    }
+
     if ($owned -and -not $ended) {
         # THE GATE. The runner owns this dispatch and has not declared it finished, so this Stop
         # is the end of a TURN, not the end of a DISPATCH -- the exact conflation E5-iv recorded.
         # Nothing is sealed, nothing is copied, and the store is left byte-untouched.
         Write-Verbose "evidence-hooks-next: dispatch $did is runner-owned and unfinished -- Stop is a no-op (state OPEN)."
+        Send-StopTelemetry -ManifestShaBefore '' -Sidecar $null -MaySeal $false
         exit 0
     }
 
+    # Read for the feed only, so it may not fail the hook: a manifest held without read share would throw here
+    # under EAP Stop and take A1's run with it. Unreadable, it reads as no prior hash.
+    $manShaBefore = $null
+    try { $manShaBefore = Get-Sha256OfFile -Path (Join-Path (Get-EvidenceRuntimeDir -Root $root -DispatchId $did) 'manifest.json') } catch { $manShaBefore = $null }
+    $side = $null
     $a1Exit = Invoke-A1Finalizer -Payload $stdin -Dispatch $DispatchId -NoStream ([bool]$NoStreams)
 
     # THE SIDECAR IS WRITTEN HERE TOO, AND IT WAS NOT BEFORE. H-2 requires Stop-time reconciliation
@@ -102,12 +128,14 @@ try {
         # THE SESSION IS FORWARDED TOO (round 4). The log is per-DISPATCH and the transcript is
         # per-SESSION; without a session to scope the log side, the two arms describe different
         # populations and their difference is arithmetic rather than evidence.
-        $null = Write-EvidenceCaptureGapsSidecar -Root $root -DispatchId $did -TranscriptPath $tp -SessionId $sessionId
+        $side = Write-EvidenceCaptureGapsSidecar -Root $root -DispatchId $did -TranscriptPath $tp -SessionId $sessionId
     }
     catch {
         try { Write-EvidenceHookError -Hook 'Stop' -SessionId $sessionId `
                 -Message "capture-gaps sidecar could not be written after finalize: $($_.Exception.Message)" } catch { }
     }
+
+    Send-StopTelemetry -ManifestShaBefore ([string]$manShaBefore) -Sidecar $side -MaySeal $true
 
     exit $a1Exit
 }

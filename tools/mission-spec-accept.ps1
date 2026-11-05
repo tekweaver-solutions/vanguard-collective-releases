@@ -342,6 +342,10 @@ function Invoke-DraftFirstAccept {
         else { Write-Host "ROLLBACK FAILED. Manual recovery required; the pre-acceptance HEAD was $PreSha." -ForegroundColor Red }
         exit 1
     }
+    # UI-1 S1 (ADR-045): one spec_bumped line -- no version before the draft, so from_version is null, and no
+    # amendment drives a first acceptance. (Invoke-AtomicCommit above has already offered the snapshot.)
+    Invoke-MissionLibTelemetry -Root $Root -Verb 'spec-accept' -Events @(@{ Kind = 'spec_bumped'; SourcePath = '.mission/spec/v001.yaml'
+        Payload = [ordered]@{ from_version = $null; to_version = 'v001'; amendment_id = $null } })
     Write-Section "Spec v001 accepted from draft"
     Write-Host "  Committed spec:     .mission/spec/v001.yaml (state: accepted)" -ForegroundColor Green
     Write-Host "  Acceptance commit:  $newSha" -ForegroundColor Green
@@ -685,6 +689,17 @@ try {
     if ($newSha -eq $preAcceptanceSha) {
         throw "git commit did not advance HEAD (still at $preAcceptanceSha). Phantom-commit risk -- aborting."
     }
+
+    # UI-1 S1 (ADR-045): one spec_bumped line (the first version, so from_version and amendment_id are null)
+    # and the snapshot -- this path commits with git directly, not through Invoke-AtomicCommit.
+    try {
+        $tmA = Join-Path $PSScriptRoot 'lam\mission-telemetry.ps1'
+        if (Test-Path -LiteralPath $tmA -PathType Leaf) {
+            . $tmA
+            Invoke-MissionTelemetry -Root (Get-Location).Path -Verb 'spec-accept' -Snapshot -Events @(@{ Kind = 'spec_bumped'; SourcePath = ($committedSpecPath -replace '\\', '/')
+                Payload = [ordered]@{ from_version = $null; to_version = $ProposalVersion; amendment_id = $null } })
+        }
+    } catch { }
 
     Write-Section "Phase 5 acceptance COMPLETE"
     Write-Host "  Mission state:      Executing" -ForegroundColor Green

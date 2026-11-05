@@ -82,4 +82,7 @@ if (-not $NoCommit) {
     $paths = @($amRel, ".mission/spec/$($result.NewName).yaml", '.mission/spec/current.txt', '.mission/mission.yaml', '.mission/ledger/entries.jsonl')
     Invoke-AtomicCommit -Root $root -Paths $paths -MessageFile $msg | Out-Null
 }
+# UI-1 S1 (ADR-045): one spec_bumped line, its source the new spec version file.
+Invoke-MissionLibTelemetry -Root $root -Verb 'spec-bump' -Events @(@{ Kind = 'spec_bumped'; SourcePath = ".mission/spec/$($result.NewName).yaml"
+    Payload = [ordered]@{ from_version = $result.OldName; to_version = $result.NewName; amendment_id = $AmendmentId } })
 Write-Host "mission spec-bump: done ($($result.OldName) -> $($result.NewName))" -ForegroundColor Cyan
