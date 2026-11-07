@@ -1,35 +1,109 @@
-Vanguard Collective -- Evaluation Licence
+Vanguard Collective -- Commercial Use & Support Licence
 
 Copyright (c) 2026 tekWeaver Solutions Inc. All rights reserved.
 
-1. Grant. tekWeaver Solutions Inc. ("tekWeaver") grants you a non-exclusive,
-   non-transferable, revocable licence to install and use this software ("the
-   Framework") solely to evaluate it and for your own internal development work.
+This licence is offered by tekWeaver Solutions Inc. ("tekWeaver").
 
-2. Restrictions. You may not redistribute, sublicense, sell, lease, or make the
-   Framework available to any third party; publish it or any substantial part of
-   it; or remove this notice. You may modify it for your own internal use;
-   modified copies remain subject to this licence.
+1. Grant of Free Use Rights.
+   Subject to the restrictions in this licence, tekWeaver grants you a non-exclusive,
+   non-transferable, worldwide licence to download, install, and use the Vanguard
+   Collective software and its accompanying materials (collectively, "the Framework")
+   for any lawful purpose you choose, including but not limited to:
+   - personal use, learning, and evaluation;
+   - internal development and production use by individuals, consultants, or corporations;
+   - using the Framework to design, build, or deliver software or services for yourself
+     or for third parties (including clients of a corporation or consultant); and
+   - making the Framework available to your employees, contractors, and the people or
+     organisations working on your projects.
 
-3. Ownership. The Framework is licensed, not sold. tekWeaver retains all right,
-   title and interest in it. Nothing in this licence grants rights to tekWeaver's
-   trademarks.
+   No signed Order Form is required for the rights in this section 1.
 
-4. Your work. Everything you produce by using the Framework in your own
-   repositories is yours.
+2. What You May Sell.
+   You (and your clients) own everything you produce by using the Framework in your own
+   repositories or projects. You may sell, license, or otherwise commercially distribute
+   the software, products, or services you create with the Framework.
 
-5. No warranty. The Framework is provided "AS IS", without warranty of any kind,
-   express or implied, including merchantability, fitness for a particular
+3. Restrictions on the Framework Itself.
+   You may not:
+   - sell, resell, sublicense, rent, lease, or otherwise redistribute the Framework
+     or any substantial part of it (including modified versions);
+   - host the Framework as a service for others in a manner that effectively redistributes
+     the Framework itself;
+   - include or accompany the Framework (or any substantial part of it) with any software
+     or product that you sell or distribute to a third party;
+   - publish the Framework; or
+   - remove or alter this licence notice or any proprietary notices.
+
+   Modified copies of the Framework remain subject to this licence. The Framework is
+   licensed, not sold. tekWeaver retains all right, title, and interest in the Framework.
+   Nothing in this licence grants rights to tekWeaver's trademarks.
+
+4. Support.
+   The free rights above do not include support. tekWeaver offers direct support for
+   the Framework only to paying customers under a separate signed Order Form / support
+   agreement. That Order Form describes the support channels, response targets, covered
+   versions, hours, and fees. Support is provided from Canada in English unless the
+   Order Form says otherwise. Support covers the Framework as released by tekWeaver; it
+   does not cover your own repositories, your model usage, or your cloud accounts.
+
+   Commercial licensing and support enquiries: support@tekweaver.ca
+
+5. Updates.
+   You may install any release tekWeaver publishes under the same major version.
+   A new major version may be subject to updated licence terms or, if you have a
+   support Order Form, may require an updated Order Form for continued support.
+
+6. Fees (Support Only).
+   Fees, invoicing, and payment terms for support are those set out in the applicable
+   Order Form. Fees are non-refundable except as the Order Form states. Late amounts
+   may bear interest as the Order Form states, and tekWeaver may suspend support while
+   an undisputed amount is overdue. No fees are required for the free use rights in
+   section 1.
+
+7. Ownership.
+   The Framework is licensed, not sold. tekWeaver retains all right, title and interest
+   in it. Everything you or your clients produce by using the Framework in your own
+   repositories is yours or theirs.
+
+8. Confidentiality (support customers).
+   Where a support Order Form is in place, each party keeps the other's non-public
+   information confidential and uses it only for this agreement, for the Order Form's
+   term and three years after. Your mission records, ledgers and evidence are yours and
+   are never sent to tekWeaver unless you choose to share them for support.
+
+9. Warranty.
+   For customers under a support Order Form, tekWeaver warrants that it has the right
+   to grant this licence and that the Framework, as released, materially performs as
+   its documentation describes for 90 days from the start of the support term. Your
+   exclusive remedy for breach of this warranty is repair, replacement or, if tekWeaver
+   cannot do either within a reasonable time, a refund of any fees paid for the current
+   support term. Otherwise the Framework is provided "AS IS", without warranty of any
+   kind, express or implied, including merchantability, fitness for a particular
    purpose and non-infringement.
 
-6. Limitation of liability. To the fullest extent permitted by law, tekWeaver is
-   not liable for any damages arising from the use of or inability to use the
-   Framework.
+   You use the Framework on your own repositories and projects at your own risk.
+   tekWeaver is not responsible for any change the Framework, or your use of it, makes
+   to your own projects, including an existing project that stops working, and is not
+   responsible for restoring it.
 
-7. Term. This licence continues until terminated. It terminates automatically if
-   you breach it; on termination you must stop using and delete all copies.
+10. Limitation of liability.
+    To the fullest extent permitted by law, neither party is liable to the other for
+    indirect, incidental, special or consequential damages, or for lost profits or data,
+    and tekWeaver's total liability under this licence is limited to the fees you paid
+    for support (if any) in the twelve months before the claim. These limits do not
+    apply to a party's breach of section 8 or to amounts owed under a support Order Form.
 
-8. Law. This licence is governed by the laws of the Province of Ontario and the
-   federal laws of Canada applicable therein.
+11. Term and termination.
+    The free use rights in section 1 continue indefinitely subject to this licence.
+    Support rights run for the term of the applicable Order Form and renew as that
+    Order Form states. Either party may terminate support for a material breach the
+    other does not cure within 30 days of written notice. On termination of support
+    you must stop using any support-specific entitlements; the free use rights under
+    section 1 continue. Sections 7 to 10 survive.
 
-Commercial licensing: support@tekweaver.ca
+12. Law.
+    This licence is governed by the laws of the Province of Ontario and the federal
+    laws of Canada applicable therein; the courts of Ontario have exclusive jurisdiction.
+
+Commercial licensing and support: support@tekweaver.ca
+Version 2.0 (November 2026) -- supersedes the Evaluation Licence shipped with releases 1.0.0 and 1.1.0.

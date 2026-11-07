@@ -41,7 +41,8 @@ def vanguard():
 
 @app.command("ui")
 def ui(
-    host: str = typer.Option(cfg.DEFAULT_HOST, "--host", help="Bind address. 127.0.0.1 by default; any other address must be named here."),
+    host: str = typer.Option(cfg.DEFAULT_HOST, "--host", help="Bind address, 127.0.0.1 by default. Version 1 serves loopback only: a request whose Host is "
+                             "not loopback is answered 421, so binding another address serves nothing -- the flag is reserved for the v2 hub."),
     port: int = typer.Option(cfg.DEFAULT_PORT, "--port", help="TCP port."),
     rebuild: bool = typer.Option(False, "--rebuild", help="Delete the projection (ui.db) and regenerate it from the feeds before serving."),
     home: str = typer.Option(None, "--home", help="The Vanguard home holding projects.yaml and ui.db (default $VANGUARD_HOME, else ~/.vanguard)."),

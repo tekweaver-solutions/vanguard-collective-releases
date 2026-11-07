@@ -34,12 +34,26 @@ function Get-MissionTelemetryHome {
 }
 
 function Get-MissionTelemetryYamlScalar {
-    # A column-0 scalar, one key or none ($null for absent, duplicated, null or ~).
+    # A column-0 scalar, one key or none ($null for absent, duplicated, null or ~). RELEASE-4 S2 F-H13 (S1 F5): a '#' is a
+    # comment only where YAML makes it one -- outside quotes, at the value's start or after a space or tab -- so a name
+    # such as 'Project #2' (mission init writes the name single-quoted, '' for a quote) or Project#2 is kept whole, and a
+    # trailing " # comment" is still stripped. Single-quoted: '' is one '. Double-quoted: \" and \\ are unescaped.
     param([AllowNull()][string]$Text, [string]$Key)
     if (-not $Text) { return $null }
-    $ms = [regex]::Matches($Text, '(?m)^' + [regex]::Escape($Key) + ':[ \t]*([^\s#][^\r\n#]*?)[ \t]*(?:#.*)?\r?$')
+    $ms = [regex]::Matches($Text, '(?m)^' + [regex]::Escape($Key) + ':[ \t]*(.*?)[ \t]*\r?$')
     if ($ms.Count -ne 1) { return $null }
-    $v = $ms[0].Groups[1].Value.Trim().Trim('"', "'")
+    $raw = $ms[0].Groups[1].Value
+    if ($raw.StartsWith("'")) {
+        $q = [regex]::Match($raw, "^'((?:[^']|'')*)'(?:[ \t]+#.*)?$")
+        if (-not $q.Success) { return $null }
+        $v = $q.Groups[1].Value.Replace("''", "'")
+    } elseif ($raw.StartsWith('"')) {
+        $q = [regex]::Match($raw, '^"((?:[^"\\]|\\.)*)"(?:[ \t]+#.*)?$')
+        if (-not $q.Success) { return $null }
+        $v = $q.Groups[1].Value.Replace('\"', '"').Replace('\\', '\')
+    } else {
+        $v = ([regex]::Replace($raw, '(^|[ \t])#.*$', '')).Trim()
+    }
     if ($v -eq '' -or $v -eq 'null' -or $v -eq '~') { return $null }
     return $v
 }
@@ -124,11 +138,46 @@ function Register-MissionWorktree {
 # read from the feed except the last snapshot: its hash, and -- only when the hash moved -- its milestones'
 # started_ts / done_ts, which are carried forward (see Set-MissionMilestoneTimes).
 # --------------------------------------------------------------------------------------------------
+function Get-MissionCheckoutName {
+    # The folder name mission init gives a mission (F-P5a): the checkout's own; for a linked worktree, whose .git is a file
+    # naming <primary>\.git\worktrees\<n>, the primary checkout's -- one mission, one name, whichever stream writes.
+    param([Parameter(Mandatory = $true)][string]$Root)
+    $full = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    $dotGit = Join-Path $full '.git'
+    if (Test-Path -LiteralPath $dotGit -PathType Leaf) {
+        $m = [regex]::Match([System.IO.File]::ReadAllText($dotGit), '(?m)^gitdir:\s*(.+?)\s*$')
+        if ($m.Success) {
+            $wm = [regex]::Match($m.Groups[1].Value, '^(.*)[\\/]\.git[\\/]worktrees[\\/][^\\/]+$')
+            if ($wm.Success) { return (Split-Path -Leaf ($wm.Groups[1].Value.TrimEnd('\', '/'))) }
+        }
+    }
+    return (Split-Path -Leaf $full)
+}
+
+function ConvertTo-MissionMilestoneStatus {
+    # A milestone's spec status word as the snapshot carries it: the closed set of expanded-schemas SS14 (passed, active,
+    # pending, withdrawn), done read as passed; $null for any other word (the caller refuses it). Case-sensitive.
+    param([AllowNull()][string]$Word)
+    switch -CaseSensitive ($Word) {
+        'passed'    { return 'passed' }
+        'done'      { return 'passed' }
+        'active'    { return 'active' }
+        'pending'   { return 'pending' }
+        'withdrawn' { return 'withdrawn' }
+    }
+    return $null
+}
+
 function Get-MissionSnapshotState {
     param([Parameter(Mandatory = $true)][string]$Root)
     $mt = [System.IO.File]::ReadAllText((Join-Path $Root '.mission\mission.yaml'))
     $state = Get-MissionTelemetryYamlScalar -Text $mt -Key 'state'
     $milestone = Get-MissionTelemetryYamlScalar -Text $mt -Key 'current_milestone'
+    # the mission's name (RELEASE-4 S1, F-P5a): the record's own `name`, which mission init writes; where the record carries
+    # none (a mission made before init wrote it), the value init would have written -- the checkout's own folder name, the
+    # primary checkout's for a linked worktree. Never the host registry's row, which is stale by design after a prune.
+    $missionName = Get-MissionTelemetryYamlScalar -Text $mt -Key 'name'
+    if (-not $missionName) { $missionName = Get-MissionCheckoutName -Root $Root }
 
     # assertions: ids from the contract, status from the validator results (latest attempt wins)
     $assertions = @{}
@@ -231,6 +280,14 @@ function Get-MissionSnapshotState {
                 $ids += @($assertMilestone.Keys | Where-Object { $assertMilestone[$_] -eq $mid })
                 $ids = @($ids | Sort-Object -Unique)
                 $green = @($ids | Where-Object { $assertions[$_] -eq 'green' }).Count
+                if ($mstatus) {
+                    # THE STATUS MAP (RELEASE-4 S1, F-P1a): a spec word becomes one of the closed set at emit -- done -> passed,
+                    # withdrawn -> withdrawn, passed / active / pending as they are. A word outside the map is refused, the
+                    # snapshot with it: never a silent fifth value.
+                    $word = $mstatus
+                    $mstatus = ConvertTo-MissionMilestoneStatus -Word $word
+                    if (-not $mstatus) { throw ("REFUSED: milestone $mid carries the spec status '$word', a word outside the milestone status map (passed, active, pending, withdrawn; done -> passed)") }
+                }
                 if (-not $mstatus) {
                     if ($ids.Count -gt 0 -and $green -eq $ids.Count) { $mstatus = 'passed' }
                     elseif ($mid -eq $milestone -or @($ids | Where-Object { $assertions.ContainsKey($_) -and $assertions[$_] -ne 'pending' }).Count -gt 0) { $mstatus = 'active' }
@@ -267,6 +324,7 @@ function Get-MissionSnapshotState {
     $ao = [ordered]@{}; foreach ($k in @($assertions.Keys | Sort-Object)) { $ao[$k] = $assertions[$k] }
     return [ordered]@{
         state             = $state
+        mission_name      = $missionName
         current_milestone = $milestone
         features          = $fo
         assertions        = $ao
@@ -398,7 +456,9 @@ function Write-MissionSnapshot {
         # concurrent verbs after one state change write one snapshot, not one each.
         return (Write-MissionEvent -Root $Root -Kind 'mission_snapshot' -Payload $s -SourcePath '.mission/mission.yaml' -Hook $Hook -ChangeField 'snapshot_sha256')
     } catch {
-        try { Write-MissionTelemetryError -Root $Root -Hook $Hook -Message ("telemetry: the mission_snapshot could not be derived and nothing was written to .mission-runtime/telemetry/events.jsonl: " + $_.Exception.Message) } catch { }
+        $why = $_.Exception.Message
+        $what = if ($why.StartsWith('REFUSED: ')) { 'was refused' } else { 'could not be derived' }
+        try { Write-MissionTelemetryError -Root $Root -Hook $Hook -Message ("telemetry: the mission_snapshot $what and nothing was written to .mission-runtime/telemetry/events.jsonl: " + $why) } catch { }
         return $false
     }
 }

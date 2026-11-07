@@ -15,5 +15,6 @@ __pycache__/
 node_modules/
 # UI-1 S3: the dashboard's build output, ui/dist/ (S4's release member, rebuilt from ui/ source), and the smoke's leftovers.
 /ui/dist/
+!/ui/dist/
 /ui/test-results/
 /ui/playwright-report/

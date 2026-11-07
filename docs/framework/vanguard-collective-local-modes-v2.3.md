@@ -593,7 +593,7 @@ line in each hook and lifecycle verb.
 
 **Context.** ADR-029 answered §12.9 with native surfaces (agent view, channels, Artifacts) and
 deferred a custom web UI. Since then the framework became a product (1.0.0, ZIP and public release
-repository, proprietary evaluation licence) whose users are business and IT people who do not sit
+repository, proprietary licence) whose users are business and IT people who do not sit
 at the seat. Native surfaces show one session to one operator holding a Claude Code licence; they
 cannot show anyone a fleet of projects, where each stands in its lifecycle, what is blocked, and
 whether the last run passed. Per-project state exists only in files the operator knows how to read.

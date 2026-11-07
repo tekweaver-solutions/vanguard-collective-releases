@@ -95,6 +95,9 @@ if (-not (Test-Path -LiteralPath $root -PathType Container)) { Say "no folder at
 if ($Verb -eq 'init') {
     $now = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ', [System.Globalization.CultureInfo]::InvariantCulture)
     $id = [guid]::NewGuid().ToString()
+    # THE MISSION'S NAME (RELEASE-4 S1, F-P5a): the target folder's name, the one the operator already calls the project by;
+    # the snapshot carries it to the dashboard. The operator may rename it here.
+    $nameQ = "'" + ((Split-Path -Leaf $root) -replace "'", "''") + "'"
 
     $missionYaml = @"
 # Mission record -- written by mission.ps1 init. An EMPTY mission: every value below is a placeholder
@@ -105,8 +108,10 @@ if ($Verb -eq 'init') {
 # draft, v001 (spec/v001.yaml).
 # A mission that needs a porcelain contract or a commit ledger declares them here itself
 # (admitted_porcelain, declared_commit_ledger); this one declares neither.
+# name is the target folder's name, the one the dashboard shows; rename it here.
 
 id: $id
+name: $nameQ
 created_at: $now
 created_by: "TODO - operator identifier"
 
@@ -229,14 +234,15 @@ detectors:
     # THE ROOT .gitignore (header): the two rules, each with the spellings that already ignore the same path.
     $giPath = Join-Path $root '.gitignore'
     if (Test-Path -LiteralPath $giPath -PathType Container) { Say "$giPath is a folder, not a file -- init cannot make it ignore Claude Code's per-checkout files. Nothing was written."; exit 1 }
-    # The third rule is the mission-event feed's (UI-1 S1, ADR-045: events.jsonl is "never committed, ignored by
-    # the installer's .gitignore entry"); a rule that already ignores the whole runtime plane counts as present.
+    # The third rule is the runtime plane's (RELEASE-4 S1, F-P7a): everything under .mission-runtime/ is per-checkout and
+    # never committed -- the mission-event feed (UI-1 S1, ADR-045) and the evidence, LAM and HALT folders the hooks and
+    # verbs write beside it -- so the rule ignores the whole plane, not its telemetry folder alone.
     $giRules = [ordered]@{
         '/.claude/settings.local.json' = @('/.claude/settings.local.json', '.claude/settings.local.json')
         '/.claude/worktrees/'          = @('/.claude/worktrees/', '.claude/worktrees/')
-        '/.mission-runtime/telemetry/' = @('/.mission-runtime/telemetry/', '.mission-runtime/telemetry/', '/.mission-runtime/', '.mission-runtime/')
+        '/.mission-runtime/'           = @('/.mission-runtime/', '.mission-runtime/')
     }
-    $giComment = '# Claude Code''s per-checkout files at this root, its local settings and its worktrees, and the mission-event feed under .mission-runtime/telemetry/, are never committed (written by mission.ps1 init); .claude/settings.json is named by none and stays tracked.'
+    $giComment = '# Claude Code''s per-checkout files at this root, its local settings and its worktrees, and the runtime plane .mission-runtime/ (the mission-event feed, the evidence, LAM and HALT folders), are never committed (written by mission.ps1 init); .claude/settings.json is named by none and stays tracked.'
     $giWhy = 'per-checkout files, never committed'
     # The whole .gitignore decision is made HERE, before the first write: a .gitignore that cannot be read, or that
     # lacks a rule and cannot be appended to, makes the target unusable (exit 1) with nothing written -- never a
@@ -317,21 +323,23 @@ if ($Verb -eq 'register') {
     if (-not (Test-Path -LiteralPath $tmR -PathType Leaf)) { Say "the registration step is not on disk at $tmR. Nothing was written."; exit 1 }
     . $tmR
     $regR = Register-MissionCheckout -Root $root
-    Say ("registered on this host: host_id {0}, {1}; the feed folder .mission-runtime/telemetry/ is there" -f $regR.host_id, $(if ($regR.row_added) { 'a row added to ' + $regR.registry } else { 'already a row in ' + $regR.registry }))
+    # the line init prints for its own registration (RELEASE-4 S1, F-P7b; INSTALL.md section 7 gives it)
+    Say ("registered on this host: host_id {0}, {1} ({2})" -f $regR.host_id, $(if ($regR.row_added) { 'a row added to ' + $regR.registry } else { 'already a row in ' + $regR.registry }), 'the mission-event feed folder .mission-runtime/telemetry/ made')
     $giR = Join-Path $root '.gitignore'
-    $giHeld = @('/.mission-runtime/telemetry/', '.mission-runtime/telemetry/', '/.mission-runtime/', '.mission-runtime/')
+    # the rule init writes (F-P7a): the whole runtime plane
+    $giHeld = @('/.mission-runtime/', '.mission-runtime/')
     $giText = if (Test-Path -LiteralPath $giR -PathType Leaf) { $script:Utf8NoBom.GetString([System.IO.File]::ReadAllBytes($giR)) } else { $null }
     $giLinesR = if ($null -ne $giText) { @(($giText.TrimStart([char]0xFEFF) -split "`n") | ForEach-Object { $_.TrimEnd(' ', "`r") }) } else { @() }
-    if (@($giHeld | Where-Object { $giLinesR -ccontains $_ }).Count -gt 0) { Say "  .gitignore unchanged: it already ignores /.mission-runtime/telemetry/" }
+    if (@($giHeld | Where-Object { $giLinesR -ccontains $_ }).Count -gt 0) { Say "  .gitignore unchanged: it already ignores /.mission-runtime/" }
     else {
         $giNlR = if ($null -ne $giText) { $giText.IndexOf("`n") } else { -1 }
         $giEolR = if (($giNlR -gt 0) -and ($giText[$giNlR - 1] -eq [char]13)) { "`r`n" } else { "`n" }
         $giAddR = ''
         if (($null -ne $giText) -and ($giText.Length -gt 0) -and -not $giText.EndsWith("`n")) { $giAddR += $giEolR }
-        $giAddR += '# The mission-event feed under .mission-runtime/telemetry/ is never committed (written by mission.ps1 register).' + $giEolR + '/.mission-runtime/telemetry/' + $giEolR
+        $giAddR += '# The runtime plane .mission-runtime/ (the mission-event feed, the evidence, LAM and HALT folders) is never committed (written by mission.ps1 register).' + $giEolR + '/.mission-runtime/' + $giEolR
         $giS = [System.IO.File]::Open($giR, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write)
         try { $giB = $script:Utf8NoBom.GetBytes($giAddR); $giS.Write($giB, 0, $giB.Length) } finally { $giS.Dispose() }
-        Say "  .gitignore $(if ($null -eq $giText) { 'created' } else { 'appended 1 rule' }): /.mission-runtime/telemetry/ (the mission-event feed, never committed)"
+        Say "  .gitignore $(if ($null -eq $giText) { 'created' } else { 'appended 1 rule' }): /.mission-runtime/ (the runtime plane, never committed)"
     }
     Invoke-MissionTelemetry -Root $root -Snapshot -Verb 'mission-register'
     exit 0

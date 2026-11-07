@@ -3084,7 +3084,7 @@ function Test-EvidencePrePushHookInstalled {
         return @{ installed = $false; path = $null; sha256 = $null; expected = $expected
                   reason = "the SHIPPED decider is not on disk at '$DeciderPath', so there is nothing to compare an installed one against. Refusing rather than reporting installed on a fingerprint that cannot see which script would run." }
     }
-    $expectedDecider = [BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash([IO.File]::ReadAllBytes($DeciderPath))).Replace('-','').ToLowerInvariant()
+    $expectedDecider = Get-EvidenceFoldSha256 -Path $DeciderPath   # F-H1 (RELEASE-4 S2): on the lock's fold-crlf-text basis (Get-EvidenceFoldSha256, at the end of this file), named in the result as decider_basis
 
     $hooksDir = Get-EvidenceEffectiveHooksPath -Root $Root
     if (-not $hooksDir) {
@@ -3151,7 +3151,7 @@ function Test-EvidencePrePushHookInstalled {
     $actualDecider = $null
     $deciderMissing = $false
     if ($deciderNamed -and $pointsAt -and (Test-Path -LiteralPath $pointsAt)) {
-        $actualDecider = [BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash([IO.File]::ReadAllBytes($pointsAt))).Replace('-','').ToLowerInvariant()
+        $actualDecider = Get-EvidenceFoldSha256 -Path $pointsAt   # F-H1: the same fold-crlf-text basis as the shipped decider's, so a CRLF and an LF checkout of one text compare equal
     } elseif ($deciderNamed) {
         # ABSENT IS NOT DIFFERENT, AND SAYING SO IS THE FIX. This used to leave $actualDecider null
         # and fall into the contents comparison, which rendered "whose contents do NOT match the
@@ -3196,8 +3196,8 @@ function Test-EvidencePrePushHookInstalled {
     }
     if ($actualDecider -cne $expectedDecider) {
         return @{ installed = $false; path = $hookPath; sha256 = $actual; expected = $expected; hooks_dir = $hooksDir
-                  decider_path = $pointsAt; decider_sha256 = $actualDecider; decider_expected = $expectedDecider
-                  reason = "the pre-push hook IS our wrapper, but it points at '$pointsAt', whose contents do NOT match the shipped decider (sha256 $actualDecider, expected $expectedDecider). A wrapper is only as good as the script it runs, and substituting that script leaves the wrapper byte-identical." }
+                  decider_path = $pointsAt; decider_sha256 = $actualDecider; decider_expected = $expectedDecider; decider_basis = 'fold-crlf-text'
+                  reason = "the pre-push hook IS our wrapper, but it points at '$pointsAt', whose contents do NOT match the shipped decider (sha256 on the fold-crlf-text basis $actualDecider, expected $expectedDecider). A wrapper is only as good as the script it runs, and substituting that script leaves the wrapper byte-identical." }
     }
     # A THIRD COMPARISON STOOD HERE AND COULD NEVER FIRE (V-1 round 15, a WP-2 finding). It re-asked the
     # fingerprint question with `-ne` after the `-cne` above had already returned, and case-sensitive
@@ -3218,7 +3218,7 @@ function Test-EvidencePrePushHookInstalled {
     }
     return @{ installed = $true; path = $hookPath; sha256 = $actual; expected = $expected; hooks_dir = $hooksDir
               hooks_path_config = $variance.hooks_path_config; worktree_config = $variance.worktree_config
-              reason = "pre-push decider installed at the effective hooks path and matching ($actual)" }
+              decider_basis = 'fold-crlf-text'; reason = "pre-push decider installed at the effective hooks path and matching ($actual; the decider's contents on the fold-crlf-text basis)" }
 }
 
 # T-3: agents cannot write under .mission/gates/**. A gate an agent could mint authorizes nothing.
@@ -6164,6 +6164,23 @@ function Get-EvidenceMissionPlanePathClass {
     if (-not $Path) { return '' }
     $t = ConvertTo-CanonicalPathText -Text $Path
     $ic = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    # F-H2 (RELEASE-4 S2; row 495 (5)): A TRACKED FIXTURE IS NOT THE MISSION PLANE. A path under a session root's
+    # tests/ or tools/lam/smoke-mission/ is a fixture tree (tests/lam/fixtures/base-700e19e5/.mission/goals/SAMPLE-GOAL.yaml
+    # is one), whatever .mission or .mission-runtime/lam component it holds below that; the root's own .mission/ and
+    # .mission-runtime/lam/ stay guarded. Anchored to -Roots only: with no root to anchor to nothing is exempt (fail closed),
+    # and a path into another checkout's .mission (an absolute path from a linked worktree) is still refused.
+    # A RELATIVE form (the value as written, beside the one joined to the cwd, which the caller also judges) is exempt
+    # on the same two prefixes only when a root is given: the joined form still carries the cwd, so a relative fixture
+    # path written from inside .mission/ is refused by that form.
+    # F-X1 (RELEASE-4 S3; S2 validator X-1): A PATH HOLDING A '..' COMPONENT IS NEVER EXEMPT. The prefix test reads the form
+    # as written, and a dot segment climbs out of tests/ or tools/lam/smoke-mission/ (tests/../.mission/..., or
+    # smoke-mission/../../../.mission/...) into the plane this function names; such a form is judged as any other path.
+    $dotDot = [regex]::IsMatch($t, '(^|[/:])\.\.(?=[/:]|$)')
+    foreach ($fr in @($Roots)) {
+        if (-not $fr -or $dotDot) { continue }
+        if ([regex]::IsMatch($t, '^' + [regex]::Escape($fr.TrimEnd('/')) + '/(tests|tools/lam/smoke-mission)/', $ic)) { return '' }
+        if (-not [regex]::IsMatch($t, '^([A-Za-z]:|/)') -and [regex]::IsMatch($t, '^(\./)*(tests|tools/lam/smoke-mission)/', $ic)) { return '' }
+    }
     if ([regex]::IsMatch($t, '(^|[/:])\.mission-runtime(:[^/]*)?/lam(?=[/:]|$)', $ic)) { return 'lam' }
     if ([regex]::IsMatch($t, '(^|[/:])\.mission(?=[/:]|$)', $ic)) { return 'mission' }
     foreach ($r in @($Roots)) {
@@ -7116,7 +7133,7 @@ function Get-EvidenceGuardDecision {
 # without one has no feed to have failed to append to. Without this rule every sandbox the A1 negative
 # suite drives would grow a hook-errors.log it asserts is absent.
 
-$script:MissionEventSchemaVersion = '1.0'
+$script:MissionEventSchemaVersion = '1.1'   # RELEASE-4 S1 (F-P1b): the milestone status enum, an additive minor
 $script:MissionEventLockWaitMs    = 500
 $script:MissionEventUuidPattern   = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 
@@ -7521,4 +7538,21 @@ function Write-MissionPushTipEvent {
         }
         return $false
     }
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# F-H1 (RELEASE-4 S2; row 495 (4)): THE PRE-PUSH DECIDER COMPARED ON THE FOLD RULE. APPENDED HERE, AT THE END, for the
+# reason the section above gives (LAM-INSTALL SS5.2 cites this file by line range and WP-5 K-4 compares functions above
+# by token): the two call sites in Test-EvidencePrePushHookInstalled were changed IN PLACE, no line added above.
+# THE BASIS IS framework.lock's eol_rule, fold-crlf-text (install.ps1 Get-JudgedForm): bytes holding no 0x00 are TEXT and
+# are hashed with every CR LF made LF; bytes holding one are BINARY and are hashed raw. So a CRLF checkout and an LF
+# checkout of the same decider compare equal, a one-byte content change still differs, and a binary file compares raw.
+function Get-EvidenceFoldSha256 {
+    param([string]$Path)
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ([System.Array]::IndexOf($bytes, [byte]0) -lt 0) {
+        $l1 = [System.Text.Encoding]::GetEncoding(28591)
+        $bytes = $l1.GetBytes($l1.GetString($bytes).Replace("`r`n", "`n"))
+    }
+    return [BitConverter]::ToString(([Security.Cryptography.SHA256]::Create()).ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
 }

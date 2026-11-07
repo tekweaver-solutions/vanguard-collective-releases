@@ -6,7 +6,9 @@ dispatches, handoffs, validator results, ledger and gates. Workers are dispatche
 their own, independent validators judge what they hand back, and a human operator holds the gates
 that admit a dispatch or a publication. The Local Autonomous Mode (LAM) toolchain drives this on a
 single Windows workstation: a runner dispatches workers, a goal evaluator decides from disk whether
-a session may stop, and a gate tool records the operator's acts.
+a session may stop, and a gate tool records the operator's acts. The Framework is free to use under
+[LICENSE](LICENSE), including for commercial and client work; the Framework itself may not be
+redistributed or resold. Support is by subscription, for paying customers: support@tekweaver.ca.
 
 What the framework says about a session is meant to be checkable on disk rather than taken from a
 transcript. Hooks registered in `.claude/settings.json` keep an evidence plane that agents cannot
@@ -15,11 +17,10 @@ and a Stop hook seals a manifest. A pre-push decider refuses a publication no ga
 acceptance instruments exercise the machinery by running it. Version 1.0.0 was the first public
 release: the framework in a repository of its own, with an installer that installs from the release ZIP
 or from a clone of the public repository at its release tag and upgrades a project in place, and agents
-that authenticate with a Claude subscription or an Anthropic API key; it is licensed for evaluation and
-your own internal development work (see Licence). Version 1.1.0 adds the dashboard, `vanguard ui`: a
+that authenticate with a Claude subscription or an Anthropic API key. Version 1.1.0 adds the dashboard, `vanguard ui`: a
 read-only, local view of every project registered on the machine, fed by the mission-event feed the
-hooks and lifecycle commands now append. Its release notes are
-[docs/RELEASE-NOTES-v1.1.0.md](docs/RELEASE-NOTES-v1.1.0.md), known limits first.
+hooks and lifecycle commands now append. The current release is 1.2.0, the licence release; its notes are
+[docs/RELEASE-NOTES-v1.2.0.md](docs/RELEASE-NOTES-v1.2.0.md), known limits first.
 
 New to the framework? Start with [docs/QUICKSTART.md](docs/QUICKSTART.md), then read the operator's
 guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguard-collective-user-guide.md).
@@ -39,7 +40,7 @@ guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguar
 
 Beside these, `tools/framework/` holds the first-generation hooks the next generation delegates to,
 and `tools/mission-*.ps1` are the mission lifecycle commands. What is installed into a project is
-exactly the set the release's `provenance/manifest.jsonl` defines (373 files in the release, `ui/dist/`
+exactly the set the release's `provenance/manifest.jsonl` defines (378 files in the release, `ui/dist/`
 and `THIRD-PARTY-NOTICES` among them); `provenance/` and this repository's own files are not installed.
 
 ## Prerequisites
@@ -103,6 +104,13 @@ through all three from the release ZIP, with the output to expect. Then
 
 starts the dashboard on `http://127.0.0.1:8765/`, read-only and local to this machine.
 
+## Ownership and contributions
+
+Vanguard Collective is owned and maintained by tekWeaver Solutions Inc. It takes no external contributions: the
+public repository, https://github.com/tekweaver-solutions/vanguard-collective-releases, publishes the releases
+only, with its issues turned off. Support is for paying customers, by contact: support@tekweaver.ca.
+
 ## Licence
 
-Evaluation licence -- see [LICENSE](LICENSE).
+The Framework is free to use under [LICENSE](LICENSE), including for commercial and client work; the Framework itself
+may not be redistributed. Support is offered to paying customers by contact: support@tekweaver.ca.

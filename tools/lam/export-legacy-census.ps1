@@ -86,6 +86,14 @@ if (($fromItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
 if ($fromItem.Length -gt $script:ReadBound) { Stop-Export 1 "-From: $fromPath is larger than $($script:ReadBound) bytes" }
 $fromBytes = [System.IO.File]::ReadAllBytes($fromPath)
 $fromSha = Get-Sha256Hex -Bytes $fromBytes
+# F-H10 (RELEASE-4 S2; row 495 (10)): THE HEADER NAMES THE EVALUATOR ON framework.lock's BASIS, fold-crlf-text -- a file
+# holding no 0x00 is hashed with every CR LF made LF, one holding one raw -- so a CRLF and an LF checkout of the same
+# evaluator write the same header, and a changed evaluator a different one. The raw sha256 is still printed below.
+$fromFold = $fromSha
+if ([System.Array]::IndexOf($fromBytes, [byte]0) -lt 0) {
+    $foldL1 = [System.Text.Encoding]::GetEncoding(28591)
+    $fromFold = Get-Sha256Hex -Bytes ($foldL1.GetBytes($foldL1.GetString($fromBytes).Replace("`r`n", "`n")))
+}
 $fromText = $null
 try { $fromText = (New-Object System.Text.UTF8Encoding($false, $true)).GetString($fromBytes) } catch { Stop-Export 1 "-From: $fromPath is not UTF-8" }
 if ($fromText.Length -gt 0 -and [int]$fromText[0] -eq 0xFEFF) { $fromText = $fromText.Substring(1) }
@@ -147,7 +155,7 @@ $header = @(
     '# tools/lam/legacy-halt-census.txt -- THE LEGACY HALT CENSUS that tools/lam/mission-goal-check.ps1 reads.',
     '#',
     '# Written by tools/lam/export-legacy-census.ps1 from the census literal of an earlier evaluator, a',
-    "# mission-goal-check.ps1 of sha256 $($fromSha): the HALTs this project answered by",
+    "# mission-goal-check.ps1 of sha256 $($fromFold) (fold-crlf-text, framework.lock's basis): the HALTs this project answered by",
     '# their own marker when that rule was retired, by file name and the sha256 of their bytes. Its form is the form of',
     "# the file the framework ships: '#' lines are comments, every other line is one member, in ordinal order. It is",
     '# HOST-CONFIG: an upgrade never rewrites it.',

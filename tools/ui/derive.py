@@ -49,6 +49,24 @@ def of_kind(events, *kinds):
     return [e for e in events if e["kind"] in kinds]
 
 
+MILESTONE_STATUSES = ("passed", "active", "pending", "withdrawn")
+
+
+def milestone_status(word):
+    """A snapshot milestone's status in the closed set of expanded-schemas SS14 (schema 1.1): a 1.0 writer passed the spec's
+    words through, so its done is read as passed; any other word is returned as it stands (a 1.1 line carries none)."""
+    return "passed" if word == "done" else word
+
+
+def mission_name(events):
+    """The mission's name (RELEASE-4 S1, F-P5a): the latest mission_snapshot's mission_name, in feed order, when it is a
+    non-empty string; None otherwise (no snapshot yet, a snapshot from before the field, or a record with no name). Never
+    the host registry's row: a row is stale by design after a prune."""
+    snaps = of_kind(events, "mission_snapshot")
+    n = snaps[-1]["line"]["payload"].get("mission_name") if snaps else None
+    return n if isinstance(n, str) and n else None
+
+
 def latest_snapshot(events):
     snaps = of_kind(events, "mission_snapshot")
     return snaps[-1] if snaps else None
@@ -115,6 +133,18 @@ def dispatches(events):
 def is_partial(e):
     p = e["line"]["payload"]
     return p.get("partial") is True or p.get("manifest_state") == "PARTIAL"
+
+
+def partial_fields(e):
+    """What a PARTIAL dispatch_finalized says, in caption order (RELEASE-4 S1, F-P4): the field that fired first --
+    partial: true -- then the manifest_state the line carries (which fired too when it is PARTIAL). Empty when neither fired."""
+    if not is_partial(e):
+        return []
+    p = e["line"]["payload"]
+    out = ["partial: true"] if p.get("partial") is True else []
+    if "manifest_state" in p:
+        out.append("manifest_state %s" % p.get("manifest_state"))
+    return out
 
 
 def gates(events):

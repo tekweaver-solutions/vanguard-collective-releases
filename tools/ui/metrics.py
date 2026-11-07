@@ -103,7 +103,13 @@ def mission_stats(events, window):
 
 
 def _segments(events):
-    """The current_milestone runs of the mission's snapshots: [{milestone, from_ts, to_ts, closed, elapsed_s}]."""
+    """The current_milestone runs of the mission's snapshots: [{milestone, from_ts, to_ts, closed, elapsed_s}]. A milestone the
+    latest snapshot's map shows withdrawn has no run (it is out of every elapsed and slowest figure); the last run of a
+    milestone that map shows passed is closed, ending at its done_ts -- unknown, so unmeasured, where the feed carries none."""
+    snap = derive.latest_snapshot(events)
+    mm = snap["line"]["payload"].get("milestones") if snap else None
+    mm = mm if isinstance(mm, dict) else {}
+    status = {k: derive.milestone_status(v.get("status")) for k, v in mm.items() if isinstance(v, dict)}
     segs, cur = [], None
     for e in derive.of_kind(events, "mission_snapshot"):
         m = e["line"]["payload"].get("current_milestone")
@@ -114,10 +120,15 @@ def _segments(events):
             segs.append(cur)
         cur = None if m is None else {"milestone": m, "from_ts": e["ts"], "to_ts": None, "closed": False}
     if cur is not None:
-        cur["to_ts"] = events[-1]["ts"]
+        if status.get(cur["milestone"]) == "passed":
+            done = mm[cur["milestone"]].get("done_ts")
+            cur["to_ts"], cur["closed"] = (done if isinstance(done, str) else None), True
+        else:
+            cur["to_ts"] = events[-1]["ts"]
         segs.append(cur)
+    segs = [s for s in segs if status.get(s["milestone"]) != "withdrawn"]
     for s in segs:
-        s["elapsed_s"] = _seconds(s["from_ts"], s["to_ts"])
+        s["elapsed_s"] = None if s["to_ts"] is None else _seconds(s["from_ts"], s["to_ts"])
     return segs
 
 
@@ -350,8 +361,10 @@ def milestones(events, clock, window):
              "formula": {"milestones": "the latest mission_snapshot's milestones map, " + MILESTONE_ORDER + "; title, status, assertions_total and "
                                        "assertions_green as the snapshot writer derived them",
                          "elapsed_s": MILESTONE_ELAPSED}}
-    pf = ("of = the milestones in the latest mission_snapshot's milestones map; complete = those with status passed; planned = those with "
-          "status pending; active = the others; current = the snapshot's current_milestone")
+    pf = ("of = the milestones in the latest mission_snapshot's milestones map, each status read in the closed set (a 1.0 line's done as "
+          "passed); passed = those with status passed; pending = those with status pending; withdrawn = those with status withdrawn, counted on "
+          "their own and left out of every denominator; active = the others; progress = passed / (of - withdrawn); complete = passed and "
+          "planned = pending (the 1.1.0 names); current = the snapshot's current_milestone")
     payload = None if snap is None else snap["line"]["payload"]
     mm = None if payload is None else payload.get("milestones")
     if snap is None:
@@ -369,13 +382,17 @@ def milestones(events, clock, window):
     for mid in sorted(mm, key=_natural):
         m = mm[mid] if isinstance(mm[mid], dict) else {}
         el, why = _milestone_elapsed(m.get("started_ts"), m.get("done_ts"), clock)
-        rows.append({"id": mid, "title": m.get("title"), "status": m.get("status"), "assertions_total": derive.as_int(m.get("assertions_total")),
+        rows.append({"id": mid, "title": m.get("title"), "status": derive.milestone_status(m.get("status")), "assertions_total": derive.as_int(m.get("assertions_total")),
                      "assertions_green": derive.as_int(m.get("assertions_green")), "elapsed_s": el, "elapsed_reason": why,
                      "formula": MILESTONE_ROW_FORMULA, "window": window})
-    complete = sum(1 for r in rows if r["status"] == "passed")
-    planned = sum(1 for r in rows if r["status"] == "pending")
+    passed = sum(1 for r in rows if r["status"] == "passed")
+    pending = sum(1 for r in rows if r["status"] == "pending")
+    withdrawn = sum(1 for r in rows if r["status"] == "withdrawn")
+    counted = len(rows) - withdrawn
     cur = snap["line"]["payload"].get("current_milestone")
-    progress = _stat(cur, pf, window, current=cur, of=len(rows), complete=complete, active=len(rows) - complete - planned, planned=planned, reason=None)
+    progress = _stat(cur, pf, window, current=cur, of=len(rows), passed=passed, active=counted - passed - pending, pending=pending, withdrawn=withdrawn,
+                     progress=_ratio(passed, counted), progress_numerator=passed, progress_denominator=counted,
+                     complete=passed, planned=pending, reason=None)
     return {"list": rows, "progress": progress, "reason": None, "basis": basis, "tile": progress}
 
 

@@ -152,7 +152,7 @@ SS5.1/5.2/5.3 at the anchor LAM-INSTALL §1 records; the SS5.4 decider is at `.g
 RES-04, RES-08 and the glob gap are closed by the swap; the RES-10 sweep is recorded with its hit count.
 
 **The install amendments are approved and ledgered**: the first (the omnibus admission of the toolchain,
-the contract, the v2.4 delta, LAM-RESIDUALS by hash, ADR-036..040, the SS14 update and
+the contract, the v2.4 delta, LAM-RESIDUALS by hash, LM2-ADR-036..040, the SS14 update and
 AM-LAM-1 folded in) committed, then approved
 in a commit of its own; the second (the sealed-hash move and the install) placed approved at the install tip. Ledger
 entries record the omnibus admission decision, any carried-id correction

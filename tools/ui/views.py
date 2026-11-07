@@ -88,6 +88,7 @@ def _summary(model, mid, streams):
             classes.append(e["class"])
     return {
         "mission_id": mid,
+        "mission_name": derive.mission_name(evs),
         "streams": [_stream_entry(s) for s in streams],
         "state": snap["line"]["payload"]["state"] if snap else None,
         "current_milestone": snap["line"]["payload"]["current_milestone"] if snap else None,
@@ -133,7 +134,7 @@ def missions(model):
             summary, evs, errs = _summary(model, mid, model.missions[mid])
         except Exception as e:  # one mission's feed never takes the fleet down: it is listed with the fault
             streams = model.missions[mid]
-            entry = {"mission_id": mid, "streams": [_stream_entry(s) for s in streams], "state": None, "current_milestone": None,
+            entry = {"mission_id": mid, "mission_name": None, "streams": [_stream_entry(s) for s in streams], "state": None, "current_milestone": None,
                      "snapshot": None, "last_activity_ts": None, "counts": None,
                      "feed": metrics.stream_totals([s["counts"] for s in streams]),
                      "errors": {"count": 0, "classes": []}, "fault": _fault(e)}
@@ -208,6 +209,7 @@ def mission(model, mid):
                        "unknown_kinds": c["unknown_kinds"]})
     body = {
         "mission_id": mid,
+        "mission_name": summary["mission_name"],
         "streams": summary["streams"],
         "header": {
             "state": summary["state"],

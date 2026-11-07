@@ -56,8 +56,8 @@
         installed spec-accept takes the draft v001 init wrote -- refusing a non-draft v001, a second version
         and -ProposalVersion v002 first, and a second acceptance after; mission smoke MET; a re-run is
         already installed. init's root .gitignore: the target had none, init created it -- a comment line
-        and /.claude/settings.local.json, /.claude/worktrees/ and /.mission-runtime/telemetry/ (UI-1 S1, the
-        mission-event feed; .mission-runtime/ already in the file counts as that rule), LF -- and, committed, git check-ignore
+        and /.claude/settings.local.json, /.claude/worktrees/ and /.mission-runtime/ (RELEASE-4 S1 F-P7a, the
+        runtime plane; .mission-runtime/ already in the file counts as that rule), LF -- and, committed, git check-ignore
         --no-index reads both ignored and .claude/settings.json not (WP-1 H-26's reading); a refused second
         init leaves it byte for byte; e3 init over a project's own .gitignore: lacking a rule, the bytes
         there kept as a prefix and only the missing rules appended after one comment line in the file's
@@ -134,9 +134,72 @@
         never installed as a release; each with the target untouched. The tagged clone reached through a junction is
         the clone; the expanded ZIP committed and tagged as a repository of its own installs as a clone whose
         source_commit is its own HEAD and whose framework_repo_tip is RELEASE's
+    h4  the session-id class (RELEASE-4 S2 F-H4): tools/lam/scan-session-ids.ps1 with a synthetic id file outside the tree
+        -- the tagged clone's tests/** read 0, its file count > 0; one id planted into a scratch fixture copy reads 1
+        by path and line; an id file inside -Root refused; (RELEASE-4 S3 F-X4) a -Under folder that does not stand refused
+        by name (exit 2), and -Under passed through -File as one comma-joined string read as its folders
+    h5  the kept-file notice (RELEASE-4 S2 F-H5): a fresh install over the project's own .claude/settings.json (the
+        release's less SubagentStop), -WhatIf and the install, and an upgrade over a 0.1.1 lock whose settings.json and
+        model-routing.yaml are the project's own: one NOTICE kept line per kept file that differs (fold-crlf-text) from the
+        release's, naming where the release's version is (a file holding the manifest's bytes), none for another; for
+        settings.json the one missing registration, SubagentStop, and the release file's own block (judged here as a
+        substring of that file and as JSON equal to its member); every kept file byte for byte as before
+    h6  the clean-environment install proof (RELEASE-4 S2 F-H6) is a script: tests/install/clean-install-proof.ps1 run
+        over the ZIP release.ps1 builds at HEAD, -Through build, in a scratch root: every step PASS, PROOF ENV PASS, the
+        registration under the scratch root's VANGUARD_HOME, the project's origin the scratch bare origin, nothing
+        else made; a non-empty scratch root refused (exit 2); -EngineDown read against the engine as it stands (up:
+        exit 3, nothing made; down: it proceeds). The acceptance step itself is S4's to run, with both arms
+    h7  PowerShell 7 and the Mark of the Web (RELEASE-4 S2 F-H7): with no pwsh on PATH, SKIPPED BY NAME (unmeasured, carried
+        to the 1.2.0 notes); with one, a local ZIP fetched by Invoke-WebRequest under pwsh and expanded, its streams printed,
+        and INSTALL.md held to naming PowerShell 7 and Zone.Identifier
+    h8  the installer warns on a git-ignored member (RELEASE-4 S2 F-H8): a git project whose .gitignore holds dist/, *.cmd
+        and a negated rule -- -WhatIf and the install, one WARNING per member *.cmd hides naming .gitignore:2 and the rule,
+        none other, the files written; a git project with no rules, none; (RELEASE-4 S3 F-X3) a git project whose *.cmd rule
+        is negated for the installed tools/ui/vanguard.cmd: git check-ignore -v reports the negated rule, the install no WARNING
+    h10 the legacy census header names the evaluator on the fold rule (RELEASE-4 S2 F-H10): the exporter over the v0.2.0
+        evaluator LF, CRLF and with a line appended -- LF and CRLF byte-equal, the header the fold digest and the basis,
+        the changed one different
+    h14 no permission-rule form the CLI rejects (RELEASE-4 S2 F-H14): the five settings templates hold no Write(path),
+        MultiEdit(path) or NotebookEdit(path) form; claude -p once in a project the tagged clone installed, stderr to a
+        file, no "Permission ... rule ... matches no known tool / is not matched" line (no claude on PATH: SKIP by name);
+        (RELEASE-4 S3 F-X6) its exit code recorded, and 0
+    h16 the verify spec's section 10 anchor table equals disk (RELEASE-4 S2 F-H16): tools/lam/verify-spec-anchors.ps1 over the
+        tagged clone exit 0; over a scratch copy with the fc9dc67 expanded-schemas.md row put back, exit 1 naming it
+    h18 the smoke builder leaves the caller's environment untouched (RELEASE-4 S2 F-H18): the tagged clone's builder run
+        IN this process into a scratch root -- exit 0; Env: identical before and after; nothing beside the smoke root
+        but it and its origin, no isolation folder left; every fixture commit the Smoke Builder identity; WP-6 ZP names
+        the builder session
+    l1  one licence (RELEASE-4 S3 F-L1; row 495 (1), the operator ruling of 2026-11-06): -Repo's LICENSE byte for byte the
+        owner-approved text (sha256 pinned here; LF, no BOM); README's Licence section two sentences -- free to use under LICENSE,
+        commercial and client work included, the Framework itself not redistributed; support for paying customers by
+        contact; no tracked file names the superseded licence as current but the historical release notes, the provenance
+        manifest's reasons, LICENSE's own last line (the supersession) and the 1.2.0 notes' one supersession line (by file and
+        exact text; operator ruling 2026-11-06)
+    l6  the model sentence (RELEASE-4 S3 F-L6; roadmap decision 1 as ruled 2026-11-06): README's first paragraph, QUICKSTART's
+        head and INSTALL.md's head each say free to use under LICENSE, commercial and client work included, the Framework
+        itself not redistributed or resold, support by subscription for paying customers (support@tekweaver.ca); none of
+        the three describes the superseded evaluation-only grant
+    l2  the public repository named (RELEASE-4 S3 F-L2; row 495 (3)): INSTALL.md and QUICKSTART each name
+        https://github.com/tekweaver-solutions/vanguard-collective-releases, its Releases page, the fixed-name and versioned
+        assets, SHA256SUMS, MEMBERS.sha256 and the gh release download form; no placeholder for the repository's URL
+    l3  the annotated-tag warning (RELEASE-4 S3 F-L3; row 495 (3)): INSTALL.md's clone section says the release tag is
+        annotated, git ls-remote lists the tag object, git clone --branch warns '... is not a commit!', gives the form
+        git rev-parse v<VERSION>^{commit} (no typed version) and names source_commit
+    l4  README's ownership and contributions (RELEASE-4 S3 F-L4; row 495 (3)): a section of that name -- owned and
+        maintained by tekWeaver Solutions Inc.; no external contributions; issues turned off on the public repository;
+        support for paying customers by contact
+    l5  an upgraded project's 0.x smoke mission (RELEASE-4 S3 F-L5; row 495 (3)): INSTALL.md section 6 says it is renamed
+        aside (lam-smoke.old, lam-smoke-origin.git.old) and a current one built by tools\lam\build-smoke-mission.ps1, the
+        acceptance wrapper then reading the new one
+    l8  the ADR namespace collision in docs/framework (RELEASE-4 S3 F-L8; row 495 (13)): the v2.4 DELTA states the citation
+        convention (LM2-ADR-0NN; bare ADR-0NN the on-disk tools/mission-cli/config file; the adr-040 collision) before its
+        first citation and cites every decision explicitly; no file under docs/framework cites ADR-036..ADR-040 bare, nor
+        ADR-045 bare outside v2.3 (the schema WP-7 U-17 pins by sha256 listed, not cured)
+    enc every tracked *.md and LICENSE is UTF-8 without a BOM, with no mojibake sequence and no whitespace-only line
+        (RELEASE-4 S3 F-ENC); expanded-schemas-base.md, whose bytes two documents cite by sha256 prefix, listed, not cured
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('a', 'b', 'c', 'd', 'e', 'f', 'g', 'gu', 'ga', 'gh', 'py', 'u', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'v', 'k1', 'k2', 'k3', 'k4')][string]$Case,
+    [Parameter(Mandatory)][ValidateSet('a', 'b', 'c', 'd', 'e', 'f', 'g', 'gu', 'ga', 'gh', 'py', 'u', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'v', 'k1', 'k2', 'k3', 'k4', 'h4', 'h5', 'h6', 'h7', 'h8', 'h10', 'h14', 'h16', 'h18', 'l1', 'l6', 'l2', 'l3', 'l4', 'l5', 'l8', 'enc')][string]$Case,
     [Parameter(Mandatory)][string]$Repo,
     [Parameter(Mandatory)][string]$Out,
     [string]$Tag = 'vc-r1',
@@ -571,7 +634,7 @@ switch ($Case) {
             ($w.code -eq 4) -and ((Count $w.out ('^install\.ps1: planned python set: NOT INSTALLED -- no CPython 3\.14 win-amd64 interpreter to make tools\\\.venv with \(-Python ' + [regex]::Escape($bogus) + ': does not run\)')) -eq 1) -and
             ((Count $w.out '^install\.ps1: planned vanguard command: tools\\ui\\vanguard\.cmd \(install\) -- ') -eq 1) -and
             (Has $w.out "install.ps1: planned host registration: a host-id would be minted in $vh; no registry row (the target carries no mission yet: mission init adds it)") -and
-            ((Count $w.out '^install\.ps1: planned telemetry ignore rule: no mission yet: mission init writes the rule') -eq 1) -and (Has $w.out 'install.ps1: WhatIf: nothing was written.') -and
+            ((Count $w.out '^install\.ps1: planned telemetry ignore rule: no mission yet: mission init writes the rule /\.mission-runtime/ into the target''s \.gitignore$') -eq 1) -and (Has $w.out 'install.ps1: WhatIf: nothing was written.') -and
             (-not (Test-Path -LiteralPath $t)) -and (-not (Test-Path -LiteralPath (Join-Path $vh 'host-id'))))
         $r = Run $installer @('-Target', $t, '-Python', $bogus)
         L "(install, no interpreter) exit=$($r.code)"; $r.out | Where-Object { $_ -notmatch '^install\.ps1:   install ' } | ForEach-Object { L "  | $_" }
@@ -614,14 +677,14 @@ switch ($Case) {
         $w5 = Run $installer @('-Target', $t5, '-WhatIf', '-SkipPythonSet')
         Check '(a mission with the feed folder) -WhatIf: a row for the target (mission m-falsifier) to be added to projects.yaml; the .gitignore does not ignore the feed, and mission.ps1 register adds the rule; the python set skipped' (
             ($w5.code -eq 0) -and ((Count $w5.out ('^install\.ps1: planned host registration: .+; a row for the target \(mission m-falsifier\) would be added to ' + [regex]::Escape((Join-Path $vh 'projects.yaml')) + '$')) -eq 1) -and
-            ((Count $w5.out '^install\.ps1: planned telemetry ignore rule: the target''s \.gitignore does not ignore /\.mission-runtime/telemetry/; install\.ps1 writes no \.gitignore -- mission\.ps1 register -Target .+ adds the rule$') -eq 1) -and
+            ((Count $w5.out '^install\.ps1: planned telemetry ignore rule: the target''s \.gitignore does not ignore /\.mission-runtime/; install\.ps1 writes no \.gitignore -- mission\.ps1 register -Target .+ adds the rule$') -eq 1) -and
             ((Count $w5.out '^install\.ps1: planned python set: skipped \(-SkipPythonSet\)') -eq 1))
         WriteBytes (Join-Path $t5 '.gitignore') (Bytes ".mission-runtime/`n")
         $null = [System.IO.Directory]::Delete((Join-Path $t5 '.mission-runtime\telemetry'))
         $w6 = Run $installer @('-Target', $t5, '-WhatIf', '-SkipPythonSet')
         Check '(the same mission, no feed folder, a .gitignore with .mission-runtime/) -WhatIf: no registry row, mission.ps1 register named; the ignore rule already held' (
             ($w6.code -eq 0) -and ((Count $w6.out '^install\.ps1: planned host registration: .+; no registry row: the target''s mission m-falsifier is not registered for the mission-event feed') -eq 1) -and
-            ((Count $w6.out '^install\.ps1: planned telemetry ignore rule: the target''s \.gitignore already ignores /\.mission-runtime/telemetry/$') -eq 1))
+            ((Count $w6.out '^install\.ps1: planned telemetry ignore rule: the target''s \.gitignore already ignores /\.mission-runtime/ \(or the feed''s folder within it\)$') -eq 1))
         Check 'no -WhatIf wrote a registry' (-not (Test-Path -LiteralPath (Join-Path $vh 'projects.yaml')))
     } finally { $env:VANGUARD_HOME = $vgPrev }
 }
@@ -637,6 +700,22 @@ switch ($Case) {
     Check 'no planned: line, and written= only on the done: line' (((Count $r.out '^install\.ps1: planned:') -eq 0) -and ((Count $r.out 'written=') -eq 1))
     Check 'the mode line says fresh install' (Has $r.out 'install.ps1: fresh install: no framework.lock in the target')
     Check "$N per-file lines say install" ((Count $r.out '^install\.ps1:   install ') -eq $N)
+    # F-H15 (RELEASE-4 S2): THE CUSTOMER REGISTRATION PATH. A fresh install from HEAD's source writes the TEMPLATE
+    # .claude/settings.json with the manifest's bytes, and that file registers SubagentStop (matcher *, the next-gen
+    # evidence-subagent-stop.ps1). Read before the lock, so a refused install reads this line FAIL, not an exception.
+    $setRel = '.claude/settings.json'
+    $setT = Join-Path $t '.claude\settings.json'
+    $setHas = Test-Path -LiteralPath $setT -PathType Leaf
+    $ssReg = @()
+    if ($setHas) {
+        $sj = [System.IO.File]::ReadAllText($setT) | ConvertFrom-Json
+        if ($sj.hooks -and (@($sj.hooks.PSObject.Properties | ForEach-Object { $_.Name }) -contains 'SubagentStop')) {
+            foreach ($g in @($sj.hooks.SubagentStop)) { foreach ($hk in @($g.hooks)) { if (([string]$g.matcher -ceq '*') -and ([string]$hk.type -ceq 'command') -and ([string]$hk.command).Contains('$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-subagent-stop.ps1')) { $ssReg += $hk } } }
+        }
+    }
+    L "(F-H15) installed $setRel present $setHas; SubagentStop registrations naming evidence-subagent-stop.ps1: $($ssReg.Count)"
+    Check "(F-H15) the fresh install wrote $setRel (the TEMPLATE, the manifest's bytes) and it registers SubagentStop once, matcher *, the next-gen evidence-subagent-stop.ps1" (
+        $setHas -and $owned.ContainsKey($setRel) -and ($owned[$setRel].class -ceq 'TEMPLATE') -and ((FileSha $setT) -eq $owned[$setRel].sha256) -and ($ssReg.Count -eq 1))
     $classes = @('MOVE', 'TEMPLATE', 'HOST-CONFIG') | ForEach-Object { $c = $_; @($owned.Values | Where-Object { $_.class -eq $c }).Count }
     $mline = @($r.out | Where-Object { $_ -match '^install\.ps1: manifest sha256 ' })[0]
     Check "the manifest line names installer-owned $N (MOVE $($classes[0]), TEMPLATE $($classes[1]), HOST-CONFIG $($classes[2])) and framework.lock absent" ($mline -cmatch ("; installer-owned $N \(MOVE $($classes[0]), TEMPLATE $($classes[1]), HOST-CONFIG $($classes[2])\); framework\.lock absent$"))
@@ -1202,10 +1281,10 @@ switch ($Case) {
     $giLines = @($r.out | Where-Object { $_ -match '^mission\.ps1:   \.gitignore ' })
     $giS = if (Test-Path -LiteralPath $giT -PathType Leaf) { $L1.GetString([System.IO.File]::ReadAllBytes($giT)) } else { '' }
     $giRows = @($giS.TrimEnd("`n").Split([char]10))
-    Check 'the target had no .gitignore; init CREATED it, its one .gitignore line saying so: a "# " comment line, then /.claude/settings.local.json, /.claude/worktrees/ and /.mission-runtime/telemetry/ (UI-1 S1), LF, no BOM, nothing else' (
-        (-not $giBefore) -and ($giLines.Count -eq 1) -and ($giLines[0] -cmatch '^mission\.ps1:   \.gitignore created: it ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/telemetry/ \(') -and
+    Check 'the target had no .gitignore; init CREATED it, its one .gitignore line saying so: a "# " comment line, then /.claude/settings.local.json, /.claude/worktrees/ and /.mission-runtime/ (RELEASE-4 S1 F-P7a), LF, no BOM, nothing else' (
+        (-not $giBefore) -and ($giLines.Count -eq 1) -and ($giLines[0] -cmatch '^mission\.ps1:   \.gitignore created: it ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/ \(') -and
         $giS.EndsWith("`n") -and (-not $giS.Contains("`r")) -and (-not $giS.StartsWith([string][char]0xEF)) -and ($giRows.Count -eq 4) -and $giRows[0].StartsWith('# ') -and
-        ($giRows[1] -ceq '/.claude/settings.local.json') -and ($giRows[2] -ceq '/.claude/worktrees/') -and ($giRows[3] -ceq '/.mission-runtime/telemetry/'))
+        ($giRows[1] -ceq '/.claude/settings.local.json') -and ($giRows[2] -ceq '/.claude/worktrees/') -and ($giRows[3] -ceq '/.mission-runtime/'))
     $curBytes = [System.IO.File]::ReadAllBytes([System.IO.Path]::Combine($t, '.mission', 'spec', 'current.txt'))
     Check 'spec/current.txt is the token v001 (4 bytes) and spec/v001.yaml exists' (([System.Text.Encoding]::ASCII.GetString($curBytes) -ceq 'v001') -and (Test-Path -LiteralPath ([System.IO.Path]::Combine($t, '.mission', 'spec', 'v001.yaml')) -PathType Leaf))
     # THE FIRST DRAFT ACCEPTED. spec-accept runs at the project root of a git repository with a clean tree, so the
@@ -1290,13 +1369,13 @@ switch ($Case) {
     # here as ISO-8859-1 (a byte per char), so the bytes there must survive as a prefix and the tail is matched exactly.
     L '--- e3 mission init over a project''s own root .gitignore: only the missing rules appended, in its line ending; a file holding both left byte for byte'
     $giFix = @(
-        @('crlf-one-held', [byte[]](Bytes "build/`r`n.claude/settings.local.json  `r`n*.log"), '^mission\.ps1:   \.gitignore appended 2 rule\(s\): /\.claude/worktrees/ and /\.mission-runtime/telemetry/ \(',
-          '\A\r\n# [^\r\n]+\r\n/\.claude/worktrees/\r\n/\.mission-runtime/telemetry/\r\n\z', 'CRLF with no final line break, holding .claude/settings.local.json unanchored with trailing spaces'),
-        @('lf-none-held', [byte[]](Bytes "dist/`n"), '^mission\.ps1:   \.gitignore appended 3 rule\(s\): /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/telemetry/ \(',
-          '\A# [^\r\n]+\n/\.claude/settings\.local\.json\n/\.claude/worktrees/\n/\.mission-runtime/telemetry/\n\z', 'LF with a final line break, holding no rule'),
-        # UI-1 S1: the telemetry rule counts as held where the project already ignores the whole runtime plane.
+        @('crlf-one-held', [byte[]](Bytes "build/`r`n.claude/settings.local.json  `r`n*.log"), '^mission\.ps1:   \.gitignore appended 2 rule\(s\): /\.claude/worktrees/ and /\.mission-runtime/ \(',
+          '\A\r\n# [^\r\n]+\r\n/\.claude/worktrees/\r\n/\.mission-runtime/\r\n\z', 'CRLF with no final line break, holding .claude/settings.local.json unanchored with trailing spaces'),
+        @('lf-none-held', [byte[]](Bytes "dist/`n"), '^mission\.ps1:   \.gitignore appended 3 rule\(s\): /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/ \(',
+          '\A# [^\r\n]+\n/\.claude/settings\.local\.json\n/\.claude/worktrees/\n/\.mission-runtime/\n\z', 'LF with a final line break, holding no rule'),
+        # RELEASE-4 S1 F-P7a: the runtime plane's rule counts as held where the project already ignores it unanchored.
         @('bom-both-held', [byte[]](@([byte]0xEF, [byte]0xBB, [byte]0xBF) + (Bytes "# the project's own rules`n/.claude/worktrees/`n.claude/settings.local.json`n.mission-runtime/`n")),
-          '^mission\.ps1:   \.gitignore unchanged: it already ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/telemetry/$', $null, 'UTF-8 with a BOM, holding every rule, reordered, one unanchored, the telemetry one as .mission-runtime/')
+          '^mission\.ps1:   \.gitignore unchanged: it already ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/$', $null, 'UTF-8 with a BOM, holding every rule, reordered, one unanchored, the runtime plane''s as .mission-runtime/')
     )
     foreach ($gf in $giFix) {
         $gd = Join-Path $Work ('e3-' + $gf[0])
@@ -1325,7 +1404,7 @@ switch ($Case) {
     L '--- e3 mission init over a .gitignore it cannot append to, that is a folder, or that it cannot read: exit 1, nothing written'
     $giRo = @(
         @('ro-lacking', [byte[]](Bytes "dist/`n"), 1, '^mission\.ps1: .*\\\.gitignore cannot be appended to \(.*\) -- init cannot make it ignore Claude Code''s per-checkout files\. Nothing was written\.$', 'read-only, lacking both rules'),
-        @('ro-both-held', [byte[]](Bytes "/.claude/settings.local.json`n/.claude/worktrees/`n/.mission-runtime/telemetry/`n"), 0, '^mission\.ps1:   \.gitignore unchanged: it already ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/telemetry/$', 'read-only, already holding every rule')
+        @('ro-both-held', [byte[]](Bytes "/.claude/settings.local.json`n/.claude/worktrees/`n/.mission-runtime/`n"), 0, '^mission\.ps1:   \.gitignore unchanged: it already ignores /\.claude/settings\.local\.json and /\.claude/worktrees/ and /\.mission-runtime/$', 'read-only, already holding every rule')
     )
     foreach ($gf in $giRo) {
         $gd = Join-Path $Work ('e3-' + $gf[0])
@@ -2425,6 +2504,552 @@ switch ($Case) {
         ($rowR0.kind -ceq 'move') -and ($rd.kind -ceq 'host-config') -and ($rd.disposition -ceq 'kept') -and ($rd.sha256 -eq (FoldSha ([System.IO.File]::ReadAllBytes($rp)))) -and
         ($rd.upstream_sha256 -eq $sD.fold[$kc.reverse]) -and ($rd.sha256 -ne $rd.upstream_sha256) -and ((FileSha $rp) -eq $revBefore))
     Check 'no staging folder is left in any target' ((@($tA, $tB, $tC, $tD) | Where-Object { (Staging $_) -ne 0 }).Count -eq 0)
+}
+'h4' {
+    # F-H4 (RELEASE-4 S2; row 495 (2)): THE SESSION-ID CLASS. tools/lam/scan-session-ids.ps1 over the tagged clone's
+    # tests/** and tools/lam/fixtures/** with an id file OUTSIDE the tree: a synthetic id file the case writes (two made-up
+    # GUIDs) reads 0 over the clone; the same id planted into a scratch copy of one fixture reads 1, by path and line;
+    # an id file inside -Root is refused. The host's own record is never in the repository: the seat's reading of it
+    # (row-faces.jsonl) is the S2 report's, not this case's.
+    $tool = Join-Path $Tagged.root 'tools\lam\scan-session-ids.ps1'
+    $idf = Join-Path $Work 'ids.txt'
+    # assembled at run time: this file lies under tests/**, which the tool reads, so no whole GUID stands in its text
+    $fakeA = '0f0e0d0c' + '-0b0a-4909-8807-060504030201'; $fakeB = '11112222' + '-3333-4444-8555-666677778888'
+    [System.IO.File]::WriteAllText($idf, "synthetic host record`n$fakeA`n$fakeB`n")
+    $r = Run $tool @('-Root', $Tagged.root, '-IdFile', $idf)
+    L "(h4) clean: exit $($r.code); $((@($r.out) | Select-Object -Last 1) -join '')"
+    Check '(h4) the tagged clone''s tests/** (the default -Under, which holds tests/lam/fixtures/**) holds none of the id file''s session ids: exit 0, 0 hit(s)' (($r.code -eq 0) -and ((Count $r.out '^scan-session-ids: 0 hit\(s\) of 2 host id\(s\)') -eq 1))
+    # F-X4 (RELEASE-4 S3; S2 validator X-4): NO VACUOUS PASS. The clean reading read files (its count > 0); a -Under folder
+    # that does not stand is REFUSED by name (exit 2), never skipped; and -Under given through -File as one comma-joined
+    # string (tests,tests/lam/fixtures) is read as its folders, files counted.
+    $fc = [regex]::Match((@($r.out) -join "`n"), '\((\d+) file\(s\)\)')
+    $nf = if ($fc.Success) { [int]$fc.Groups[1].Value } else { 0 }
+    Check "(h4) the clean reading read the tagged clone's files: $nf file(s) (> 0)" ($nf -gt 0)
+    $rm = Run $tool @('-Root', $Tagged.root, '-IdFile', $idf, '-Under', 'tests,no-such-folder')
+    L "(h4) -Under naming a folder that does not stand: exit $($rm.code); $((@($rm.out) | Select-Object -Last 1) -join '')"
+    Check '(h4) a -Under folder that does not stand is refused by name: exit 2, the line naming no-such-folder' (($rm.code -eq 2) -and ((Count $rm.out '^scan-session-ids: -Under folder does not stand: no-such-folder ') -eq 1))
+    $rj = Run $tool @('-Root', $Tagged.root, '-IdFile', $idf, '-Under', 'tests,tests/lam/fixtures')
+    $fj = [regex]::Match((@($rj.out) -join "`n"), 'under tests, tests/lam/fixtures \((\d+) file\(s\)\)')
+    L "(h4) -Under 'tests,tests/lam/fixtures' as one -File argument: exit $($rj.code); $((@($rj.out) | Select-Object -Last 1) -join '')"
+    Check '(h4) -Under given through -File as one comma-joined string reads both folders: exit 0, files > 0' (($rj.code -eq 0) -and $fj.Success -and ([int]$fj.Groups[1].Value -gt 0))
+    $cp = Join-Path $Work 'copy'; $null = New-Item -ItemType Directory -Force -Path (Join-Path $cp 'tests\lam\fixtures\ui')
+    $fx = Join-Path $cp 'tests\lam\fixtures\ui\p.jsonl'
+    [System.IO.File]::WriteAllText($fx, ([System.IO.File]::ReadAllText((Join-Path $Tagged.root 'tests\lam\fixtures\ui\p.jsonl')) + '{"session_id":"' + $fakeA + '"}' + "`n"))
+    $r2 = Run $tool @('-Root', $cp, '-IdFile', $idf)
+    Check '(h4) one host id planted into a scratch copy of a fixture reads 1 hit, by path and line, exit 1' (($r2.code -eq 1) -and ((Count $r2.out '^scan-session-ids: SESSION-ID tests/lam/fixtures/ui/p\.jsonl:\d+ 0f0e0d0c\.\.\.$') -eq 1))
+    $inside = Join-Path $cp 'ids.txt'; [System.IO.File]::WriteAllText($inside, $fakeA)
+    $r3 = Run $tool @('-Root', $cp, '-IdFile', $inside)
+    Check '(h4) an id file inside -Root is refused, exit 2' ($r3.code -eq 2)
+}
+'h5' {
+    # F-H5 (RELEASE-4 S2; row 495 (7)): THE KEPT-FILE NOTICE. The installer never edits a kept file (ruling: a protected
+    # customer file is the operator's); it says, per kept file that differs (fold-crlf-text, the lock's basis) from this
+    # release's version, that it kept it and where the release's version is, and for .claude/settings.json names each
+    # registration the release's version carries that the project's lacks, with the block read from the release's file.
+    # The expected block is judged here independently: a substring of the release file (LF-folded), and, wrapped in {},
+    # JSON whose member equals the release file's parsed member.
+    $setRel = '.claude/settings.json'
+    $relSet = Join-Path $Tagged.root '.claude\settings.json'
+    $relText = ([System.IO.File]::ReadAllText($relSet)) -replace "`r`n", "`n"
+    $relObj = $relText | ConvertFrom-Json
+    function Own-Settings { param([string]$Dest)
+        # the project's own copy: the release's file less its SubagentStop registration (a 1.1.0-era project's shape)
+        $o = [System.IO.File]::ReadAllText($relSet) | ConvertFrom-Json
+        $null = $o.hooks.PSObject.Properties.Remove('SubagentStop')
+        $null = [System.IO.Directory]::CreateDirectory((Split-Path -Parent $Dest))
+        [System.IO.File]::WriteAllText($Dest, ($o | ConvertTo-Json -Depth 20), $NoBom)
+    }
+    function Judge-Notices { param($Out, [string]$Label, [string[]]$Expect)
+        $heads = @($Out | Where-Object { $_ -match '^install\.ps1: NOTICE kept (\S+) -- kept: ' })
+        $named = Sorted @($heads | ForEach-Object { if ($_ -match '^install\.ps1: NOTICE kept (\S+) -- kept: ') { $Matches[1] } })
+        $atOk = $true
+        foreach ($h in $heads) {
+            if ($h -notmatch '^install\.ps1: NOTICE kept (\S+) -- kept: .*which is at (.+)$') { $atOk = $false; continue }
+            $p = $Matches[1]; $at = $Matches[2]
+            if (-not (Test-Path -LiteralPath $at -PathType Leaf) -or ((FileSha $at) -ne $owned[$p].sha256)) { $atOk = $false }
+        }
+        L "($Label) notice lines: $($heads.Count); files named: $($named -join ', '); expected: $((Sorted $Expect) -join ', ')"
+        Check "($Label) one NOTICE kept line per kept file that differs from the release's version, and none for another: $((Sorted $Expect) -join ', ')" (Same $named (Sorted $Expect))
+        Check "($Label) each notice names where the release's version is: an existing file holding the manifest's bytes" ($atOk -and $heads.Count -gt 0)
+        $reg = @($Out | Where-Object { $_ -match '^install\.ps1: NOTICE kept \.claude/settings\.json -- this release registers (\S+) ' })
+        $block = @($Out | Where-Object { $_.StartsWith('install.ps1: NOTICE   | ') } | ForEach-Object { $_.Substring('install.ps1: NOTICE   | '.Length) }) -join "`n"
+        $blockOk = $false
+        if ($block) {
+            try { $bo = ('{' + $block + '}') | ConvertFrom-Json; $blockOk = ((($bo.SubagentStop | ConvertTo-Json -Depth 20 -Compress)) -ceq (($relObj.hooks.SubagentStop | ConvertTo-Json -Depth 20 -Compress))) -and $relText.Contains($block) } catch { $blockOk = $false }
+        }
+        L "($Label) registration lines: $($reg.Count) ($(@($reg | ForEach-Object { if ($_ -match 'registers (\S+) ') { $Matches[1] } }) -join ', ')); block lines: $(@($Out | Where-Object { $_.StartsWith('install.ps1: NOTICE   | ') }).Count); block the release file's own and its SubagentStop: $blockOk"
+        Check "($Label) for $setRel the notice names SubagentStop, the one registration the project's copy lacks, and prints the release file's own SubagentStop block" (($reg.Count -eq 1) -and ($reg[0] -match 'registers SubagentStop ') -and $blockOk)
+    }
+    # (h5a) A FRESH INSTALL into a folder holding the project's own .claude/settings.json: kept, named, the block printed.
+    $t = Join-Path $Work 'fresh'
+    Own-Settings (Join-Path $t '.claude\settings.json')
+    $ownSha = FileSha (Join-Path $t '.claude\settings.json')
+    $w = Run $installer @('-Target', $t, '-WhatIf')
+    L "(h5a) -WhatIf exit=$($w.code)"; $w.out | Where-Object { $_ -notmatch '^install\.ps1:   install ' } | ForEach-Object { L "  | $_" }
+    Check '(h5a) -WhatIf: exit 0, nothing written (the project''s file as it was, no framework.lock)' (($w.code -eq 0) -and ((FileSha (Join-Path $t '.claude\settings.json')) -eq $ownSha) -and -not (Test-Path -LiteralPath (Join-Path $t 'framework.lock')))
+    Judge-Notices $w.out 'h5a -WhatIf' @($setRel)
+    $r = Run $installer @('-Target', $t)
+    L "(h5a) install exit=$($r.code)"; $r.out | Where-Object { $_ -notmatch '^install\.ps1:   install ' } | ForEach-Object { L "  | $_" }
+    Check "(h5a) install: exit 0, $setRel kept, and the installer did not edit it (byte for byte the project's)" (($r.code -eq 0) -and ((Count $r.out ('^install\.ps1:   keep\s+' + [regex]::Escape($setRel) + '$')) -eq 1) -and ((FileSha (Join-Path $t '.claude\settings.json')) -eq $ownSha))
+    Judge-Notices $r.out 'h5a install' @($setRel)
+    # (h5b) AN UPGRADE over a 0.1.1-locked project whose own .claude/settings.json lacks SubagentStop and whose
+    # model-routing.yaml carries a line of its own; every other kept file is the release's (so it is named by none).
+    $u = Join-Path $Work 'up'
+    Copy-Owned $Repo $u $owned
+    Own-Settings (Join-Path $u '.claude\settings.json')
+    $mr = Join-Path $u 'model-routing.yaml'
+    [System.IO.File]::WriteAllBytes($mr, [byte[]]([System.IO.File]::ReadAllBytes($mr) + [System.Text.Encoding]::ASCII.GetBytes("# the project's own line`n")))
+    Write-Lock1 -Target $u -Header (Header 'lock-header-0.1.1.json') -Paths @($owned.Keys)
+    $keptPaths = @($owned.Keys | Where-Object { $owned[$_].class -ne 'MOVE' })
+    $keptBefore = @{}; foreach ($p in $keptPaths) { $keptBefore[$p] = FileSha (Join-Path $u ($p -replace '/', '\')) }
+    $w = Run $installer @('-Target', $u, '-WhatIf')
+    L "(h5b) upgrade -WhatIf exit=$($w.code)"; $w.out | Where-Object { $_ -notmatch '^install\.ps1:   (already-identical|keep|upgrade) ' } | ForEach-Object { L "  | $_" }
+    Check '(h5b) upgrade -WhatIf: exit 0' ($w.code -eq 0)
+    Judge-Notices $w.out 'h5b upgrade -WhatIf' @($setRel, 'model-routing.yaml')
+    $r = Run $installer @('-Target', $u)
+    L "(h5b) upgrade exit=$($r.code)"; $r.out | Where-Object { $_ -notmatch '^install\.ps1:   (already-identical|keep|upgrade) ' } | ForEach-Object { L "  | $_" }
+    Check '(h5b) upgrade: exit 0' ($r.code -eq 0)
+    Judge-Notices $r.out 'h5b upgrade' @($setRel, 'model-routing.yaml')
+    $edited = @($keptPaths | Where-Object { (FileSha (Join-Path $u ($_ -replace '/', '\'))) -ne $keptBefore[$_] })
+    Check "(h5b) the installer edited none of the $($keptPaths.Count) kept files (each byte for byte as before the upgrade)" ($edited.Count -eq 0)
+}
+'h6' {
+    # F-H6 (RELEASE-4 S2; row 495 (11)): THE CLEAN-ENVIRONMENT INSTALL PROOF IS A SCRIPT, tests/install/clean-install-proof.ps1,
+    # -Repo's own. The ZIP release.ps1 builds in a clone at HEAD; the script run over it -Through build (every step but the
+    # acceptance run, which S4 makes with both arms), in a scratch root here; then its refusals.
+    $proof = Join-Path $Repo 'tests\install\clean-install-proof.ps1'
+    Check 'tests/install/clean-install-proof.ps1 stands in -Repo' (Test-Path -LiteralPath $proof -PathType Leaf)
+    if (-not (Test-Path -LiteralPath $proof -PathType Leaf)) { throw 'no proof script, and the rest of (h6) stands on it' }
+    $clone = New-Clone (Join-Path $Work 'clone')
+    $z = Build-Zip $clone
+    $sr = Join-Path $Work 'p'
+    $envBefore = (@(Get-ChildItem Env: | Sort-Object Name | ForEach-Object { $_.Name + '=' + $_.Value }) -join "`n")
+    $r = Run $proof @('-Zip', $z.zip, '-ScratchRoot', $sr, '-RunKey', 'h6-member', '-Through', 'build')
+    L "(h6) proof -Through build: exit=$($r.code)"; $r.out | Where-Object { $_ -notmatch '^  \| install\.ps1:   ' } | ForEach-Object { L "  | $_" }
+    $stepLines = @($r.out | Where-Object { $_ -match '^PROOF (release|project|install|init|smoke|register|build) (PASS|FAIL) -- ' })
+    $passes = @($stepLines | Where-Object { $_ -match ' PASS -- ' })
+    Check '(h6) exit 0; PROOF release, project, install, init, smoke, register and build each PASS; PROOF ENV PASS; PROOF RESULT 8 step(s), 0 failed' (
+        ($r.code -eq 0) -and ($stepLines.Count -eq 7) -and ($passes.Count -eq 7) -and ((Count $r.out '^PROOF ENV PASS -- ') -eq 1) -and (Has $r.out 'PROOF RESULT: 8 step(s), 0 failed (through build)'))
+    $vhRows = @(Get-ChildItem -LiteralPath (Join-Path $sr 'vanguard-home') -Recurse -File -ErrorAction SilentlyContinue)
+    $outside = @(Get-ChildItem -LiteralPath $Work -Force | Where-Object { @('clone', 'p', 'p3', 'tagged-clone') -notcontains $_.Name } | ForEach-Object { $_.Name })
+    Check "(h6) the registration is under the scratch root's VANGUARD_HOME ($($vhRows.Count) file(s)); the project's origin is the scratch root's bare origin; nothing beside the scratch root in this case's folder ($($outside -join ', '))" (
+        ($vhRows.Count -gt 0) -and (((RunGit (Join-Path $sr 'project') @('remote', 'get-url', 'origin')).out -join '').Trim() -eq (Join-Path $sr 'origin.git')) -and ($outside.Count -eq 0))
+    Check '(h6) this process''s environment unchanged by the run' (((@(Get-ChildItem Env: | Sort-Object Name | ForEach-Object { $_.Name + '=' + $_.Value }) -join "`n")) -ceq $envBefore)
+    $r2 = Run $proof @('-Zip', $z.zip, '-ScratchRoot', $sr, '-RunKey', 'h6-member', '-Through', 'install')
+    Check '(h6) a scratch root that is not empty is REFUSED, exit 2' (($r2.code -eq 2) -and ((Count $r2.out '^PROOF REFUSED: -ScratchRoot .* is not empty$') -eq 1))
+    $eng = @($r.out | Where-Object { $_ -match '^PROOF ENGINE read: .* -> engine (UP|DOWN)$' })
+    $up = ($eng.Count -eq 1) -and ($eng[0] -match 'engine UP$')
+    $r3 = Run $proof @('-Zip', $z.zip, '-ScratchRoot', (Join-Path $Work 'p3'), '-RunKey', 'h6-member', '-Through', 'release', '-EngineDown')
+    L "(h6) the engine read: $($eng -join ''); -EngineDown exit=$($r3.code)"
+    Check "(h6) -EngineDown reads the engine and, the engine $(if ($up) { 'UP: refuses, exit 3, nothing made' } else { 'DOWN: proceeds, exit 0' })" ($(if ($up) { ($r3.code -eq 3) -and -not (Test-Path -LiteralPath (Join-Path $Work 'p3\release')) } else { $r3.code -eq 0 }))
+}
+'h7' {
+    # F-H7 (RELEASE-4 S2; row 495 (9)): POWERSHELL 7, Invoke-WebRequest AND THE MARK OF THE WEB. The measurement is an
+    # operator block on a PS7 host (the S2 seat's handoff carries its text); this member reads whether this host has one.
+    # With none -- no pwsh on PATH -- it SKIPS BY NAME: unmeasured, carried to the 1.2.0 notes (operator ruling 2026-11-06).
+    # With one, it fetches a local file through Invoke-WebRequest under pwsh, expands it, and prints the streams each holds;
+    # it holds INSTALL.md section 3 to naming PowerShell 7 and Zone.Identifier once the operator's paste has been recorded.
+    $pw = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $pw) {
+        L 'CHECK SKIP  (h7) F-H7 UNMEASURED: no PowerShell 7 host here (pwsh is not on PATH) -- recorded in the 1.2.0 notes as unmeasured and carried (operator ruling 2026-11-06); the measurement is the S2 handoff''s operator block'
+    } else {
+        $d = Join-Path $Work 'motw'; $null = New-Item -ItemType Directory -Force -Path $d
+        $z = Join-Path $d 'src.zip'; $null = New-Item -ItemType Directory -Force -Path (Join-Path $d 'in')
+        [System.IO.File]::WriteAllText((Join-Path $d 'in\a.txt'), "a`n"); Compress-Archive -Path (Join-Path $d 'in\*') -DestinationPath $z
+        $probe = Join-Path $d 'probe.ps1'
+        [System.IO.File]::WriteAllText($probe, ("`$ErrorActionPreference='Stop'; `$o = Join-Path '$d' 'got.zip'; Invoke-WebRequest -Uri ([uri]'$z').AbsoluteUri -OutFile `$o; " +
+            "'PS ' + `$PSVersionTable.PSVersion; 'zip streams: ' + ((Get-Item `$o -Stream * | ForEach-Object Stream) -join ','); " +
+            "Expand-Archive `$o -DestinationPath (Join-Path '$d' 'x'); 'expanded streams: ' + ((Get-Item (Join-Path '$d' 'x\a.txt') -Stream * | ForEach-Object Stream) -join ',')"))
+        $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $po = @(& $pw.Source -NoProfile -File $probe 2>&1 | ForEach-Object { "$_" }); $pc = $LASTEXITCODE } finally { $ErrorActionPreference = $prev }
+        L "(h7) pwsh at $($pw.Source): exit $pc"; $po | ForEach-Object { L "  | $_" }
+        $im3 = DocText (Join-Path $Repo 'INSTALL.md')
+        Check '(h7) a PS7 host: the measurement ran, and INSTALL.md names PowerShell 7 and Zone.Identifier (the operator''s paste recorded)' (($pc -eq 0) -and $im3.Contains('PowerShell 7') -and $im3.Contains('Zone.Identifier'))
+    }
+}
+'h14' {
+    # F-H14 (RELEASE-4 S2; S1 F7, amendment-1 note): NO PERMISSION-RULE FORM THE CLI REJECTS, IN ANY INSTALLED SETTINGS FILE.
+    # (1) the settings templates of the tagged clone are scanned for Write(path)/MultiEdit(path)/NotebookEdit(path) rule
+    # forms (expect 0; every file rule is written as Edit, tools/lam/settings/validator.json says so); (2) claude -p runs
+    # ONCE in a project the tagged clone installed, with this session's markers cleared for it and its stderr to a file,
+    # and no stderr line reads "Permission ... rule ... matches no known tool / is not matched". No claude on PATH: SKIP.
+    $tpl = @('.claude/settings.json', 'tools/lam/settings/orchestrator.json', 'tools/lam/settings/validator.json', 'tools/lam/settings/worker.json', 'tools/lam/smoke-mission/dot-claude/settings.local.json')
+    $forms = @()
+    foreach ($p in $tpl) {
+        $fp = Join-Path $Tagged.root ($p -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $fp -PathType Leaf)) { $forms += "$p (absent)"; continue }
+        # the RULES only -- the strings of permissions.allow, .deny and .ask; prose elsewhere in a file may name a form
+        $sj = [System.IO.File]::ReadAllText($fp) | ConvertFrom-Json
+        $perm = if ($sj.PSObject.Properties['permissions']) { $sj.permissions } else { $null }
+        foreach ($k in @('allow', 'deny', 'ask')) {
+            if ($null -eq $perm -or $null -eq $perm.PSObject.Properties[$k]) { continue }
+            foreach ($rule in @($perm.$k)) { if ([string]$rule -match '^\s*(Write|MultiEdit|NotebookEdit)\(') { $forms += "$p permissions.$k $rule" } }
+        }
+    }
+    L "(h14) rule forms the CLI rejects, in $($tpl.Count) settings templates: $($forms.Count)$(if ($forms.Count) { ' -- ' + ($forms -join '; ') })"
+    Check "(h14) no Write(path), MultiEdit(path) or NotebookEdit(path) rule form in the $($tpl.Count) settings templates" ($forms.Count -eq 0)
+    $cl = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $cl) { L 'CHECK SKIP  (h14) claude is not on PATH: the CLI''s own reading of the installed settings is not measured here' }
+    else {
+        $t = Join-Path $Work 'p'; $null = New-Item -ItemType Directory -Force -Path $t; $null = RunGit $t @('init', '-q')
+        $ri = Run $installer @('-Target', $t)
+        Check '(h14) the project for the CLI: a fresh install, exit 0' ($ri.code -eq 0)
+        $eo = Join-Path $Work 'claude-stderr.txt'; $so = Join-Path $Work 'claude-stdout.txt'
+        $cv = @(Get-ChildItem Env: | Where-Object { $_.Name -eq 'CLAUDECODE' -or $_.Name -like 'CLAUDE_CODE_*' -or $_.Name -eq 'CLAUDE_PROJECT_DIR' } | ForEach-Object { [pscustomobject]@{ n = $_.Name; v = $_.Value } })
+        foreach ($x in $cv) { [Environment]::SetEnvironmentVariable($x.n, $null) }
+        $pr = $null
+        try {
+            $pr = Start-Process -FilePath $cl.Source -ArgumentList @('-p', '"Reply with the single word OK."', '--max-turns', '1') -WorkingDirectory $t -NoNewWindow -PassThru -RedirectStandardError $eo -RedirectStandardOutput $so
+            $null = $pr.Handle   # F-X6: holding the handle keeps ExitCode readable after the exit (Start-Process -PassThru drops it)
+            if (-not $pr.WaitForExit(300000)) { try { $pr.Kill() } catch { } }
+        } finally { foreach ($x in $cv) { [Environment]::SetEnvironmentVariable($x.n, $x.v) } }
+        $errLines = @(if (Test-Path -LiteralPath $eo) { [System.IO.File]::ReadAllLines($eo) })
+        $bad = @($errLines | Where-Object { $_ -match 'Permission .* rule .* (matches no known tool|is not matched)' })
+        L "(h14) claude -p in the installed project: exit $(if ($pr -and $pr.HasExited) { $pr.ExitCode } else { '(killed at 300 s)' }); stderr lines $($errLines.Count); stdout $(if (Test-Path -LiteralPath $so) { ([System.IO.File]::ReadAllText($so)).Trim().Length } else { 0 }) chars"
+        foreach ($l in @($errLines | Select-Object -First 8)) { L "  stderr | $l" }
+        Check "(h14) claude -p ran once in the installed project (its stderr captured) and no stderr line names a permission rule the CLI rejects ($($bad.Count))" (($null -ne $pr) -and $pr.HasExited -and (Test-Path -LiteralPath $eo) -and ($bad.Count -eq 0))
+        # F-X6 (RELEASE-4 S3; S2 validator X-6): the CLI's exit code is recorded, and is 0
+        $cx = if ($pr -and $pr.HasExited) { $pr.ExitCode } else { $null }
+        L "(h14) claude -p exit code recorded: '$cx'"
+        Check "(h14) claude -p's exit code is recorded and is 0 ('$cx')" (($null -ne $cx) -and ("$cx" -ne '') -and ($cx -eq 0))
+    }
+}
+'h8' {
+    # F-H8 (RELEASE-4 S2; row 505 (d); UI-1 S5-R1): THE INSTALLER WARNS ON A GIT-IGNORED MEMBER. A git project whose own
+    # .gitignore holds dist/, *.cmd and a negated rule (its global excludes pointed at an empty file, so only its own rules
+    # speak): -WhatIf and the install print one WARNING per installed member the rules hide -- here every member *.cmd
+    # matches -- naming .gitignore, the line and the rule; none for another member; the file still written. A git project
+    # with no rules: no warning.
+    $mkRepo = { param([string]$Dir, [string]$Ignore)
+        $null = New-Item -ItemType Directory -Force -Path $Dir
+        $null = RunGit $Dir @('init', '-q'); $null = RunGit $Dir @('config', 'core.autocrlf', 'false')
+        $null = RunGit $Dir @('config', 'user.name', 'falsifier-fixture'); $null = RunGit $Dir @('config', 'user.email', 'falsifier-fixture@localhost')
+        $ex = Join-Path $Dir '.git\empty-excludes'; [System.IO.File]::WriteAllText($ex, '')
+        $null = RunGit $Dir @('config', 'core.excludesFile', $ex)
+        [System.IO.File]::WriteAllText((Join-Path $Dir 'README.md'), "h8`n")
+        if ($Ignore) { [System.IO.File]::WriteAllText((Join-Path $Dir '.gitignore'), $Ignore) }
+        $null = RunGit $Dir @('add', '-A'); $null = RunGit $Dir @('commit', '-q', '-m', 'the project before the install')
+    }
+    $t = Join-Path $Work 'ig'
+    & $mkRepo $t "dist/`n*.cmd`n!tools/ui/never-installed.cmd`n"
+    $expect = Sorted @($owned.Keys | Where-Object { $_ -like '*.cmd' })
+    $warnRx = '^install\.ps1: WARNING ignored (\S+) -- the target''s git ignore rules hide it: \.gitignore:2: \*\.cmd \(git check-ignore -v\); '
+    foreach ($leg in @(@('-WhatIf', @('-Target', $t, '-WhatIf')), @('install', @('-Target', $t)))) {
+        $r = Run $installer $leg[1]
+        $all = @($r.out | Where-Object { $_ -match '^install\.ps1: WARNING ignored ' })
+        $named = Sorted @($r.out | Where-Object { $_ -match $warnRx } | ForEach-Object { if ($_ -match $warnRx) { $Matches[1] } })
+        L "(h8 $($leg[0])) exit $($r.code); WARNING lines $($all.Count); named $($named -join ', '); expected $($expect -join ', ')"
+        Check "(h8 $($leg[0])) exit 0; one WARNING per member the rule *.cmd hides ($($expect.Count)), naming .gitignore:2 and the rule; no other WARNING" (
+            ($r.code -eq 0) -and ($expect.Count -gt 0) -and (Same $named $expect) -and ($all.Count -eq $expect.Count))
+    }
+    Check '(h8) the hidden members are written all the same (each at its manifest bytes)' ((@($expect | Where-Object { (FileSha (Join-Path $t ($_ -replace '/', '\'))) -ne $owned[$_].sha256 }).Count -eq 0))
+    $t2 = Join-Path $Work 'noig'
+    & $mkRepo $t2 ''
+    $r2 = Run $installer @('-Target', $t2, '-WhatIf')
+    Check '(h8) a git project with no ignore rules: -WhatIf exit 0 and no WARNING line' (($r2.code -eq 0) -and ((Count $r2.out '^install\.ps1: WARNING ignored ') -eq 0))
+    # F-X3 (RELEASE-4 S3; S2 validator X-3): THE NEGATED RULE NAMES AN INSTALLED MEMBER. *.cmd, then !tools/ui/vanguard.cmd (the
+    # one installed *.cmd): git check-ignore -v reports the member against the NEGATED rule -- a match that hides nothing --
+    # so the installer's '!' filter is what keeps it from a WARNING; the install writes the member and warns of nothing.
+    $t3 = Join-Path $Work 'neg'
+    & $mkRepo $t3 "dist/`n*.cmd`n!tools/ui/vanguard.cmd`n"
+    $r3 = Run $installer @('-Target', $t3)
+    $ci = RunGit $t3 @('check-ignore', '-v', '--', 'tools/ui/vanguard.cmd')
+    $negLine = @($ci.out | Where-Object { $_ -match '^\.gitignore:3:!tools/ui/vanguard\.cmd\ttools/ui/vanguard\.cmd$' })
+    L "(h8 negated) install exit $($r3.code); WARNING lines $(Count $r3.out '^install\.ps1: WARNING ignored '); git check-ignore -v tools/ui/vanguard.cmd: $((@($ci.out) -join ' | '))"
+    Check '(h8 negated) *.cmd re-included by !tools/ui/vanguard.cmd, an installed member: git check-ignore -v reports the negated rule for it, and the install (exit 0) prints no WARNING and writes it' (
+        ($r3.code -eq 0) -and ($negLine.Count -eq 1) -and ((Count $r3.out '^install\.ps1: WARNING ignored ') -eq 0) -and ((FileSha (Join-Path $t3 'tools\ui\vanguard.cmd')) -eq $owned['tools/ui/vanguard.cmd'].sha256))
+}
+'h10' {
+    # F-H10 (RELEASE-4 S2; row 495 (10)): THE CENSUS HEADER's EVALUATOR DIGEST BY THE FOLD RULE. The tagged clone's
+    # exporter run over the v0.2.0 evaluator (upgrade.json's census tag, cloned) as it stands (LF), over a CRLF copy of it,
+    # and over a copy with one line appended: the LF and CRLF censuses are byte-equal and their header names the
+    # fold-crlf-text digest (computed here) and the basis; the changed evaluator's header differs.
+    $C = $U.census
+    $exp = Join-Path $Tagged.root ($C.exporter -replace '/', '\')
+    $old = New-Clone -Dest (Join-Path $Work 'v020') -Rev $C.tag
+    $ev = [System.IO.File]::ReadAllBytes((Join-Path $old 'tools\lam\mission-goal-check.ps1'))
+    $lfB = $L1.GetBytes($L1.GetString($ev).Replace("`r`n", "`n")); $crB = $L1.GetBytes($L1.GetString($lfB).Replace("`n", "`r`n"))
+    $chB = [byte[]]($lfB + [System.Text.Encoding]::ASCII.GetBytes("# one line more`n"))
+    $outs = @{}
+    foreach ($arm in @(@('lf', $lfB), @('crlf', $crB), @('changed', $chB))) {
+        $d = Join-Path $Work ('h10-' + $arm[0]); $null = New-Item -ItemType Directory -Force -Path $d
+        $src = Join-Path $d 'mission-goal-check.ps1'; [System.IO.File]::WriteAllBytes($src, [byte[]]$arm[1])
+        $to = Join-Path $d 'legacy-halt-census.txt'
+        $x = Run $exp @('-From', $src, '-To', $to)
+        L "(h10 $($arm[0])) exporter exit $($x.code): $((@($x.out) | Select-Object -Last 1) -join '')"
+        $outs[$arm[0]] = if (Test-Path -LiteralPath $to) { [System.IO.File]::ReadAllBytes($to) } else { $null }
+    }
+    $hdr = { param($b) if ($null -eq $b) { return '' }; return (@($L1.GetString($b).Split([char]10) | Where-Object { $_ -match '^# mission-goal-check\.ps1 of sha256 ' }) -join '') }
+    $want = FoldSha $lfB
+    $hLf = & $hdr $outs['lf']; $hCr = & $hdr $outs['crlf']; $hCh = & $hdr $outs['changed']
+    L "(h10) header lines: lf '$hLf'; crlf '$hCr'; changed '$hCh'; the fold digest computed here $want"
+    Check '(h10) the LF and the CRLF checkout of one evaluator write byte-equal censuses' (($null -ne $outs['lf']) -and ($null -ne $outs['crlf']) -and ((Sha $outs['lf']) -eq (Sha $outs['crlf'])))
+    Check "(h10) the header carries the evaluator's fold-crlf-text digest ($want) and names the basis" ($hLf.Contains($want) -and $hLf.Contains('fold-crlf-text'))
+    Check '(h10) a changed evaluator writes a different header' ($hCh -and ($hCh -cne $hLf))
+}
+'h16' {
+    # F-H16 (RELEASE-4 S2; S1b F-e): THE VERIFY SPEC's SECTION 10 ANCHOR TABLE EQUALS DISK. tools/lam/verify-spec-anchors.ps1
+    # (AUTHORED: the framework repository's own, not installed -- so its member is here, not in an installed instrument)
+    # over the tagged clone: exit 0, every row equal (sha256 on fold-crlf-text, bytes raw); over a scratch copy of the
+    # clone's spec and the files it names with one row put back stale (the expanded-schemas.md row 83960a9e/79452 it read
+    # at fc9dc67): exit 1, that row named DIFFERS.
+    $tool = Join-Path $Tagged.root 'tools\lam\verify-spec-anchors.ps1'
+    $r = Run $tool @('-Root', $Tagged.root)
+    L "(h16) over the tagged clone: exit $($r.code); $((@($r.out) | Select-Object -Last 1) -join '')"
+    Check '(h16) every row of the verify spec''s section 10 anchor table equals the file it names: exit 0, 0 differ' (($r.code -eq 0) -and ((Count $r.out '^verify-spec-anchors: \d+ row\(s\), 0 differ$') -eq 1))
+    $cp = Join-Path $Work 'stale'
+    $spec = 'docs\framework\mission-verify-spec.md'
+    $rows = @([regex]::Matches([System.IO.File]::ReadAllText((Join-Path $Tagged.root $spec)), '(?m)^[0-9a-f]{8}[ \t]+\d+[ \t]+(\S+)[ \t]*\r?$') | ForEach-Object { $_.Groups[1].Value })
+    foreach ($p in @($rows + @($spec -replace '\\', '/'))) { WriteBytes (Join-Path $cp ($p -replace '/', '\')) ([System.IO.File]::ReadAllBytes((Join-Path $Tagged.root ($p -replace '/', '\')))) }
+    $sp = Join-Path $cp $spec
+    $st = [System.IO.File]::ReadAllText($sp)
+    $st2 = [regex]::Replace($st, '(?m)^[0-9a-f]{8}([ \t]+)\d+([ \t]+docs/framework/expanded-schemas\.md)', ('83960a9e${1}79452${2}'))
+    [System.IO.File]::WriteAllText($sp, $st2)
+    $r2 = Run $tool @('-Root', $cp)
+    Check '(h16) one row put back stale (the fc9dc67 expanded-schemas.md row) reads exit 1, that row DIFFERS' (($st2 -cne $st) -and ($r2.code -eq 1) -and ((Count $r2.out '^verify-spec-anchors: anchor DIFFERS docs/framework/expanded-schemas\.md ') -eq 1))
+}
+'h18' {
+    # F-H18 (RELEASE-4 S2, found 2026-11-06): THE SMOKE BUILDER LEAVES THE CALLER'S ENVIRONMENT UNTOUCHED. The tagged clone's
+    # tools/lam/build-smoke-mission.ps1 is run IN THIS PROCESS (&), as an operator runs it in a terminal, so anything it
+    # sets in its own process is set here: this process's Env: before and after must be identical; nothing named
+    # <root>.no-global-gitconfig stands beside the smoke root and no isolation folder is left in the temp folder; the
+    # fixture's commits still carry the Smoke Builder identity; WP-6 ZP's exclusion table still names the builder session.
+    $builder = Join-Path $Tagged.root 'tools\lam\build-smoke-mission.ps1'
+    $sp = Join-Path $Work 'sm'; $null = New-Item -ItemType Directory -Force -Path $sp
+    $sr = Join-Path $sp 'lam-smoke'
+    $snap = { (@(Get-ChildItem Env: | Sort-Object Name | ForEach-Object { $_.Name + '=' + $_.Value }) -join "`n") }
+    $isoGlob = { @(Get-ChildItem -LiteralPath ([System.IO.Path]::GetTempPath()) -Directory -Filter 'lam-smoke-iso-*' -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }) }
+    $envBefore = & $snap; $isoBefore = & $isoGlob
+    $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $bo = @(& $builder -SmokeRoot $sr *>&1 | ForEach-Object { "$_" }); $bc = $LASTEXITCODE } finally { $ErrorActionPreference = $prev }
+    $envAfter = & $snap; $isoAfter = & $isoGlob
+    L "(h18) the builder in this process: exit $bc; last lines: $((@($bo) | Select-Object -Last 3) -join ' | ')"
+    Check '(h18) the builder, run in this process, builds the smoke mission: exit 0 and the root a git repository' (($bc -eq 0) -and (Test-Path -LiteralPath (Join-Path $sr '.git')))
+    $bl = @($envBefore -split "`n"); $al = @($envAfter -split "`n")
+    $added = @($al | Where-Object { $bl -cnotcontains $_ }); $gone = @($bl | Where-Object { $al -cnotcontains $_ })
+    L "(h18) Env: lines changed by the build: $($added.Count) added or altered, $($gone.Count) removed or altered$(if ($added.Count) { ' -- e.g. ' + ((@($added) | Select-Object -First 4 | ForEach-Object { ($_ -split '=')[0] }) -join ', ') })"
+    Check "(h18) this process's environment is identical before and after the build (Env: compared whole)" ($envAfter -ceq $envBefore)
+    $beside = Join-Path $sp 'lam-smoke.no-global-gitconfig'
+    $isoLeft = @($isoAfter | Where-Object { $isoBefore -notcontains $_ })
+    Check "(h18) nothing beside the smoke root ($(@(Get-ChildItem -LiteralPath $sp -Force | ForEach-Object { $_.Name }) -join ', ')): no lam-smoke.no-global-gitconfig, and no isolation folder left in the temp folder ($($isoLeft.Count))" (
+        -not (Test-Path -LiteralPath $beside) -and ($isoLeft.Count -eq 0) -and (@(Get-ChildItem -LiteralPath $sp -Force | Where-Object { @('lam-smoke', 'lam-smoke-origin.git') -notcontains $_.Name }).Count -eq 0))
+    $ids = @((RunGit $sr @('log', '--format=%an <%ae>|%cn <%ce>')).out | Select-Object -Unique)
+    Check "(h18) every fixture commit carries the Smoke Builder identity, author and committer ($($ids -join '; '))" (($ids.Count -eq 1) -and ($ids[0] -cmatch '^Smoke Builder <[^>]+>\|Smoke Builder <[^>]+>$'))
+    $bt = [System.IO.File]::ReadAllText($builder)
+    $bs = [regex]::Match($bt, '(?m)^\$builderSession\s*=\s*''([0-9a-f-]{36})''')
+    $zp = [System.IO.File]::ReadAllText((Join-Path $Tagged.root 'tests\lam\instrument-WP-6.ps1'))
+    Check "(h18) WP-6 ZP's exclusion table still names the builder session ($(if ($bs.Success) { $bs.Groups[1].Value } else { 'none read' }))" ($bs.Success -and $zp.Contains($bs.Groups[1].Value))
+}
+'l1' {
+    # F-L1 (RELEASE-4 S3; row 495 (1); the operator ruling of 2026-11-06): ONE LICENCE, free use with paid support. -Repo's
+    # working files are read (as h7 reads INSTALL.md). LICENSE is byte for byte the owner-approved text, whose sha256 the
+    # contract's SHA256SUMS states (pinned here); README's Licence section is two sentences; no tracked file names the
+    # superseded licence as current, but the historical release notes (never rewritten), the provenance manifest's
+    # reasons (a record of each file's history) and LICENSE's own last line, which names what it supersedes.
+    $licWant = '5ff7017e99da68eb451b1f04b4568c47ca2ff8cca6552a021e25ef5492899204'
+    $lb = [System.IO.File]::ReadAllBytes((Join-Path $Repo 'LICENSE'))
+    $lbom = ($lb.Length -ge 3 -and $lb[0] -eq 0xEF -and $lb[1] -eq 0xBB -and $lb[2] -eq 0xBF)
+    L "(l1) LICENSE: $($lb.Length) bytes, sha256 $(Sha $lb), eol $(EolOf $lb), BOM $lbom"
+    Check "(l1) LICENSE is byte for byte the owner-approved licence text (sha256 $licWant), LF, no BOM" (((Sha $lb) -eq $licWant) -and ((EolOf $lb) -eq 'lf') -and -not $lbom)
+    $rt = [System.IO.File]::ReadAllText((Join-Path $Repo 'README.md'))
+    $sec = [regex]::Match($rt, '(?ms)^## Licence[ \t]*\r?\n(.*?)(?=^## |\z)')
+    $body = if ($sec.Success) { ($sec.Groups[1].Value -replace '\s+', ' ').Trim() } else { '' }
+    $sn = @([regex]::Split($body, '(?<=\.)\s+(?=[A-Z])') | Where-Object { $_ })
+    L "(l1) README's Licence section, $($sn.Count) sentence(s): $body"
+    $one = ($sn.Count -ge 1) -and $sn[0].Contains('free to use') -and $sn[0].Contains('[LICENSE](LICENSE)') -and $sn[0].Contains('commercial') -and $sn[0].Contains('client') -and $sn[0].Contains('redistribut')
+    $two = ($sn.Count -ge 2) -and $sn[1].Contains('support') -and $sn[1].Contains('paying customers') -and $sn[1].Contains('support@tekweaver.ca')
+    Check "(l1) README's Licence section is two sentences: free to use under LICENSE, commercial and client work included, the Framework itself not redistributed; support for paying customers by contact" (($sn.Count -eq 2) -and $one -and $two)
+    # the superseded licence's name, assembled here so that this file does not name it
+    $old = [regex]('(?i)' + 'evaluation' + '\s+licen[cs]e')
+    $hist = @('docs/RELEASE-NOTES-v0.3.0.md', 'docs/RELEASE-NOTES-v1.0.0.md', 'docs/RELEASE-NOTES-v1.1.0.md', 'provenance/manifest.jsonl')
+    $tracked = @((RunGit $Repo @('-c', 'core.quotePath=false', 'ls-files')).out | Where-Object { $_ })
+    $hits = New-Object System.Collections.Generic.List[string]; $seen = 0
+    foreach ($p in $tracked) {
+        $fp = Join-Path $Repo ($p -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $fp -PathType Leaf)) { continue }
+        $b = [System.IO.File]::ReadAllBytes($fp); if (IsBinary $b) { continue }; $seen++
+        $ls = $NoBom.GetString($b).Split([char]10)
+        for ($i = 0; $i -lt $ls.Count; $i++) {
+            if (-not $old.IsMatch($ls[$i])) { continue }
+            if ($hist -contains $p) { continue }
+            if ($p -ceq 'LICENSE' -and $i -eq ($ls.Count - 2) -and $ls[$i].StartsWith('Version ') -and $ls[$i].Contains('supersedes')) { continue }
+            # the 1.2.0 notes' one supersession line (operator ruling 2026-11-06), by file and exact text, assembled like $old
+            if ($p -ceq 'docs/RELEASE-NOTES-v1.2.0.md' -and $ls[$i] -ceq ('  Framework itself is not redistributed; support for paying customers -- supersedes the ' + 'Evaluation' + ' Licence of 1.0.0')) { continue }
+            $hits.Add("${p}:$($i + 1)")
+        }
+    }
+    L "(l1) the superseded licence named in $($tracked.Count) tracked file(s) ($seen text): $($hits.Count) line(s) outside the historical notes, the manifest's reasons and LICENSE's last line$(if ($hits.Count) { ' -- ' + ($hits -join ', ') })"
+    Check "(l1) no tracked file names the superseded licence as current (outside $($hist -join ', '), LICENSE's supersession line and the 1.2.0 notes' supersession line): 0 line(s)" ($hits.Count -eq 0)
+}
+'l6' {
+    # F-L6 (RELEASE-4 S3; roadmap decision 1, as the operator ruled it 2026-11-06): THE MODEL, SAID WHERE A READER STARTS.
+    # README's first paragraph (the lines after the title up to the first blank line), QUICKSTART's head and INSTALL.md's
+    # head (the text before the first '## ') each carry, in their own words: free to use under LICENSE, commercial and client
+    # work included; the Framework itself not redistributed or resold; support by subscription for paying customers, by
+    # support@tekweaver.ca. None of the three describes the superseded evaluation-only grant (its phrase assembled here).
+    $evalPhrase = 'licensed for ' + 'evaluation'
+    $docs = [ordered]@{ 'README.md' = 'first paragraph'; 'docs/QUICKSTART.md' = 'head'; 'INSTALL.md' = 'head' }
+    foreach ($p in $docs.Keys) {
+        $t = ([System.IO.File]::ReadAllText((Join-Path $Repo ($p -replace '/', '\')))) -replace "`r`n", "`n"
+        $head = if ($docs[$p] -eq 'first paragraph') { ([regex]::Match($t, '(?s)\A#[^\n]*\n\n(.*?)\n\n')).Groups[1].Value } else { ([regex]::Match($t, '(?s)\A(.*?)\n## ')).Groups[1].Value }
+        $h = ($head -replace '\s+', ' ')
+        $need = @('free to use', 'LICENSE', 'commercial', 'client', 'redistribut', 'resold', 'subscription', 'paying customers', 'support@tekweaver.ca')
+        $miss = @($need | Where-Object { -not $h.Contains($_) })
+        $evalAt = @(([regex]::Matches($t, [regex]::Escape($evalPhrase))) | ForEach-Object { $_.Index }).Count
+        L "(l6) $p, its $($docs[$p]) ($($h.Length) chars): missing $($miss.Count)$(if ($miss.Count) { ' -- ' + ($miss -join ', ') }); '$evalPhrase' in the file: $evalAt"
+        Check "(l6) $p's $($docs[$p]) says the model -- $($need -join ', ') -- and the file never says '$evalPhrase'" (($h.Length -gt 0) -and ($miss.Count -eq 0) -and ($evalAt -eq 0))
+    }
+}
+'l2' {
+    # F-L2 (RELEASE-4 S3; row 495 (3)): THE PUBLIC REPOSITORY NAMED WHERE THE SOURCE IS FETCHED. INSTALL.md and QUICKSTART
+    # (-Repo's working files) each name the public repository's URL, its Releases page, the four assets -- the fixed-name
+    # vanguard-collective.zip, the versioned vanguard-collective-v<VERSION>.zip, SHA256SUMS, MEMBERS.sha256 -- and the
+    # gh release download form against that repository; and no placeholder stands where the source should be named.
+    $url = 'https://github.com/tekweaver-solutions/vanguard-collective-releases'
+    foreach ($p in @('INSTALL.md', 'docs/QUICKSTART.md')) {
+        $t = DocText (Join-Path $Repo ($p -replace '/', '\'))
+        $need = [ordered]@{ 'the URL' = $url; 'the Releases page' = ($url + '/releases'); 'the fixed-name asset' = 'vanguard-collective.zip'
+                            'the versioned asset' = 'vanguard-collective-v<VERSION>.zip'; 'SHA256SUMS' = 'SHA256SUMS'; 'MEMBERS.sha256' = 'MEMBERS.sha256'
+                            'the gh form' = ('gh release download v<VERSION> --repo tekweaver-solutions/vanguard-collective-releases') }
+        $miss = @($need.Keys | Where-Object { -not $t.Contains($need[$_]) })
+        $urlN = ([regex]::Matches($t, [regex]::Escape($url))).Count
+        $ph = @([regex]::Matches($t, '(?i)<[^<>]*\brepository\b[^<>]*\bURL\b[^<>]*>') | ForEach-Object { $_.Value })
+        L "(l2) ${p}: the URL $urlN time(s); missing $($miss.Count)$(if ($miss.Count) { ' -- ' + ($miss -join ', ') }); placeholder token(s) $($ph.Count)$(if ($ph.Count) { ' -- ' + ($ph -join ', ') })"
+        Check "(l2) $p names $url (1+), its Releases page, the fixed-name and versioned assets, SHA256SUMS, MEMBERS.sha256 and the gh release download form; no placeholder for the repository's URL (0)" (($urlN -ge 1) -and ($miss.Count -eq 0) -and ($ph.Count -eq 0))
+    }
+}
+'l3' {
+    # F-L3 (RELEASE-4 S3; row 495 (3)): THE ANNOTATED-TAG WARNING. INSTALL.md's clone section (from its heading to the next
+    # heading) says the release tag is annotated, that git ls-remote lists the tag object and not the commit, that git clone
+    # --branch warns '... is not a commit!', gives the form git rev-parse v<VERSION>^{commit} (the version never typed), and
+    # names the id the installer records, source_commit.
+    $t = ([System.IO.File]::ReadAllText((Join-Path $Repo 'INSTALL.md'))) -replace "`r`n", "`n"
+    $sec = ([regex]::Match($t, '(?ms)^### Install from a clone of the public repository\n(.*?)(?=^#{2,3} )')).Groups[1].Value
+    $s = $sec -replace '\s+', ' '
+    $need = [ordered]@{ 'annotated' = 'annotated'; 'ls-remote' = 'git ls-remote'; 'the tag object' = 'tag object'; 'the warning' = 'is not a commit!'
+                        'the form' = 'git rev-parse v<VERSION>^{commit}'; 'the lock field' = 'source_commit' }
+    $miss = @($need.Keys | Where-Object { -not $s.Contains($need[$_]) })
+    $typed = @([regex]::Matches($s, 'git rev-parse v\d+\.\d+\.\d+') | ForEach-Object { $_.Value })
+    L "(l3) INSTALL.md's clone section, $($s.Length) chars: missing $($miss.Count)$(if ($miss.Count) { ' -- ' + ($miss -join ', ') }); a typed version in the rev-parse form: $($typed.Count)"
+    Check "(l3) INSTALL.md's clone section: the tag is annotated, ls-remote lists the tag object, clone --branch warns 'is not a commit!', the form git rev-parse v<VERSION>^{commit}, source_commit named; no typed version" (($s.Length -gt 0) -and ($miss.Count -eq 0) -and ($typed.Count -eq 0))
+}
+'l4' {
+    # F-L4 (RELEASE-4 S3; row 495 (3)): README's OWNERSHIP AND CONTRIBUTIONS. A section of that name: owned and maintained by
+    # tekWeaver Solutions Inc.; no external contributions; issues off on the public repository; support for paying customers
+    # by contact.
+    $t = ([System.IO.File]::ReadAllText((Join-Path $Repo 'README.md'))) -replace "`r`n", "`n"
+    $sec = [regex]::Match($t, '(?ms)^## Ownership and contributions[ \t]*\n(.*?)(?=^## |\z)')
+    $s = ($sec.Groups[1].Value -replace '\s+', ' ')
+    $need = @('owned and maintained by tekWeaver Solutions Inc.', 'no external contributions', 'issues', 'turned off', 'https://github.com/tekweaver-solutions/vanguard-collective-releases', 'paying customers', 'support@tekweaver.ca')
+    $miss = @($need | Where-Object { -not $s.Contains($_) })
+    L "(l4) README's 'Ownership and contributions': $(if ($sec.Success) { 'present' } else { 'ABSENT' }); missing $($miss.Count)$(if ($miss.Count) { ' -- ' + ($miss -join ' | ') })"
+    Check "(l4) README carries 'Ownership and contributions': owned and maintained by tekWeaver Solutions Inc., no external contributions, issues turned off on the public repository, support for paying customers by contact" ($sec.Success -and ($miss.Count -eq 0))
+}
+'l5' {
+    # F-L5 (RELEASE-4 S3; row 495 (3)): AN UPGRADED PROJECT's 0.x SMOKE MISSION. INSTALL.md's section 6 says the smoke mission
+    # 0.x built beside the project is renamed aside -- lam-smoke.old, lam-smoke-origin.git.old -- and a current one built
+    # beside the project by the installed builder, the acceptance wrapper then reading the new one.
+    $t = ([System.IO.File]::ReadAllText((Join-Path $Repo 'INSTALL.md'))) -replace "`r`n", "`n"
+    $sec = ([regex]::Match($t, '(?ms)^## 6\. Upgrade a project an earlier release installed\n(.*?)(?=^## )')).Groups[1].Value
+    $s = $sec -replace '\s+', ' '
+    $need = @('0.x', 'lam-smoke.old', 'lam-smoke-origin.git.old', 'tools\lam\build-smoke-mission.ps1', 'instrument-acceptance.ps1')
+    $miss = @($need | Where-Object { -not $s.Contains($_) })
+    L "(l5) INSTALL.md section 6, $($s.Length) chars: missing $($miss.Count)$(if ($miss.Count) { ' -- ' + ($miss -join ', ') })"
+    Check "(l5) INSTALL.md section 6 says what an upgrade does with a 0.x smoke mission: renamed aside to lam-smoke.old and lam-smoke-origin.git.old, a current one built by tools\lam\build-smoke-mission.ps1, read by the acceptance wrapper" (($s.Length -gt 0) -and ($miss.Count -eq 0))
+}
+'l8' {
+    # F-L8 (RELEASE-4 S3; row 495 (13)): THE ADR NAMESPACE COLLISION, IN docs/framework ONLY. The local-modes family mints
+    # its decisions as ADR-0NN and has artifacts cite them as LM2-ADR-0NN; a bare ADR-0NN is the on-disk file
+    # tools/mission-cli/config/adr-0NN-*.md (v2.2 and v2.3, 'Naming'). The v2.4 DELTA minted ADR-036..ADR-040 bare, and the
+    # on-disk series holds an adr-040 of its own: the collision. Held here: (1) the DELTA states the convention where it
+    # first uses the namespaces (before its first citation), naming LM2-ADR-0NN, the on-disk folder and the adr-040
+    # collision; (2) the DELTA holds no bare ADR-0NN citation; (3) no file under docs/framework cites ADR-036..ADR-040 bare
+    # (the DELTA's five, the collision's series), nor ADR-045 bare outside the family documents that mint it in their own
+    # namespace (v2.3) -- but docs/framework/mission-event.schema.json, whose bytes WP-7 U-17 pins by sha256 (listed, an
+    # open decision, not cured).
+    $fw = @((RunGit $Repo @('-c', 'core.quotePath=false', 'ls-files', '--', 'docs/framework')).out | Where-Object { $_ })
+    $bare = '(?<![-A-Za-z0-9])ADR-0(\d\d)(?![0-9])'
+    $delta = 'docs/framework/vanguard-collective-local-modes-v2.4-DELTA.md'
+    $dt = ([System.IO.File]::ReadAllText((Join-Path $Repo ($delta -replace '/', '\')))) -replace "`r`n", "`n"
+    $conv = [regex]::Match($dt, '(?s)\*\*Naming\.\*\*(.*?)\n\n')
+    $firstCite = [regex]::Match($dt, '(?<![A-Za-z0-9])(LM2-)?ADR-0\d\d')
+    $cv = ($conv.Groups[1].Value -replace '\s+', ' ')
+    $convOk = $conv.Success -and $firstCite.Success -and ($conv.Index -lt $firstCite.Index) -and $cv.Contains('LM2-ADR-0NN') -and $cv.Contains('tools/mission-cli/config') -and $cv.Contains('adr-040')
+    L "(l8) the DELTA's convention paragraph: $(if ($conv.Success) { 'at char ' + $conv.Index } else { 'ABSENT' }); its first citation at char $($firstCite.Index); names LM2-ADR-0NN, tools/mission-cli/config and adr-040: $convOk"
+    Check "(l8) the v2.4 DELTA states the citation convention (LM2-ADR-0NN; bare ADR-0NN is the on-disk tools/mission-cli/config file; the adr-040 collision) before its first citation" $convOk
+    $dBare = @([regex]::Matches($dt, $bare) | ForEach-Object { $_.Value })
+    L "(l8) bare ADR-0NN citations in the DELTA: $($dBare.Count)$(if ($dBare.Count) { ' -- ' + (($dBare | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', ') })"
+    Check "(l8) the v2.4 DELTA cites every decision explicitly: 0 bare ADR-0NN" ($dBare.Count -eq 0)
+    $mint = @('docs/framework/vanguard-collective-local-modes-v2.3.md')
+    $pinned = @('docs/framework/mission-event.schema.json')
+    $hits = New-Object System.Collections.Generic.List[string]; $known = New-Object System.Collections.Generic.List[string]
+    foreach ($p in $fw) {
+        $fp = Join-Path $Repo ($p -replace '/', '\'); if (-not (Test-Path -LiteralPath $fp -PathType Leaf)) { continue }
+        $b = [System.IO.File]::ReadAllBytes($fp); if (IsBinary $b) { continue }
+        $ls = $NoBom.GetString($b).Split([char]10)
+        for ($i = 0; $i -lt $ls.Count; $i++) {
+            foreach ($m in [regex]::Matches($ls[$i], $bare)) {
+                $n = [int]$m.Groups[1].Value
+                $series = ($n -ge 36 -and $n -le 40)
+                $dash = ($n -eq 45) -and ($mint -notcontains $p)
+                if (-not ($series -or $dash)) { continue }
+                if ($pinned -contains $p) { $known.Add("${p}:$($i + 1) $($m.Value)"); continue }
+                $hits.Add("${p}:$($i + 1) $($m.Value)")
+            }
+        }
+    }
+    L "(l8) bare ADR-036..ADR-040 anywhere, and bare ADR-045 outside v2.3, under docs/framework ($($fw.Count) file(s)): $($hits.Count)$(if ($hits.Count) { ' -- ' + ($hits -join '; ') }); KNOWN, not cured (bytes pinned by WP-7 U-17): $($known -join '; ')"
+    Check "(l8) docs/framework cites the DELTA's five and ADR-045 explicitly: 0 bare ADR-036..ADR-040 and 0 bare ADR-045 outside v2.3 (the pinned schema aside, listed)" ($hits.Count -eq 0)
+    # (RELEASE-4 S3 validator round 1, claim 6) THE COUNT THE FACE ALLOWS, outside the family documents that mint the namespace
+    # (v2.1, v2.2, v2.3): the bare ADR-0NN citations under docs/framework are EXACTLY a pinned list -- per file, the ordered sequence of
+    # numbers (validator round 2: a count ceiling let a swapped or a dropped citation through). The design brief, the user guide and the
+    # DELTA hold none. The KNOWN files: expanded-schemas.md, expanded-schemas-project.md and evidence-manifest.schema.json cite on-disk
+    # decisions under their own convention (bare = the tools/mission-cli/config file: adr-032, adr-023, adr-012, adr-003) -- correct,
+    # nothing to cure; mission-event.schema.json's 045 (no on-disk adr-045) is pinned by WP-7 U-17; v35-08-FINDINGS-delta-pass.md (22 33
+    # 23 35) and build-dispatch-mission-verify.md (22) are ambiguous and NOT judged here -- an open decision, listed. Any other bare
+    # citation, one more, one fewer or one changed, FAILS.
+    $family = @('docs/framework/vanguard-collective-local-modes-v2.1.md', 'docs/framework/vanguard-collective-local-modes-v2.2.md', 'docs/framework/vanguard-collective-local-modes-v2.3.md')
+    $known = @{ 'docs/framework/expanded-schemas.md' = '32 32 23 32 32 32 32 23 32 32 12 32 32 32 32'
+                'docs/framework/expanded-schemas-project.md' = '32 32 23 32 32 32 32 23 32 32 12 32 32 32 32'
+                'docs/framework/evidence-manifest.schema.json' = '03'; 'docs/framework/mission-event.schema.json' = '45'
+                'docs/framework/v35-08-FINDINGS-delta-pass.md' = '22 33 23 35'; 'docs/framework/build-dispatches/build-dispatch-mission-verify.md' = '22' }
+    $per = @{}
+    foreach ($p in $fw) {
+        if ($family -contains $p) { continue }
+        $fp = Join-Path $Repo ($p -replace '/', '\'); if (-not (Test-Path -LiteralPath $fp -PathType Leaf)) { continue }
+        $b = [System.IO.File]::ReadAllBytes($fp); if (IsBinary $b) { continue }
+        $sq = (@([regex]::Matches($NoBom.GetString($b), $bare) | ForEach-Object { $_.Groups[1].Value })) -join ' '; if ($sq) { $per[$p] = $sq }
+    }
+    $off = @(@($per.Keys) + @($known.Keys) | Select-Object -Unique | Where-Object { [string]$per[$_] -cne [string]$known[$_] } | ForEach-Object { "$_ is '$($per[$_])', pinned '$($known[$_])'" })
+    L "(l8) bare ADR-0NN outside v2.1-v2.3, per file (ordered numbers): $((@($per.Keys | Sort-Object | ForEach-Object { "$_ [$($per[$_])]" })) -join '; '); off the pinned list: $($off.Count)$(if ($off.Count) { ' -- ' + ($off -join '; ') })"
+    Check "(l8) outside the family documents the bare ADR-0NN citations are exactly the pinned list, per file and in order (on-disk citations, the U-17-pinned schema, two ambiguous files listed); none in the design brief, the user guide or the DELTA" ($off.Count -eq 0)
+}
+'enc' {
+    # F-ENC (RELEASE-4 S3): EVERY TRACKED MARKDOWN FILE AND LICENSE IS UTF-8 WITHOUT A BOM, WITH NO MOJIBAKE AND NO
+    # WHITESPACE-ONLY LINE. -Repo's working files: each read as strict UTF-8 (an invalid sequence is a FAIL), no EF BB BF,
+    # none of the sequences a UTF-8 text read as Windows-1252 leaves (C3 82 C2 A7 for a section sign, C3 A2 E2 82 AC for the
+    # dashes and quotes, C3 83 C2 A9 for e-acute: built from code points here), and no line holding only spaces or tabs
+    # (its line ending aside). KNOWN, not cured: docs/framework/expanded-schemas-base.md, whose bytes expanded-schemas.md and
+    # expanded-schemas-project.md cite by sha256 prefix 57ed463c (an open decision; its count is printed).
+    $strict = New-Object System.Text.UTF8Encoding($false, $true)
+    $moj = @(([string][char]0xC2 + [char]0xA7), ([string][char]0xE2 + [char]0x20AC), ([string][char]0xC3 + [char]0xA9))
+    $cited = @('docs/framework/expanded-schemas-base.md')
+    $files = @((RunGit $Repo @('-c', 'core.quotePath=false', 'ls-files')).out | Where-Object { $_ -and ($_ -match '\.md$' -or $_ -ceq 'LICENSE') })
+    $bad = New-Object System.Collections.Generic.List[string]; $known = 0
+    foreach ($p in $files) {
+        $b = [System.IO.File]::ReadAllBytes((Join-Path $Repo ($p -replace '/', '\')))
+        if ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF) { $bad.Add("$p BOM") }
+        $t = $null; try { $t = $strict.GetString($b) } catch { $bad.Add("$p not UTF-8"); continue }
+        $ls = $t.Split([char]10)
+        for ($i = 0; $i -lt $ls.Count; $i++) {
+            $l = $ls[$i].TrimEnd([char]13)
+            foreach ($m in $moj) { if ($l.Contains($m)) { $bad.Add("${p}:$($i + 1) mojibake") } }
+            if ($l.Length -gt 0 -and $l -match '^[ \t]+$') { if ($cited -contains $p) { $known++ } else { $bad.Add("${p}:$($i + 1) whitespace-only") } }
+        }
+    }
+    $byFile = @($bad | ForEach-Object { ($_ -split '[: ]')[0] } | Group-Object | ForEach-Object { "$($_.Name) $($_.Count)" })
+    L "(enc) $($files.Count) tracked *.md and LICENSE: $($bad.Count) finding(s)$(if ($bad.Count) { ' -- by file: ' + ($byFile -join ', ') + '; first: ' + ((@($bad) | Select-Object -First 5) -join '; ') }); KNOWN, not cured: $($cited -join ', ') $known whitespace-only line(s) (its bytes cited by sha256 prefix)"
+    Check "(enc) every tracked *.md and LICENSE: UTF-8, no BOM, no mojibake sequence, no whitespace-only line ($($files.Count) file(s); the cited base document aside, listed)" ($bad.Count -eq 0)
 }
 }
 } catch {

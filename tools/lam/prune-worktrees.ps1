@@ -815,13 +815,42 @@ function Invoke-PwRemove {
     $script:PwActed = $true
     $finding = $false
     foreach ($t in $picked) {
-        $r = Invoke-PwGit @('-C', $Root, 'worktree', 'remove', '--force', $t.Entry.Path)
-        Write-PwNativeOutput $r
-        Write-PwLine ('remove ' + $t.Name + ' exit ' + $r.Code)
-        if ($r.Code -ne 0) {
-            Write-PwLine ('FINDING: git worktree remove refused ' + $t.Name + ' (exit ' + $r.Code + '); the loop stops here')
-            $finding = $true
-            break
+        # F-H3 (RELEASE-4 S2; row 495 (6); ledger 1729): A FOLDER PRESENT AND EMPTY (held open, or emptied) is no
+        # working tree for `git worktree remove` to remove -- it refused, and the loop stopped before `git branch -d`. Its
+        # registration is git's to drop: `git worktree prune` (the .git file it points at is gone), the folder itself left
+        # where it stands; then the branch is deleted with -d as any other. A folder holding anything is removed as before,
+        # and a refusal there now prints what the folder holds.
+        $dir = $t.Entry.Path -replace '/', '\'
+        $entries = @()
+        $present = [System.IO.Directory]::Exists($dir)
+        if ($present) { $entries = @([System.IO.Directory]::GetFileSystemEntries($dir)) }
+        if ($present -and $entries.Count -eq 0) {
+            Write-PwLine ('remove ' + $t.Name + ': the folder ' + $dir + ' is present and EMPTY (held or emptied); its registration is pruned (git worktree prune), the folder left in place')
+            $p0 = Invoke-PwGit @('-C', $Root, 'worktree', 'prune')
+            Write-PwNativeOutput $p0
+            Write-PwLine ('worktree prune exit ' + $p0.Code)
+            $still = @()
+            $l0 = Invoke-PwGit @('-C', $Root, 'worktree', 'list', '--porcelain', '-z')
+            if ($l0.Code -eq 0) { $still = @(ConvertFrom-PwPorcelain -Text $l0.Out | Where-Object { Test-PwSamePath (Get-PwFullPath $_.Path) $t.Full }) }
+            if ($p0.Code -ne 0 -or $l0.Code -ne 0 -or $still.Count -gt 0) {
+                Write-PwLine ('FINDING: the empty folder''s registration was not dropped ' + $t.Name + ' (prune exit ' + $p0.Code + ', still listed ' + $still.Count + '); the loop stops here')
+                $finding = $true
+                break
+            }
+        } else {
+            $r = Invoke-PwGit @('-C', $Root, 'worktree', 'remove', '--force', $t.Entry.Path)
+            Write-PwNativeOutput $r
+            Write-PwLine ('remove ' + $t.Name + ' exit ' + $r.Code)
+            if ($r.Code -ne 0) {
+                Write-PwLine ('FINDING: git worktree remove refused ' + $t.Name + ' (exit ' + $r.Code + '); the loop stops here')
+                if ($present) {
+                    Write-PwLine ('  the folder ' + $dir + ' holds ' + $entries.Count + ' entr' + $(if ($entries.Count -eq 1) { 'y' } else { 'ies' }) + ':')
+                    foreach ($e in @($entries | Sort-Object | Select-Object -First 20)) { Write-PwLine ('    ' + [System.IO.Path]::GetFileName($e)) }
+                    if ($entries.Count -gt 20) { Write-PwLine ('    ... and ' + ($entries.Count - 20) + ' more') }
+                }
+                $finding = $true
+                break
+            }
         }
         if (-not $t.Branch) { Write-PwLine ('branch -d ' + $t.Name + ': a detached HEAD, no branch to delete'); continue }
         $b = Invoke-PwGit @('-C', $Root, 'branch', '-d', $t.Branch)

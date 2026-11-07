@@ -8573,8 +8573,8 @@ Check -Id 'H-25' -Title 'the seat tripwire: a mission-plane write from a session
       -Ok $h25Ok -Detail $h25detail
 
 # =============================================================================================
-# H-26 -- THE TRACKED REGISTRATION, READ WHEN PRESENT: autoMemoryEnabled false AND THE FOUR NEXT-GEN HOOKS
-#         (WP-E, E-3 and E-4; ruling (v))
+# H-26 -- THE TRACKED REGISTRATION, READ WHEN PRESENT: autoMemoryEnabled false AND THE NEXT-GEN HOOKS
+#         (WP-E, E-3 and E-4; ruling (v); RELEASE-4 S1b: the next-gen-only events LAM-INSTALL section 2 declares)
 # =============================================================================================
 # RULING (v) asks for "autoMemoryEnabled: false in the tracked .claude/settings.json". At this member's
 # commit NO such file is tracked: .claude/ is gitignored whole (.gitignore:7), and writing the file is a
@@ -8586,12 +8586,23 @@ Check -Id 'H-25' -Title 'the seat tripwire: a mission-plane write from a session
 #       of the installer's composition (install-evidence-hooks.ps1:48-146: the TRACKED fragment
 #       tools/framework/hooks/settings.evidence-hooks.json's hooks merged into an empty settings object and
 #       serialised by PS 5.1's ConvertTo-Json -Depth 20, whose key order is that hashtable's), then LAM-INSTALL
-#       section 2's four-path swap, with ONE line added: autoMemoryEnabled false. The installer itself is not
+#       section 2's four-path swap, with ONE line added: autoMemoryEnabled false -- PLUS THE NEXT-GEN-ONLY EVENTS
+#       LAM-INSTALL SECTION 2 LISTS (RELEASE-4 S1b; operator ruling 2026-11-05). The sealed A1 fragment stays
+#       sealed; an event the next-gen set registers and the fragment never had is DECLARED in section 2's list
+#       ("Next-generation-only events", one table row per event: event, matcher, command, timeout), and this
+#       member reads that list FROM THE DOC, never from the proposal, and composes each row into the same
+#       hashtable beside the fragment's events (a group { matcher, hooks: [ { type command, command, timeout } ] }),
+#       before serialisation. A row whose event the fragment already has, or whose command does not name the
+#       next-gen library (or names the sealed one), is a finding; a section 2 with no such list is a finding.
+#       So the proposal must be the fragment + swap + the declared list + one line: a SubagentStop in the
+#       proposal that section 2 does not declare, or a declared event the proposal lacks, turns (P) red.
+#       The installer itself is not
 #       driven (it writes .claude/settings.json). WP-E measured the same restatement sha256-EQUAL to the live root
 #       file without opening it, so a fragment that moves turns this row red and the proposal must be re-derived.
 #   (R) THE READER, over a fixture table with a control in each direction: it passes the proposal and refuses
 #       each defect -- the key absent, true, a string; a PreToolUse matcher missing a tool; the sealed A1
-#       library registered instead of the next-gen one; a hook event missing; not JSON.
+#       library registered instead of the next-gen one; a hook event missing; not JSON; SubagentStop missing;
+#       SubagentStop naming the sealed A1 path. Its $want names all five events with the next-gen script behind each.
 #   (L) THE LIVE REGISTRATION, WHEN PRESENT: if .claude/settings.json is tracked at HEAD, its blob must pass the
 #       reader and equal the proposal on the LF basis, and .claude/settings.local.json and .claude/worktrees/
 #       must still be ignored. When it is NOT tracked the row prints ABSENT -- the operator's step has not
@@ -8601,9 +8612,53 @@ $h26Lines = New-Object System.Collections.Generic.List[string]
 $h26Cl = '.cl' + 'aude'
 $h26PropPath = Join-Path $nextRoot 'claude-settings.proposed.json'
 $h26FragPath = Join-Path $repoRoot 'tools\framework\hooks\settings.evidence-hooks.json'
+$h26DocPath  = Join-Path $repoRoot 'docs\framework\LAM-INSTALL.md'
+function Read-Wp1H26NextGenOnly {
+    # LAM-INSTALL SECTION 2'S DECLARED LIST of next-gen-only events, read from the doc (never from the proposal):
+    # @{ found; rows; findings }, each row @{ event; matcher; command; timeout }. The list is the first table after
+    # the line beginning '**Next-generation-only events' inside '## 2. ' .. '## 3. '; its header must be the
+    # section's own columns; every cell is one backticked value; a matcher's escaped pipes are unescaped.
+    param([string]$Path)
+    $f = New-Object System.Collections.Generic.List[string]
+    $rows = New-Object System.Collections.Generic.List[object]
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { [void]$f.Add('LAM-INSTALL.md is absent'); return @{ found = $false; rows = @(); findings = $f.ToArray() } }
+    $doc = @(([System.IO.File]::ReadAllText($Path) -replace "`r`n", "`n") -split "`n")
+    $s2 = -1; $s3 = $doc.Count
+    for ($i = 0; $i -lt $doc.Count; $i++) {
+        if ($s2 -lt 0) { if ($doc[$i].StartsWith('## 2. ')) { $s2 = $i }; continue }
+        if ($doc[$i].StartsWith('## 3. ')) { $s3 = $i; break }
+    }
+    if ($s2 -lt 0) { [void]$f.Add('LAM-INSTALL has no section 2'); return @{ found = $false; rows = @(); findings = $f.ToArray() } }
+    $mk = @(); for ($i = $s2; $i -lt $s3; $i++) { if ($doc[$i].StartsWith('**Next-generation-only events')) { $mk += $i } }
+    if ($mk.Count -eq 0) { [void]$f.Add('section 2 declares no next-gen-only events list (no line beginning **Next-generation-only events)'); return @{ found = $false; rows = @(); findings = $f.ToArray() } }
+    if ($mk.Count -gt 1) { [void]$f.Add(('section 2 carries {0} next-gen-only events lists (expect one)' -f $mk.Count)) }
+    $i = $mk[0] + 1
+    while ($i -lt $s3 -and -not $doc[$i].StartsWith('|')) { $i++ }
+    if (($i + 1) -ge $s3) { [void]$f.Add('the next-gen-only events list carries no table'); return @{ found = $false; rows = @(); findings = $f.ToArray() } }
+    if ($doc[$i].Trim() -cne '| event | matcher | command | timeout |') { [void]$f.Add('the list''s header is not the section''s own columns: ' + $doc[$i].Trim()) }
+    if ($doc[$i + 1].Trim() -cne '|---|---|---|---|') { [void]$f.Add('the list''s separator row is not |---|---|---|---|') }
+    for ($j = $i + 2; $j -lt $s3 -and $doc[$j].StartsWith('|'); $j++) {
+        $raw = $doc[$j].Trim()
+        $cells = @([regex]::Split($raw.Substring(1, $raw.Length - 2), '(?<!\\)\|') | ForEach-Object { $_.Trim() })
+        if ($cells.Count -ne 4) { [void]$f.Add(('list row {0}: {1} cell(s), expect 4' -f ($j + 1), $cells.Count)); continue }
+        $v = @()
+        foreach ($c in $cells) { if ($c -match '^`(.+)`$') { $v += $Matches[1] } else { $v += $null } }
+        if (@($v | Where-Object { $null -eq $_ }).Count) { [void]$f.Add(('list row {0}: a cell is not one backticked value' -f ($j + 1))); continue }
+        $row = @{ event = $v[0]; matcher = $v[1].Replace('\|', '|'); command = $v[2]; timeout = $v[3] }
+        if ($row.event -notmatch '^[A-Za-z]+$') { [void]$f.Add(('list row {0}: event {1} is not an event name' -f ($j + 1), $row.event)) }
+        if ($row.timeout -notmatch '^\d+$') { [void]$f.Add(('list row {0}: timeout {1} is not a whole number' -f ($j + 1), $row.timeout)) }
+        if (-not $row.command.Contains('$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/')) { [void]$f.Add(('list row {0}: {1}''s command does not name the next-gen library' -f ($j + 1), $row.event)) }
+        if ($row.command.Contains('tools/framework/hooks/')) { [void]$f.Add(('list row {0}: {1}''s command names the SEALED A1 library' -f ($j + 1), $row.event)) }
+        [void]$rows.Add($row)
+    }
+    # F-H17: a declared list whose table holds no row is a finding (it raised none, and only the inequality caught it).
+    if ($rows.Count -eq 0) { [void]$f.Add('the next-gen-only events list carries no row (an empty declared table)') }
+    return @{ found = $true; rows = $rows.ToArray(); findings = $f.ToArray() }
+}
 function Test-Wp1H26Registration {
     # THE READER: @{ ok; findings } for one JSON text. Strict about the TYPE of autoMemoryEnabled, the EXACT
-    # PreToolUse matcher, and the next-gen script behind each of the four events.
+    # PreToolUse matcher, and the next-gen script behind each of the five events (the four swapped and
+    # SubagentStop, the one next-gen-only event LAM-INSTALL section 2 declares).
     param([AllowNull()][string]$Text)
     $f = New-Object System.Collections.Generic.List[string]
     $o = $null
@@ -8616,7 +8671,8 @@ function Test-Wp1H26Registration {
     $want = [ordered]@{ PreToolUse  = @('Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell', 'evidence-guard-pretooluse.ps1')
                         PostToolUse = @('*', 'evidence-post-tool-use.ps1')
                         Stop        = @('*', 'evidence-stop-finalize.ps1')
-                        PreCompact  = @('*', 'evidence-pre-compact.ps1') }
+                        PreCompact  = @('*', 'evidence-pre-compact.ps1')
+                        SubagentStop = @('*', 'evidence-subagent-stop.ps1') }
     $evNames = @($o.hooks.PSObject.Properties | ForEach-Object { $_.Name })
     $allCommands = New-Object System.Collections.Generic.List[string]
     foreach ($ev in $want.Keys) {
@@ -8636,7 +8692,19 @@ function Test-Wp1H26Registration {
         }
         if (-not $found) { [void]$f.Add($ev + ': no command hook, matcher ' + $want[$ev][0] + ', naming the next-gen ' + $want[$ev][1]) }
     }
+    # F-H17 (RELEASE-4 S2; S1b F-h): EVERY EVENT PRESENT is read for the sealed A1 path, not only the five above -- an
+    # undeclared extra event naming tools/framework/hooks/ passed this reader before (only (P)'s equality caught it).
+    foreach ($ev in @($evNames | Where-Object { @($want.Keys) -cnotcontains $_ })) {
+        foreach ($g in @($o.hooks.$ev)) {
+            if ($g -isnot [System.Management.Automation.PSCustomObject] -or $null -eq $g.PSObject.Properties['hooks']) { continue }
+            foreach ($h in @($g.hooks)) { if ($h -is [System.Management.Automation.PSCustomObject] -and $null -ne $h.PSObject.Properties['command']) { [void]$allCommands.Add([string]$h.command) } }
+        }
+    }
     foreach ($c in $allCommands) { if ($c.Contains('tools/framework/hooks/')) { [void]$f.Add('the SEALED A1 library is registered: ' + $c) } }
+    # -- and the sealed A1 path ANYWHERE in the text (a field no event reads, a stray string) is a finding of its own.
+    if ($Text.Contains('tools/framework/hooks/') -and -not (@($allCommands | Where-Object { $_.Contains('tools/framework/hooks/') }).Count)) {
+        [void]$f.Add('the SEALED A1 path tools/framework/hooks/ stands in the text outside any registered command')
+    }
     return @{ ok = ($f.Count -eq 0); findings = $f.ToArray() }
 }
 function ConvertTo-Wp1H26Hashtable {
@@ -8656,22 +8724,35 @@ try {
     $h26PropText = if ($h26PropPresent) { ([System.IO.File]::ReadAllText($h26PropPath)) -replace "`r`n", "`n" } else { '' }
     $h26PropRead = if ($h26PropPresent) { Test-Wp1H26Registration -Text $h26PropText } else { @{ ok = $false; findings = @('the proposal file is absent') } }
     $h26Derived = $false; $h26DerivedMsg = 'not compared'
+    # the next-gen-only events LAM-INSTALL section 2 declares -- read from the doc, never from the proposal
+    $h26Ng = Read-Wp1H26NextGenOnly -Path $h26DocPath
+    $h26NgFind = New-Object System.Collections.Generic.List[string]
+    foreach ($x in @($h26Ng.findings)) { [void]$h26NgFind.Add($x) }
     if ($h26PropPresent -and (Test-Path -LiteralPath $h26FragPath)) {
         $frag = [System.IO.File]::ReadAllText($h26FragPath) | ConvertFrom-Json
         $setH = @{}; $setH['hooks'] = @{}
         $fragH = ConvertTo-Wp1H26Hashtable $frag.hooks
         foreach ($ev in @($fragH.Keys)) { $setH['hooks'][$ev] = @(@() + @($fragH[$ev])) }
+        $fragCount = @($fragH.Keys).Count
+        foreach ($r in @($h26Ng.rows)) {
+            if ($setH['hooks'].ContainsKey($r.event)) { [void]$h26NgFind.Add(('declared next-gen-only event {0} is already in the sealed fragment' -f $r.event)); continue }
+            $hk = @{}; $hk['type'] = 'command'; $hk['command'] = $r.command; $hk['timeout'] = [int]$r.timeout
+            $grp = @{}; $grp['matcher'] = $r.matcher; $grp['hooks'] = @($hk)
+            $setH['hooks'][$r.event] = @($grp)
+        }
         $composed = ($setH | ConvertTo-Json -Depth 20).Replace('tools/framework/hooks/', 'tools/evidence-hooks-next/hooks/')
         $cLines = @(($composed -replace "`r`n", "`n") -split "`n")
         $pLines = @($h26PropText -split "`n")
         $added = '    "autoMemoryEnabled":  false,'
         $expected = @($cLines[0], $added) + @($cLines[1..($cLines.Count - 1)])
         $h26Derived = (($expected -join "`n") -ceq ($pLines -join "`n"))
-        $h26DerivedMsg = ('composed {0} line(s) + 1 added = {1}; the proposal has {2}; equal: {3}' -f $cLines.Count, $expected.Count, $pLines.Count, $h26Derived)
+        $h26DerivedMsg = ('the fragment''s {0} event(s) + {1} next-gen-only event(s) LAM-INSTALL section 2 declares ({2}): composed {3} line(s) + 1 added = {4}; the proposal has {5}; equal: {6}' -f $fragCount, @($h26Ng.rows).Count, $(if (@($h26Ng.rows).Count) { (@($h26Ng.rows) | ForEach-Object { $_.event + ' ' + $_.matcher + ' ' + (($_.command -split '/')[-1]).TrimEnd('"') + ' ' + $_.timeout }) -join '; ' } else { 'none' }), $cLines.Count, $expected.Count, $pLines.Count, $h26Derived)
     }
-    if (-not ($h26PropPresent -and $h26PropRead.ok -and $h26Derived)) { $h26Ok = $false }
+    $h26NgOk = $h26Ng.found -and ($h26NgFind.Count -eq 0)
+    if (-not ($h26PropPresent -and $h26PropRead.ok -and $h26Derived -and $h26NgOk)) { $h26Ok = $false }
     [void]$h26Lines.Add(('    (P) proposal {0}: present {1}; reader {2}{3}' -f 'tools/evidence-hooks-next/claude-settings.proposed.json', $h26PropPresent, $(if ($h26PropRead.ok) { 'PASS' } else { 'REFUSES' }), $(if (-not $h26PropRead.ok) { ' -- ' + (@($h26PropRead.findings) -join '; ') } else { '' })))
-    [void]$h26Lines.Add('        equal to this member''s restatement of the installer''s composition of the tracked fragment + the four-path swap + ONE added line: ' + $h26DerivedMsg + '   (expect equal: True)')
+    [void]$h26Lines.Add(('        LAM-INSTALL section 2''s next-gen-only events list: found {0}; rows {1}; findings {2}   (expect found True, findings none)' -f $h26Ng.found, @($h26Ng.rows).Count, $(if ($h26NgFind.Count) { $h26NgFind.ToArray() -join '; ' } else { 'none' })))
+    [void]$h26Lines.Add('        equal to this member''s restatement of the installer''s composition of the tracked fragment + the four-path swap + the declared next-gen-only events + ONE added line: ' + $h26DerivedMsg + '   (expect equal: True)')
     # ---- (R) THE READER, both directions -----------------------------------------------------------------
     if ($h26PropPresent) {
         $noKey = $h26PropText.Replace('    "autoMemoryEnabled":  false,' + "`n", '')
@@ -8683,14 +8764,45 @@ try {
             @('a PreToolUse matcher missing PowerShell', $h26PropText.Replace('Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell', 'Write|Edit|MultiEdit|NotebookEdit|Bash'), $false, 'PreToolUse'),
             @('the SEALED A1 guard registered', $h26PropText.Replace('tools/evidence-hooks-next/hooks/evidence-guard-pretooluse.ps1', 'tools/framework/hooks/evidence-guard-pretooluse.ps1'), $false, 'SEALED A1'),
             @('the Stop event missing', $h26PropText.Replace('"Stop":', '"StopX":'), $false, 'Stop not registered'),
-            @('not JSON', ($h26PropText + ' }'), $false, 'not JSON')
+            @('not JSON', ($h26PropText + ' }'), $false, 'not JSON'),
+            @('a proposal missing SubagentStop', $h26PropText.Replace('"SubagentStop":', '"SubagentStopX":'), $false, 'SubagentStop not registered'),
+            @('SubagentStop naming the SEALED A1 path', $h26PropText.Replace('tools/evidence-hooks-next/hooks/evidence-subagent-stop.ps1', 'tools/framework/hooks/evidence-subagent-stop.ps1'), $false, 'tools/framework/hooks/evidence-subagent-stop.ps1')
         )
+        # F-H17 (RELEASE-4 S2; S1b F-h): two controls over the reader's blind spots -- an undeclared extra event whose
+        # command names the sealed A1 library, and the A1 path in a field no event reads (statusLine).
+        $xo = $h26PropText | ConvertFrom-Json
+        $xh = New-Object PSObject -Property ([ordered]@{ type = 'command'; command = 'powershell -NoProfile -File "$CLAUDE_PROJECT_DIR/tools/framework/hooks/evidence-guard-pretooluse.ps1"'; timeout = 10 })
+        $xg = New-Object PSObject -Property ([ordered]@{ matcher = '*'; hooks = @($xh) })
+        $xo.hooks | Add-Member -NotePropertyName 'Notification' -NotePropertyValue @($xg)
+        $extraEv = $xo | ConvertTo-Json -Depth 20
+        $so = $h26PropText | ConvertFrom-Json
+        $so | Add-Member -NotePropertyName 'statusLine' -NotePropertyValue (New-Object PSObject -Property ([ordered]@{ type = 'command'; command = 'powershell -File "$CLAUDE_PROJECT_DIR/tools/framework/hooks/status.ps1"' }))
+        $statusTx = $so | ConvertTo-Json -Depth 20
+        $cases += ,@('an undeclared extra event naming the SEALED A1', $extraEv, $false, 'SEALED A1 library is registered')
+        $cases += ,@('the SEALED A1 path in a field no event reads', $statusTx, $false, 'outside any registered command')
         foreach ($c in $cases) {
             $rr = Test-Wp1H26Registration -Text $c[1]
             $cOk = if ($c[2]) { $rr.ok } else { (-not $rr.ok) -and ((@($rr.findings) -join '; ').Contains($c[3])) }
             if (-not $cOk) { $h26Ok = $false }
             [void]$h26Lines.Add(('    (R) {0,-44} -> {1,-8} (expect {2}) {3}{4}' -f $c[0], $(if ($rr.ok) { 'PASS' } else { 'REFUSES' }), $(if ($c[2]) { 'PASS' } else { 'REFUSES, naming ' + $c[3] }), $(if ($cOk) { 'ok' } else { 'WRONG' }), $(if (-not $rr.ok) { ' -- ' + (@($rr.findings) -join '; ') } else { '' })))
         }
+        # ... and the third control: LAM-INSTALL section 2 with its declared table's rows removed reads a finding.
+        $etDoc = Join-Path $sandbox 'h26-empty-declared-table.md'
+        $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $etDoc)
+        $etLines = @(([System.IO.File]::ReadAllText($h26DocPath) -replace "`r`n", "`n") -split "`n")
+        $etMk = -1; for ($i = 0; $i -lt $etLines.Count; $i++) { if ($etLines[$i].StartsWith('**Next-generation-only events')) { $etMk = $i; break } }
+        $etKeep = New-Object System.Collections.Generic.List[string]; $etSep = $false
+        for ($i = 0; $i -lt $etLines.Count; $i++) {
+            if ($etMk -ge 0 -and $i -gt $etMk -and $etLines[$i].StartsWith('|---')) { $etSep = $true; [void]$etKeep.Add($etLines[$i]); continue }
+            if ($etSep -and $etLines[$i].StartsWith('|')) { continue }
+            if ($etSep -and -not $etLines[$i].StartsWith('|')) { $etSep = $false; $etMk = -1 }
+            [void]$etKeep.Add($etLines[$i])
+        }
+        [System.IO.File]::WriteAllText($etDoc, ($etKeep -join "`n"), (New-Object System.Text.UTF8Encoding($false)))
+        $et = Read-Wp1H26NextGenOnly -Path $etDoc
+        $etOk = $et.found -and (@($et.rows).Count -eq 0) -and ((@($et.findings) -join '; ').Contains('carries no row'))
+        if (-not $etOk) { $h26Ok = $false }
+        [void]$h26Lines.Add(('    (R) {0,-44} -> rows {1}, findings {2} (expect 0 rows, a finding naming no row) {3}' -f 'an empty declared next-gen-only table', @($et.rows).Count, $(if (@($et.findings).Count) { @($et.findings) -join '; ' } else { 'none' }), $(if ($etOk) { 'ok' } else { 'WRONG' })))
     }
     # ---- (L) THE LIVE REGISTRATION, WHEN PRESENT -----------------------------------------------------------
     $h26Rel = $h26Cl + '/settings.json'
@@ -8719,15 +8831,16 @@ $h26detail = @"
   operator lands (amendment 55), pinned to the tracked fragment it is derived from.
 $($h26Lines -join "`n")
   WHAT A RED ROW MEANS. (P) red: the proposal is missing, fails the reader, or no longer equals this member's
-  restatement of the installer's composition of the tracked fragment plus one line -- re-derive it before the
-  operator lands it. (R) red: the
+  restatement of the installer's composition of the tracked fragment plus the next-gen-only events LAM-INSTALL
+  section 2 declares plus one line -- re-derive it before the operator lands it; or section 2's list is absent
+  or carries a finding (an event the fragment has, a command not naming the next-gen library). (R) red: the
   reader passed a defect or refused the proposal. (L) red: a TRACKED registration exists and is not the
   proposal, fails the reader, or a still-local file has become un-ignored.
   WHAT IS NOT CLAIMED: that autoMemoryEnabled false is HONOURED by the harness -- WP-E's live probes measured
   that (amendment 55) and this member runs no session; nor anything about the untracked root file, which it
   never opens.
 "@
-Check -Id 'H-26' -Title 'the tracked hook registration is read when present -- autoMemoryEnabled the boolean false and the four next-gen hooks -- and until then the exact proposal is pinned to the tracked fragment it is derived from (ruling (v))' `
+Check -Id 'H-26' -Title 'the tracked hook registration is read when present -- autoMemoryEnabled the boolean false and the next-gen hooks, the four swapped and the next-gen-only events LAM-INSTALL section 2 declares -- and until then the exact proposal is pinned to the tracked fragment and that declared list it is derived from (ruling (v); RELEASE-4 S1b)' `
       -Ok $h26Ok -Detail $h26detail
 # =============================================================================================
 # H-27 -- THE NTFS STREAM SPELLING AGAINST T-3 AND A1'S PROTECTED TIER, FILE-TOOL ROUTE, FROM A
@@ -9584,6 +9697,145 @@ $($h31Lines -join "`n")
 "@
 Check -Id 'H-31' -Title 'the composition of normalisations -- an 8.3 alias AND a Win32 trailing dot (and optionally a stream) on one path -- is refused against A1''s protected tier, top-level and nested and unknown-tool, because the A1-offer builder closes each seed under {Win32, 8.3, stream-strip} to a fixpoint; a root-seat parent-only path, a path outside protected, and a read stay allowed (WP-E2 round 4; validator round 3''s refutation)' `
       -Ok $h31Ok -Detail $h31detail
+
+
+# =============================================================================================
+# H-32 -- F-H1 (RELEASE-4 S2; row 495 (4); E115): THE PRE-PUSH DECIDER IS COMPARED ON THE FOLD RULE
+# =============================================================================================
+# The runner asks the guard library (Test-EvidencePrePushHookInstalled) whether the decider the installed pre-push
+# wrapper names is the shipped one. 1.0.0 named the defect and left it: the two were hashed RAW, so a CRLF checkout of
+# the same text read as a substituted decider. The cure reads both on framework.lock's basis, fold-crlf-text (text CR LF
+# made LF; a file holding 0x00 raw) and names it (decider_basis). Each arm is a child process that dot-sources the
+# library, writes the shipped wrapper (Get-EvidencePrePushWrapperText) into a fresh repository's hooks naming the
+# INSTALLED copy, and asks with the SHIPPED copy. Expect: a CRLF and an LF copy of one text installed (both ways), the
+# basis named; identical LF installed (control); one byte changed refused; a binary decider and its CRLF copy refused
+# (raw). RED at fc9dc67: h32a and h32b refused, and no basis named on any arm.
+$h32Lines = New-Object System.Collections.Generic.List[string]
+$h32Ok = $true
+$h32Root = Join-Path $sandbox 'h32'
+try {
+    if (Test-Path -LiteralPath $h32Root) { Remove-Item -LiteralPath $h32Root -Recurse -Force }
+    $null = New-Item -ItemType Directory -Path $h32Root -Force
+    $h32L1 = [System.Text.Encoding]::GetEncoding(28591)
+    $h32Lf = $h32L1.GetString([System.IO.File]::ReadAllBytes((Join-Path $hooksDir 'evidence-pre-push.ps1'))).Replace("`r`n", "`n")
+    $h32Probe = Join-Path $h32Root 'probe.ps1'
+    [System.IO.File]::WriteAllText($h32Probe, @'
+param([string]$Lib, [string]$Repo, [string]$Shipped, [string]$Installed)
+$ErrorActionPreference = 'Stop'
+. $Lib
+$hooks = Join-Path $Repo '.git\hooks'
+$null = New-Item -ItemType Directory -Force -Path $hooks
+[System.IO.File]::WriteAllText((Join-Path $hooks 'pre-push'), (Get-EvidencePrePushWrapperText -DeciderPath $Installed), (New-Object System.Text.UTF8Encoding($false)))
+$r = Test-EvidencePrePushHookInstalled -Root $Repo -DeciderPath $Shipped
+$b = ''; if ($r.ContainsKey('decider_basis')) { $b = [string]$r['decider_basis'] }
+'RESULT ' + ([pscustomobject]@{ installed = [bool]$r.installed; basis = $b; reason = [string]$r.reason } | ConvertTo-Json -Compress)
+'@, (New-Object System.Text.UTF8Encoding($false)))
+    $h32Nul = [string][char]0
+    $h32Arms = @(
+        @{ id = 'h32a'; what = 'shipped LF, installed the same text CRLF'; ship = $h32Lf; inst = $h32Lf.Replace("`n", "`r`n"); expect = $true },
+        @{ id = 'h32b'; what = 'shipped CRLF, installed the same text LF'; ship = $h32Lf.Replace("`n", "`r`n"); inst = $h32Lf; expect = $true },
+        @{ id = 'h32c'; what = 'both LF and identical (control)'; ship = $h32Lf; inst = $h32Lf; expect = $true },
+        @{ id = 'h32d'; what = 'one byte changed (one character appended)'; ship = $h32Lf; inst = $h32Lf + '#'; expect = $false },
+        @{ id = 'h32e'; what = 'a BINARY decider (a 0x00 in it) and its CRLF copy: compared raw'; ship = $h32Lf + $h32Nul + "`n"; inst = ($h32Lf + $h32Nul + "`n").Replace("`n", "`r`n"); expect = $false }
+    )
+    foreach ($a in $h32Arms) {
+        $d = Join-Path $h32Root $a.id; $rp = Join-Path $d 'repo'
+        $null = New-Item -ItemType Directory -Force -Path $rp
+        $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $null = & git -C $rp init -q 2>&1 } finally { $ErrorActionPreference = $prevEap }
+        $shipP = Join-Path $d 'shipped\evidence-pre-push.ps1'; $instP = Join-Path $d 'installed\evidence-pre-push.ps1'
+        $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $shipP), (Split-Path -Parent $instP)
+        [System.IO.File]::WriteAllBytes($shipP, $h32L1.GetBytes($a.ship)); [System.IO.File]::WriteAllBytes($instP, $h32L1.GetBytes($a.inst))
+        $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $out = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $h32Probe -Lib $libPath -Repo $rp -Shipped $shipP -Installed $instP 2>&1 | ForEach-Object { "$_" }) } finally { $ErrorActionPreference = $prevEap }
+        $line = @($out | Where-Object { $_.StartsWith('RESULT ') })
+        $res = if ($line.Count -eq 1) { $line[0].Substring(7) | ConvertFrom-Json } else { $null }
+        $got = if ($res) { [bool]$res.installed } else { $null }
+        $basis = if ($res) { [string]$res.basis } else { '' }
+        $one = ($null -ne $got) -and ($got -eq $a.expect) -and ($basis -ceq 'fold-crlf-text' -or -not $a.expect)
+        if (-not $one) { $h32Ok = $false }
+        $why = if ($res) { ([string]$res.reason) } else { 'no RESULT line: ' + (($out | Select-Object -Last 3) -join ' | ') }
+        if ($why.Length -gt 150) { $why = $why.Substring(0, 150) + '...' }
+        [void]$h32Lines.Add(('    [{0}] {1} {2}: installed {3} (expect {4}); basis named {5}  -- {6}' -f $(if ($one) { 'ok' } else { 'NO' }), $a.id, $a.what, $got, $a.expect, $(if ($basis) { $basis } else { '(none)' }), $why))
+    }
+} catch {
+    $h32Ok = $false
+    [void]$h32Lines.Add('    THREW: ' + $_.Exception.Message)
+}
+$h32detail = @"
+  ONE QUESTION -- does the guard library judge the installed pre-push decider against the shipped one on the lock's
+  fold-crlf-text basis, and say so? (Test-EvidencePrePushHookInstalled; Get-EvidenceFoldSha256, appended to the library)
+$($h32Lines -join "`n")
+  WHAT A RED ROW MEANS. h32a/h32b refused: the compare is raw again (E115's defect). A basis not named on an installed
+  arm: the result does not say which basis it read. h32d installed: the fold swallowed a content change. h32e installed:
+  a binary file was folded.
+"@
+Check -Id 'H-32' -Title 'F-H1 (row 495 (4)): the pre-push decider is compared on the lock''s fold-crlf-text basis, named -- a CRLF and an LF checkout of one text both pass, a one-byte change refuses, a binary decider compares raw' `
+      -Ok $h32Ok -Detail $h32detail
+
+
+# =============================================================================================
+# H-33 -- F-H2 (RELEASE-4 S2; row 495 (5)): THE SEAT TRIPWIRE vs A TRACKED FIXTURE PATH THAT HOLDS .mission/
+# =============================================================================================
+# RELEASE-2 S6: a seat could not stage tests/lam/fixtures/base-700e19e5/.mission/goals/SAMPLE-GOAL.yaml -- the tripwire's
+# territory test (Get-EvidenceMissionPlanePathClass) read ANY .mission component as the mission plane. The cure exempts a
+# path under a session root's tests/ or tools/lam/smoke-mission/, anchored to -Roots; the root's own .mission/ and
+# .mission-runtime/lam/ stay guarded, and so does another checkout's, and a path with no root to anchor to. Asked
+# directly (the territory) and through Get-EvidenceSeatTripwireHit's shell route (a `git add` from the root).
+$h33Lines = New-Object System.Collections.Generic.List[string]
+$h33Ok = $true
+try {
+    $h33R = 'C:/h33root'
+    $h33Cases = @(
+        @('C:/h33root/tests/lam/fixtures/base-700e19e5/.mission/goals/SAMPLE-GOAL.yaml', $h33R, '', 'the RELEASE-2 S6 fixture, stageable'),
+        @('C:/h33root/tools/lam/smoke-mission/.mission/x.yaml', $h33R, '', 'a smoke-mission source path holding .mission, stageable'),
+        @('C:/h33root/tests/lam/fixtures/x/.mission-runtime/lam/y', $h33R, '', 'a fixture holding .mission-runtime/lam, stageable'),
+        @('C:/h33root/.mission/goals/G.yaml', $h33R, 'mission', 'the root''s own .mission, refused'),
+        @('C:/h33root/.mission-runtime/lam/x', $h33R, 'lam', 'the root''s own .mission-runtime/lam, refused'),
+        @('C:/h33root/docs/.mission/x', $h33R, 'mission', 'a .mission outside tests/ and smoke-mission/, refused'),
+        @('C:/h33root/testsx/.mission/x', $h33R, 'mission', 'a sibling spelled like tests, refused'),
+        @('C:/other/tests/lam/fixtures/.mission/x', $h33R, 'mission', 'another checkout''s fixture tree, refused (not this root)'),
+        @('tests/lam/fixtures/.mission/x', '', 'mission', 'no root to anchor to: refused (fail closed)'),
+        # F-X1 (RELEASE-4 S3; S2 validator X-1): a dot segment climbing out of tests/ or tools/lam/smoke-mission/ into the
+        # root's .mission is the mission plane, read so by the territory function itself (not only by the caller's dot-resolved form)
+        @('C:/h33root/tests/../.mission/gates/G.yaml', $h33R, 'mission', 'tests/../.mission: climbs out of tests/ into the root''s .mission, refused (F-X1)'),
+        @('tests/../.mission/gates/G.yaml', $h33R, 'mission', 'the same, relative: refused (F-X1)'),
+        @('C:/h33root/tools/lam/smoke-mission/../../../.mission/x.yaml', $h33R, 'mission', 'smoke-mission/../../../.mission: climbs out of tools/lam/smoke-mission/, refused (F-X1)')
+    )
+    foreach ($c in $h33Cases) {
+        $got = ''
+        try { $got = [string](Get-EvidenceMissionPlanePathClass -Path $c[0] -Roots @($c[1])) } catch { $got = 'THREW' }
+        $one = ($got -ceq $c[2]); if (-not $one) { $h33Ok = $false }
+        [void]$h33Lines.Add(('    [{0}] territory {1} root ''{2}'' -> ''{3}'' (expect ''{4}'') -- {5}' -f $(if ($one) { 'ok' } else { 'NO' }), $c[0], $c[1], $got, $c[2], $c[3]))
+    }
+    $h33Shell = @(
+        @('git add tests/lam/fixtures/base-700e19e5/.mission/goals/SAMPLE-GOAL.yaml', $false, 'staging the fixture from the root: no hit'),
+        @('git add .mission/goals/SAMPLE-GOAL.yaml', $true, 'staging the root''s own .mission: a hit')
+    )
+    $h33Inside = 'C:/h33root/.mission'
+    try { $hitIn = Get-EvidenceSeatTripwireHit -ToolName 'Bash' -RawPaths @() -CmdText 'git add tests/x/.mission/y' -Cwd $h33Inside -ReadOnlyTools @('Read') -ShellTools @('Bash', 'PowerShell') -Worker $false -Roots @($h33R) } catch { $hitIn = 'THREW' }
+    $oneIn = ($null -ne $hitIn) -and ($hitIn -isnot [string]); if (-not $oneIn) { $h33Ok = $false }
+    [void]$h33Lines.Add(('    [{0}] shell ''git add tests/x/.mission/y'' from the cwd {1} -> {2} (expect a hit: the joined form is under the root''s .mission)' -f $(if ($oneIn) { 'ok' } else { 'NO' }), $h33Inside, $(if ($hitIn -is [string]) { $hitIn } elseif ($hitIn) { 'hit ' + $hitIn.plane + ' ' + $hitIn.form } else { 'no hit' })))
+    foreach ($s in $h33Shell) {
+        $hit = $null; $thr = ''
+        try { $hit = Get-EvidenceSeatTripwireHit -ToolName 'Bash' -RawPaths @() -CmdText $s[0] -Cwd $h33R -ReadOnlyTools @('Read') -ShellTools @('Bash', 'PowerShell') -Worker $false -Roots @($h33R) } catch { $thr = $_.Exception.Message }
+        $isHit = ($null -ne $hit)
+        $one = (-not $thr) -and ($isHit -eq $s[1]); if (-not $one) { $h33Ok = $false }
+        [void]$h33Lines.Add(('    [{0}] shell ''{1}'' at the root -> {2} (expect {3}) -- {4}' -f $(if ($one) { 'ok' } else { 'NO' }), $s[0], $(if ($thr) { 'THREW ' + $thr } elseif ($isHit) { 'hit ' + $hit.plane + ' ' + $hit.form } else { 'no hit' }), $(if ($s[1]) { 'a hit' } else { 'no hit' }), $s[2]))
+    }
+} catch {
+    $h33Ok = $false
+    [void]$h33Lines.Add('    THREW: ' + $_.Exception.Message)
+}
+$h33detail = @"
+  ONE QUESTION -- does the seat tripwire guard the session root's own mission plane only, and let a tracked fixture
+  whose path holds .mission/ under tests/ or tools/lam/smoke-mission/ be staged? (Get-EvidenceMissionPlanePathClass)
+$($h33Lines -join "`n")
+  WHAT A RED ROW MEANS. A fixture row reading 'mission': the RELEASE-2 S6 refusal is back. A refused row reading '': the
+  exemption reached the real plane (the root's own .mission, another checkout's, or a path with no root).
+"@
+Check -Id 'H-33' -Title 'F-H2 (row 495 (5)): the seat tripwire guards the root''s own .mission/ and .mission-runtime/lam/; a tracked fixture path holding .mission/ under tests/ or tools/lam/smoke-mission/ is stageable' `
+      -Ok $h33Ok -Detail $h33detail
 
 # =============================================================================================
 # summary -- counts DERIVED from the recorder, never hand-authored (law 3 / law 5)

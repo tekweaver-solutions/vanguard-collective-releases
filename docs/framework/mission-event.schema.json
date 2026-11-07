@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://tekweaver.ca/vanguard-collective/schemas/mission-event/1.0",
+  "$id": "https://tekweaver.ca/vanguard-collective/schemas/mission-event/1.1",
   "title": "mission-event",
-  "description": "One line of .mission-runtime/telemetry/events.jsonl (expanded-schemas §14, ADR-045). Additive only.",
+  "description": "One line of .mission-runtime/telemetry/events.jsonl (expanded-schemas §14, ADR-045). Additive only. 1.1: a mission_snapshot line of schema_version 1.1 or later carries each milestone's status as passed, active, pending or withdrawn; a 1.0 line is read as 1.0 wrote it.",
   "type": "object",
   "additionalProperties": true,
   "required": ["schema_version", "mission_id", "host_id", "seq", "ts", "kind", "payload", "source_path", "sha256", "commit"],
@@ -64,6 +64,9 @@
       "then": { "properties": { "payload": { "required": ["state", "current_milestone", "features", "assertions", "counts", "snapshot_sha256"],
         "properties": { "features": { "type": "object" }, "assertions": { "type": "object" },
           "counts": { "type": "object", "required": ["features", "assertions", "open_halts", "open_dispatches"] },
-          "snapshot_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } } } } } }
+          "snapshot_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } } } } } },
+    { "if": { "required": ["schema_version"], "properties": { "kind": { "const": "mission_snapshot" }, "schema_version": { "not": { "const": "1.0" } } } },
+      "then": { "properties": { "payload": { "properties": { "milestones": { "type": "object",
+        "additionalProperties": { "type": "object", "properties": { "status": { "enum": ["passed", "active", "pending", "withdrawn"] } } } } } } } } }
   ]
 }

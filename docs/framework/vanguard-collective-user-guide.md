@@ -1,4 +1,4 @@
-# Vanguard Collective 1.1.0 -- the operator's guide
+# Vanguard Collective 1.2.0 -- the operator's guide
 
 This guide says what the parts of the framework are, what each one records, who may write it, and
 how to read what the acceptance instruments say about it. It does not repeat the procedures: the
@@ -448,9 +448,10 @@ failure). A count line whose numbers no instrument could print is not read at al
   row that was measured and missed fails the member: a measured miss outranks an unmeasurable row.
 
 **Why skips are expected on a fresh project.** A skip names an environment, not a defect. A
-reading of a fresh install of this release -- a new git project with a bare origin, the install with
-its Python set, `mission init`, the smoke mission built, the container engine down -- failed nothing
-and showed fifty-nine named skips, each with its reason on its face:
+reading of a fresh install of this release -- a new git project with a bare origin, the install from
+the ZIP, `mission init`, the smoke mission built, the container engine up -- failed nothing and
+showed 67 named skips with the Python set installed (`-Python`) and 70 without it
+(`-SkipPythonSet`), each with its reason on its face:
 
 - **No project acceptance record: WP-1 H-12, WP-2 R-16 and R-B, WP-3 C-1v, C-1w and C-2d.** Each
   measures against a project's own acceptance record, `docs/framework/LAM-ACCEPT.md`, which no
@@ -459,11 +460,18 @@ and showed fifty-nine named skips, each with its reason on its face:
   of `src\.venv` and `tools\.venv` (the primary checkout's too, from a worktree) that has a
   `Scripts\python.exe`; the install's `tools\.venv` holds the dashboard's packages and no pytest, so
   each skips, naming it. With pytest installed there, or a `src\.venv` that has it, they are measured.
-- **The dashboard's tests and source not installed: WP-7 V-1 to V-20 and L-1 to L-16.** The service's
-  pytest suite and the dashboard's source stay in the framework's development repository.
-- **The release tree's `mission.ps1` and `VERSION` not installed: WP-7 F-0, U-4, U-5, U-10, U-13, U-14,
-  U-15 and U-16.** Their fixtures are fresh checkouts `mission.ps1 init` makes, and one reads `VERSION`;
-  the members that read only the smoke mission are measured.
+- **The dashboard's tests and source not installed: WP-7 V-1 to V-20 and L-1 to L-16, U-20, U-24 and U-26.** The
+  service's pytest suite and the dashboard's source stay in the framework's development repository.
+- **The release tree's `mission.ps1` and `VERSION` not installed: WP-7 F-0, U-4, U-5, U-10, U-13 to U-16 and U-25.** Their fixtures
+  are fresh checkouts `mission.ps1 init` makes, and one reads `VERSION`; the members that read only the smoke
+  mission are measured.
+- **`mission.ps1` not installed: WP-7 U-28 and U-29.** Each runs the release tree's `mission.ps1`.
+- **The project's own `.gitignore`: WP-7 U-27.** It reads the release tree's `.gitignore`,
+  which is not installed; an installed project's is its own.
+- **`provenance/` not installed: WP-7 U-21.** It holds the settings template to its manifest
+  row, and the manifest is not installed.
+- **No Python set, without `-Python` only: WP-7 U-19, U-22 and U-30.** They run the service on `tools\.venv`'s
+  interpreter, which an install with `-SkipPythonSet` does not make.
 - **No goal-check registration file: WP-3 C-2c.** There is no `.claude\settings.local.json` in the
   checkout, nor in the primary checkout when the reading runs in a worktree. Once that file exists
   the member is measured: it must register a command Stop hook that runs `mission-goal-check.ps1`
@@ -473,10 +481,10 @@ and showed fifty-nine named skips, each with its reason on its face:
   plane at all, there is nothing live to drive. Where HALTs stand, its census row still has nothing
   to read while `tools\lam\legacy-halt-census.txt` is empty, as the framework ships it, so the member
   stays a named SKIP unless one of the rows it measured missed.
-- **The container engine down: WP-3 C-1aw.** It measures what a goal reads with the engine up, so it
-  skips while the engine cannot be reached. With the engine up, **WP-3 C-1bd** skips in its place: it
-  measures what a goal reads with the engine really down, so it skips while the engine's named pipe
-  (`\\.\pipe\dockerDesktopLinuxEngine`) is among the host's pipes, or while the pipes cannot be listed.
+- **The container engine up: WP-3 C-1bd.** It measures what a goal reads with the engine really down, so it
+  skips while the engine's named pipe (`\\.\pipe\dockerDesktopLinuxEngine`) is among the host's pipes, or while
+  the pipes cannot be listed. With the engine down, **WP-3 C-1aw** skips in its place: it measures what a goal
+  reads with the engine up, so it skips while the engine cannot be reached.
 - **No spawn ledger yet: WP-4 T-42.** Its live row reads the primary checkout's
   `.mission-runtime\lam\spawn-ledger.jsonl`, which a project's runner writes when it first
   dispatches; with none there it skips. Once one stands, T-42 fails: its audit holds the ledger's
@@ -508,8 +516,8 @@ section 10).
 
 ## 12. The dashboard -- `vanguard ui`
 
-The dashboard is a read-only, local view of every mission registered on this machine -- ADR-045 in the
-local-modes design document (section 11.6), which supersedes ADR-029 for the human-facing Mission Control
+The dashboard is a read-only, local view of every mission registered on this machine -- LM2-ADR-045 in the
+local-modes design document (section 11.6), which supersedes LM2-ADR-029 for the human-facing Mission Control
 surface. It owns no truth: `.mission\` and the evidence plane stay the record, and the dashboard is a
 projection of the projects' event feeds that can be deleted and rebuilt from them at any time. It sends
 nothing to an agent, writes nothing into a project, and holds no cost figure.

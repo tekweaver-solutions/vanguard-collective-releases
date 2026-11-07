@@ -15,6 +15,13 @@ something, this document says so rather than filling the gap.
 concurrent-session window, and its content quality is irrelevant to that. Every finding below is
 cited to an artifact a reader can open.
 
+**Naming.** This delta continues the local-modes family's ADR namespace and cites its decisions, v2.3's
+and its own, as **`LM2-ADR-0NN`** -- v2.3's standing convention (its Erratum E2). A bare `ADR-0NN` denotes
+the on-disk file `tools/mission-cli/config/adr-0NN-*.md`, a namespace of its own. The two series overlap:
+the five decisions this build establishes are LM2-ADR-036 … LM2-ADR-040, and the on-disk series holds
+`adr-040`, `adr-041`, `adr-042` and `adr-044` (no `adr-043`), so the number 040 names two different decisions --
+LM2-ADR-040 is this delta's runner; the on-disk `adr-040` is the meta-framework rework route.
+
 ---
 
 ## 1. The one-line summary
@@ -111,15 +118,15 @@ An owned, unfinished dispatch reads `PARTIAL`. H-1 introduces `OPEN` on the next
 vocabularies now differ, and v2.4 must reconcile them or verify will keep reporting a state the
 runner does not use.
 
-### E12 — ADR-032's "settings-enforced" memory-off has no settings key
+### E12 — LM2-ADR-032's "settings-enforced" memory-off has no settings key
 **CLI 2.1.241 exposes no settings key and no flag that disables auto memory on its own.** The only
 documented control is `--bare`, which also skips hooks — and a worker without hooks has no evidence
 plane at all, which is strictly worse than the leak it would prevent. Verified independently by
 three parties: the build, the WP-5 validator (`claude --version`, `claude --help`), and the WP-2
-validator. **ADR-032's intent stands; its mechanism is struck**.
+validator. **LM2-ADR-032's intent stands; its mechanism is struck**.
 What is achievable and checkable, and what the role templates now carry as fields, is: the declared
 mechanism, the **separation actually obtained**, and the **disable named as unobtainable on this
-CLI**. See §3, ADR-036.
+CLI**. See §3, LM2-ADR-036.
 
 ### E13 — a continuation Stop hook traps every nested session in its project
 Measured: **200 s versus 4 s**. A project's Stop hook is inherited by every nested session in that
@@ -135,9 +142,9 @@ including the auto-memory block. The compensating control is that S-2 verdicts b
 and byte comparison**, not by the validator's account of itself.
 
 ### E15 — verify's suite arm is an unimplemented increment boundary
-It makes ADR-022 unsatisfiable for build-class dispatches: `suite.passed/failed/skipped` are
-hardcoded `ABSENT`. **Interim cure: PASS-DIB** (ADR-036 below). The real cure is
-verify increment 2 (suite execution), registered as follow-on work outside this build. **ADR-022's
+It makes LM2-ADR-022 unsatisfiable for build-class dispatches: `suite.passed/failed/skipped` are
+hardcoded `ABSENT`. **Interim cure: PASS-DIB** (LM2-ADR-036 below). The real cure is
+verify increment 2 (suite execution), registered as follow-on work outside this build. **LM2-ADR-022's
 v2.4 text must name PASS-DIB a transitional verdict class that dissolves when the arm lands.**
 
 ### E16 — presence-based evaluation was insufficient
@@ -2576,13 +2583,13 @@ reason the seal is known intact rather than assumed intact.
 
 ---
 
-## 3. ADRs as built (ADR-036 … ADR-040)
+## 3. ADRs as built (LM2-ADR-036 … LM2-ADR-040)
 
-v2.3's highest ADR is ADR-035. These five are what this build establishes, stated as built rather
+v2.3's highest ADR is LM2-ADR-035. These five are what this build establishes, stated as built rather
 than as intended.
 
-### ADR-036 — Memory hygiene is *separation*, not a disable, and the residual travels on the artifact
-**Supersedes the mechanism of ADR-032; its intent stands verbatim.** No settings key disables auto
+### LM2-ADR-036 — Memory hygiene is *separation*, not a disable, and the residual travels on the artifact
+**Supersedes the mechanism of LM2-ADR-032; its intent stands verbatim.** No settings key disables auto
 memory on CLI 2.1.241 (E12), and `--bare` is unusable because it also removes hooks. Each role
 settings template therefore carries four checkable fields: `intent`, `declared_mechanism`, the
 **`separation_obtained`** (worktree-level directory separation for a worker; fresh-identity session
@@ -2591,7 +2598,7 @@ left blank), and a **`disable_status`** naming the disable unobtainable on 2.1.2
 **A claim with no working detector is an overclaim, so the artifact carries the residual and the
 instrument checks the fields rather than the prose.**
 
-### ADR-037 — PASS-DIB: a transitional verdict class with an expiry built into its definition
+### LM2-ADR-037 — PASS-DIB: a transitional verdict class with an expiry built into its definition
 A verify run whose refusing subjects are exactly a subset of
 `{suite.passed, suite.failed, suite.skipped}`, **each with outcome `ABSENT` and verify's own
 increment-boundary residual on its own subject**, and every other subject `MATCHED` or
@@ -2600,10 +2607,10 @@ increment-boundary residual on its own subject**, and every other subject `MATCH
 dissolves without an edit when verify increment 2 lands: the subjects begin reporting `MATCHED` and
 take the PASS branch. **The per-subject reading is the load-bearing part** — the first
 implementation tested the residual as one global substring over the report and admitted a suite
-subject refusing with `DIVERGED` (recorded 12, derived 4), which is precisely the mismatch ADR-022
+subject refusing with `DIVERGED` (recorded 12, derived 4), which is precisely the mismatch LM2-ADR-022
 exists to catch.
 
-### ADR-038 — Advance admission: ancestry, declared cleanliness, and ledger provenance, jointly
+### LM2-ADR-038 — Advance admission: ancestry, declared cleanliness, and ledger provenance, jointly
 A tree that has legitimately moved on is admitted **iff all three** hold: **(a) ancestry**
 (`git merge-base --is-ancestor`); **(b) cleanliness** against **the mission's own declared
 `admitted_porcelain`** (never another mission's shape — E21); **(c) provenance** — every commit in
@@ -2613,12 +2620,12 @@ admission (E16). Admission covers **exactly** `ANCHOR/head_sha` and `ANCHOR/porc
 used it is recorded **verbatim in the anchors** — declared patterns, the entries each tolerated, and
 the declaration's source path and sha256. **A declaration may never act silently.**
 
-### ADR-039 — Ratification binds to an artifact the ratified party cannot write
+### LM2-ADR-039 — Ratification binds to an artifact the ratified party cannot write
 A supersession marker is honoured **iff** an unrevoked `supersession` gate carries a `binds_sha256`
 equal to the marker's **re-derived** hash. Agents cannot mint one (T-3). **No gate, no skip** —
 exit 2 naming the unratified marker. Hash-binding rather than filename-binding is what makes it
 non-forgeable. **Lifecycle is per kind, and conflating them was a defect:** a `push` gate must
-expire and be single-use, because a standing publish capability is what ADR-033 abolishes; a
+expire and be single-use, because a standing publish capability is what LM2-ADR-033 abolishes; a
 `supersession` gate is **not a capability** but a recorded ruling, so it neither expires nor is
 consumed, and **revocation** is the mechanism that withdraws it. **Gates additionally carry a
 `gate_class`** — `build-authorization` (push, dispatch) or `governance` (supersession,
@@ -2633,10 +2640,10 @@ and an unclassified operator-kind line still fails. **The rule is fixed before t
 recomputed**, never fitted to it, which is the only thing that stops an exclusion list from becoming
 a way to make any number come out right.
 
-### ADR-040 — The runner is a PowerShell program over the headless CLI, and the boundary is owned
-`mission-dispatch.ps1` composes `claude -p` with `--worktree` (ADR-026), a routed model (ADR-031),
+### LM2-ADR-040 — The runner is a PowerShell program over the headless CLI, and the boundary is owned
+`mission-dispatch.ps1` composes `claude -p` with `--worktree` (LM2-ADR-026), a routed model (LM2-ADR-031),
 a role settings file, the dispatch artifact as the **entire** prompt, and `/goal` from the dispatch
-(ADR-025). It owns the dispatch boundary explicitly: it writes `OWNER` and `DISPATCH-END`, so the
+(LM2-ADR-025). It owns the dispatch boundary explicitly: it writes `OWNER` and `DISPATCH-END`, so the
 manifest finalizes on the marker rather than on `Stop`, and a pre-marker continuation derives
 `OPEN`. It validates the handoff against the closed schema, populates the anchors, and checks every
 git return code. **Two ledgers make provenance checkable rather than assumed**: one line per spawn

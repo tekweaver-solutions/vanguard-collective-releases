@@ -110,6 +110,7 @@ Created on goal capture. Transitions through the lifecycle state machine. Sealed
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | uuid | yes | Mission identifier. |
+| `name` | string | no | The mission's display name (RELEASE-4): `mission init` writes the target folder's name; the operator may change it. The `mission_snapshot` carries it to the dashboard (§14). |
 | `goal` | string | yes | Human's original goal, verbatim. |
 | `clarified_scope` | string | yes | Orchestrator's negotiated interpretation, confirmed by human. |
 | `state` | enum | yes | One of: `Created`, `Planning`, `Executing`, `Validating`, `Amending`, `Reworking`, `Blocked`, `AwaitingApproval`, `Complete`, `Aborted`. |
@@ -1359,7 +1360,7 @@ checkout path), and `mission_id` groups streams of one mission.
 
 | Field | Type | Description |
 |---|---|---|
-| `schema_version` | string | `"1.0"`. Bumped only additively; a consumer never rejects a newer minor. |
+| `schema_version` | string | `"1.1"` (`"1.0"` before RELEASE-4: the milestone status enum below). Bumped only additively; a consumer never rejects a newer minor, and reads a `"1.0"` line as 1.0 wrote it. |
 | `mission_id` | string | The mission id from `.mission/mission.yaml`. |
 | `host_id` | string | Opaque, stable per host: a UUID minted once into `~/.vanguard/host-id` by the first `install.ps1` or `mission init` on that host. Never a hostname or user name. |
 | `seq` | integer ≥ 1 | Monotonic per file, allocated under an exclusive lock on the file (named mutex per path). A gap means loss; a duplicate is rejected at ingest. Never derived from line count without the lock (v2.3 §12.3; Registered decisions N-e in this document). |
@@ -1387,7 +1388,7 @@ checkout path), and `mission_id` groups streams of one mission.
 | `assertion_result` | validator result writer | `assertion_id`, `feature`, `result` (`green`/`red`/`skipped`), `round`, `validator_kind` (`narrow`/`qa`). |
 | `verify_result` | `mission verify` | `verdict`, `arms_run` (list), `against` (prior report path), `divergences` (count). |
 | `tip_observed` | push hook / verify | `local_tip`, `origin_tip` or null, `ahead`, `behind` (null when unknown — an ahead/behind read without fetch is a cache read and is marked `cached: true`). |
-| `mission_snapshot` | any stage-level verb, on change only | `state` (lifecycle stage), `current_milestone`, `features` (id → status), `assertions` (id → status), `counts` (features, assertions, open_halts, open_dispatches), `snapshot_sha256` (hash of the derived state; emitted only when it changes). Additively (UI-1 S2-AM1), `milestones`: milestone id → `title`, `status`, `assertions_total`, `assertions_green`, `started_ts`, `done_ts`, derived from the spec's milestones and the contract's `milestone_id`, the two timestamps null until the writer observes the milestone leave `pending` or reach `passed` and kept out of the hashed state. |
+| `mission_snapshot` | any stage-level verb, on change only | `state` (lifecycle stage), `current_milestone`, `features` (id → status), `assertions` (id → status), `counts` (features, assertions, open_halts, open_dispatches), `snapshot_sha256` (hash of the derived state; emitted only when it changes). Additively (UI-1 S2-AM1), `milestones`: milestone id → `title`, `status`, `assertions_total`, `assertions_green`, `started_ts`, `done_ts`, derived from the spec's milestones and the contract's `milestone_id`, the two timestamps null until the writer observes the milestone leave `pending` or reach `passed` and kept out of the hashed state. Additively (RELEASE-4, schema_version 1.1), a milestone's `status` is one of `passed`, `active`, `pending`, `withdrawn`: the writer maps the spec's word at emit (`done` -> `passed`, `withdrawn` -> `withdrawn`) and refuses any other word, the snapshot with it, naming the word in its `hook-errors.log`; a `withdrawn` milestone is counted on its own and left out of every progress denominator. Additively (RELEASE-4), `mission_name`: the mission record's `name` (§1; `mission init` writes it) -- where the record has none, the name `init` would have written, the checkout's folder name (the primary checkout's, for a linked worktree) -- part of the hashed state -- never the host registry's row, which is stale by design after a prune; `vanguard ui` shows it on the Fleet card and the Project breadcrumb, and the mission id where no snapshot carries one (a feed with no snapshot yet, or only 1.0 snapshots, written before the field). |
 
 **Rules.**
 - Additive only: kinds and fields are added, never removed or renamed. A consumer validates each

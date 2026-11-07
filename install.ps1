@@ -146,7 +146,7 @@
   THE vanguard COMMAND is tools\ui\vanguard.cmd, installed with the files: `<target>\tools\ui\vanguard.cmd ui`
   starts the dashboard with tools\.venv's interpreter (INSTALL.md section 7).
   -WhatIf also says, writing nothing: the host registration below (host-id, the registry row) and the
-  mission-event feed's ignore rule (/.mission-runtime/telemetry/ in the target's .gitignore), which this script
+  mission-event feed's ignore rule (/.mission-runtime/ in the target's .gitignore), which this script
   never writes -- mission init writes it, and mission.ps1 register for a mission made before the feed.
 
   MARK OF THE WEB. This script copies bytes; it never runs, dot-sources or imports a file from the
@@ -584,10 +584,66 @@ function Get-RegistrationPlan {
         $giLines = @(($script:Utf8NoBom.GetString([System.IO.File]::ReadAllBytes($gi)).TrimStart([char]0xFEFF) -split "`n") | ForEach-Object { $_.TrimEnd(' ', "`r") })
         $held = (@(@('/.mission-runtime/telemetry/', '.mission-runtime/telemetry/', '/.mission-runtime/', '.mission-runtime/') | Where-Object { $giLines -ccontains $_ }).Count -gt 0)
     }
-    $giText = if ($held) { "the target's .gitignore already ignores /.mission-runtime/telemetry/" }
-        elseif ($mission) { "the target's .gitignore does not ignore /.mission-runtime/telemetry/; install.ps1 writes no .gitignore -- mission.ps1 register -Target $TargetRoot adds the rule" }
-        else { "no mission yet: mission init writes the rule /.mission-runtime/telemetry/ into the target's .gitignore" }
+    # RELEASE-4 S2 F-H12 (S1 F2): the rule named is the runtime plane's, /.mission-runtime/, which mission init and register
+    # write (S1 F-P7a); a project's older /.mission-runtime/telemetry/ rule is still read as holding the feed's folder.
+    $giText = if ($held) { "the target's .gitignore already ignores /.mission-runtime/ (or the feed's folder within it)" }
+        elseif ($mission) { "the target's .gitignore does not ignore /.mission-runtime/; install.ps1 writes no .gitignore -- mission.ps1 register -Target $TargetRoot adds the rule" }
+        else { "no mission yet: mission init writes the rule /.mission-runtime/ into the target's .gitignore" }
     return @("planned host registration: $idText; $rowText", "planned telemetry ignore rule: $giText")
+}
+
+function Get-JsonMemberText {
+    # THE EXACT TEXT of one member of a JSON object as the file carries it -- from its quoted key (the first at or after
+    # -From that a ':' follows) to the end of its value, an array or an object matched bracket by bracket outside
+    # strings. '' when there is none. Read from the file, never re-serialised, so what it prints is the file's own.
+    param([string]$Text, [string]$Name, [int]$From = 0)
+    $key = '"' + $Name + '"'
+    $k = $Text.IndexOf($key, $From, [System.StringComparison]::Ordinal)
+    $i = -1
+    while ($k -ge 0) {
+        $i = $k + $key.Length
+        while ($i -lt $Text.Length -and [char]::IsWhiteSpace($Text[$i])) { $i++ }
+        if ($i -lt $Text.Length -and $Text[$i] -eq [char]':') { break }
+        $k = $Text.IndexOf($key, $k + 1, [System.StringComparison]::Ordinal)
+    }
+    if ($k -lt 0) { return '' }
+    $i++
+    while ($i -lt $Text.Length -and [char]::IsWhiteSpace($Text[$i])) { $i++ }
+    if ($i -ge $Text.Length -or ($Text[$i] -ne [char]'[' -and $Text[$i] -ne [char]'{')) { return '' }
+    $depth = 0; $inString = $false
+    for ($j = $i; $j -lt $Text.Length; $j++) {
+        $c = $Text[$j]
+        if ($inString) { if ($c -eq [char]'\') { $j++ } elseif ($c -eq [char]'"') { $inString = $false }; continue }
+        if ($c -eq [char]'"') { $inString = $true }
+        elseif ($c -eq [char]'[' -or $c -eq [char]'{') { $depth++ }
+        elseif ($c -eq [char]']' -or $c -eq [char]'}') { $depth--; if ($depth -eq 0) { return $Text.Substring($k, $j - $k + 1) } }
+    }
+    return ''
+}
+
+function Get-SettingsRegistrationGap {
+    # THE HOOK REGISTRATIONS a release's settings file carries that a project's own copy lacks (RELEASE-4 S2 F-H5): one
+    # entry per event of the release's "hooks" with a command the project registers under no hook of that event --
+    # @{ event; present (the project has the event at all); commands; block (the release file's own text for the event) }.
+    param([string]$ReleaseText, [string]$ProjectText)
+    try { $rel = $ReleaseText | ConvertFrom-Json } catch { return @{ ok = $false; why = "this release's file does not parse as JSON"; events = @() } }
+    try { $prj = $ProjectText | ConvertFrom-Json } catch { return @{ ok = $false; why = "the project's file does not parse as JSON, so its registrations cannot be compared"; events = @() } }
+    $relHooks = Get-Field $rel 'hooks'
+    $prjHooks = $null; if ($prj -is [System.Management.Automation.PSCustomObject]) { $prjHooks = Get-Field $prj 'hooks' }
+    $gap = @()
+    if ($relHooks -isnot [System.Management.Automation.PSCustomObject]) { return @{ ok = $true; why = ''; events = @() } }
+    $hooksAt = [Math]::Max(0, $ReleaseText.IndexOf('"hooks"', [System.StringComparison]::Ordinal))
+    foreach ($ev in @($relHooks.PSObject.Properties | ForEach-Object { $_.Name })) {
+        $have = @(); $present = $false
+        if ($prjHooks -is [System.Management.Automation.PSCustomObject] -and $null -ne $prjHooks.PSObject.Properties[$ev]) {
+            $present = $true
+            foreach ($g in @($prjHooks.PSObject.Properties[$ev].Value)) { foreach ($h in @(Get-Field $g 'hooks')) { if ($null -ne $h) { $have += [string](Get-Field $h 'command') } } }
+        }
+        $missing = @()
+        foreach ($g in @($relHooks.PSObject.Properties[$ev].Value)) { foreach ($h in @(Get-Field $g 'hooks')) { if ($null -ne $h -and $have -cnotcontains [string](Get-Field $h 'command')) { $missing += [string](Get-Field $h 'command') } } }
+        if ($missing.Count) { $gap += @{ event = $ev; present = $present; commands = $missing; block = (Get-JsonMemberText -Text $ReleaseText -Name $ev -From $hooksAt) } }
+    }
+    return @{ ok = $true; why = ''; events = $gap }
 }
 
 function Read-Lock {
@@ -1044,6 +1100,45 @@ foreach ($d in $plan) {
     else { Say ("  {0,-18} {1}" -f $d.disposition, $d.path) }
 }
 foreach ($p in $retired) { Say ("  {0,-18} {1}  -- in framework.lock, not in this release: left in place, dropped from the lock" -f 'retire', $p) }
+# THE IGNORED-MEMBER WARNING (RELEASE-4 S2 F-H8; row 505 (d)). A member this run installs, upgrades or finds in place
+# that the target's own git ignore rules would hide (a dist/ rule hiding ui/dist, say) is written all the same, and git
+# then never sees it: one line per such member, naming the rule and where it stands, as git check-ignore -v reads it
+# in the target (a tracked file is never reported by git, and a negated rule's match is no hiding). Nothing is printed
+# for a target that is no git work tree, or whose rules hide nothing of the framework's.
+$giMembers = @($plan | Where-Object { @('install', 'upgrade', 'already-identical') -contains $_.disposition } | ForEach-Object { $_.path })
+if ($giMembers.Count -and [System.IO.Directory]::Exists($targetRoot)) {
+    $giTree = Invoke-GitIsolated -Root $targetRoot -GitArgs @('rev-parse', '--is-inside-work-tree')
+    if ($giTree.ok -and $giTree.out -eq 'true') {
+        for ($gb = 0; $gb -lt $giMembers.Count; $gb += 100) {
+            $giBatch = @($giMembers[$gb..([Math]::Min($gb + 99, $giMembers.Count - 1))])
+            $giHits = Invoke-GitIsolated -Root $targetRoot -GitArgs (@('check-ignore', '-v', '--') + $giBatch)
+            foreach ($gl in @($giHits.out -split "`n" | Where-Object { $_ })) {
+                if ($gl -notmatch '^(.*):(\d+):(.*)\t(.+)$') { continue }
+                if ($Matches[3].StartsWith('!')) { continue }
+                Say ("WARNING ignored {0} -- the target's git ignore rules hide it: {1}:{2}: {3} (git check-ignore -v); it is installed, and git will not see it while that rule matches it" -f $Matches[4], $Matches[1], $Matches[2], $Matches[3])
+            }
+        }
+    }
+}
+# THE KEPT-FILE NOTICE (RELEASE-4 S2 F-H5; INSTALL.md section 6). A kept file is the project's own: the installer never
+# edits it (ruling: a protected customer file is the operator's -- a notice, not a merge). For every kept file whose
+# bytes differ, on the lock's basis (fold-crlf-text), from this release's version, one line says so and where this
+# release's version stands; for .claude/settings.json it also names each registration this release's version carries
+# that the project's lacks, with the block to add, read from this release's file.
+foreach ($d in @($plan | Where-Object { $_.disposition -eq 'keep' -and $_.target_sha256 -and $_.target_sha256 -ne $_.judged })) {
+    $relFile = Join-Path $sourceRoot ($d.path -replace '/', '\')
+    Say ("NOTICE kept {0} -- kept: the project's own copy is not changed, and it differs from this release's version (fold-crlf-text basis), which is at {1}" -f $d.path, $relFile)
+    if ($d.path -ceq '.claude/settings.json') {
+        $gapText = [System.IO.File]::ReadAllText($relFile)
+        $gap = Get-SettingsRegistrationGap -ReleaseText $gapText -ProjectText ([System.IO.File]::ReadAllText((Join-Path $targetRoot '.claude\settings.json')))
+        if (-not $gap.ok) { Say ("NOTICE kept .claude/settings.json -- {0}; compare it with {1} by hand" -f $gap.why, $relFile) }
+        foreach ($g in @($gap.events)) {
+            $how = if ($g.present) { "the project registers $($g.event) without it: add the entries of this block to the project's own `"$($g.event)`" array" } else { "the project registers no $($g.event): add this block to the project's `"hooks`" object" }
+            Say ("NOTICE kept .claude/settings.json -- this release registers {0} ({1}); {2}:" -f $g.event, ($g.commands -join '; '), $how)
+            foreach ($bl in ($g.block -replace "`r`n", "`n").Split([char]10)) { Say ("NOTICE   | {0}" -f $bl) }
+        }
+    }
+}
 $refusedCount = @($plan | Where-Object { $_.disposition -eq 'REFUSED' }).Count
 $notWrittenCount = @($plan | Where-Object { $_.disposition -eq 'not-written' }).Count
 $countText = "written={0} already-identical={1} kept={2}{5} retired={3} refused={4}" -f @($plan | Where-Object { $_.disposition -eq 'install' -or $_.disposition -eq 'upgrade' }).Count,

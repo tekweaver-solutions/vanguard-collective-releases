@@ -13260,6 +13260,74 @@ if ($r57Skip -and $r57ok) {
               "        named the live stall -- the engine-down run is an S0 proposal, not re-run this batch (standings 98/99).")
 }
 
+
+# =============================================================================================
+# R-58 -- F-H3 (RELEASE-4 S2; row 495 (6); ledger 1729): prune-worktrees.ps1 -Remove FINISHES OVER AN EMPTY FOLDER
+# =============================================================================================
+# RELEASE-2 S9: -Remove over a worktree whose folder stood present but EMPTY (held, or emptied) stopped at
+# `git worktree remove`'s refusal, exit 4, and never reached `git branch -d`. The cure prunes that registration (git
+# worktree prune) and deletes the branch with -d. Three trees in a fresh repository in the sandbox, each -Removed
+# alone: (a) its folder emptied -> exit 0, the registration gone, the branch gone, the EMPTY line; (b) its folder
+# holding a stray file and no .git -> exit 4, refused with the folder's listing, the branch left; (c) a branch holding
+# a commit main lacks -> exit 4, git branch -d refused, the branch left.
+$r58Lines = New-Object System.Collections.Generic.List[string]
+$r58Ok = $true
+$r58Tool = Join-Path $repoRoot 'tools\lam\prune-worktrees.ps1'
+$r58Root = Join-Path $sandbox 'r58'
+function Invoke-R58Git { param([string]$Dir, [string[]]$A)
+    $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $o = @(& git -C $Dir -c core.autocrlf=false -c user.name=r58-fixture -c user.email=r58-fixture@example.invalid @A 2>&1 | ForEach-Object { "$_" }); $c = $LASTEXITCODE } finally { $ErrorActionPreference = $p }
+    return [pscustomobject]@{ code = $c; out = $o }
+}
+try {
+    if (Test-Path -LiteralPath $r58Root) { Remove-Item -LiteralPath $r58Root -Recurse -Force }
+    $m = Join-Path $r58Root 'main'; $wts = Join-Path $r58Root 'main-worktrees'
+    $null = New-Item -ItemType Directory -Force -Path $m, $wts
+    $null = Invoke-R58Git $m @('init', '-q', '-b', 'main')
+    [System.IO.File]::WriteAllText((Join-Path $m 'README.md'), "r58`n")
+    $null = Invoke-R58Git $m @('add', '-A'); $null = Invoke-R58Git $m @('commit', '-q', '-m', 'r58 base')
+    $arms = @(
+        @{ id = 'a'; name = 'wt-r58a'; branch = 'r58-a'; shape = 'its folder emptied'; expect = 0 },
+        @{ id = 'b'; name = 'wt-r58b'; branch = 'r58-b'; shape = 'its folder holding a stray file, no .git'; expect = 4 },
+        @{ id = 'c'; name = 'wt-r58c'; branch = 'r58-c'; shape = 'its branch holding a commit main lacks'; expect = 4 }
+    )
+    foreach ($a in $arms) {
+        $p = Join-Path $wts $a.name
+        $null = Invoke-R58Git $m @('worktree', 'add', '-q', '-b', $a.branch, $p)
+        if ($a.id -eq 'c') {
+            [System.IO.File]::WriteAllText((Join-Path $p 'c.txt'), "c`n")
+            $null = Invoke-R58Git $p @('add', '-A'); $null = Invoke-R58Git $p @('commit', '-q', '-m', 'r58 unmerged')
+        }
+        $h8 = (((Invoke-R58Git $p @('rev-parse', 'HEAD')).out -join '').Trim()).Substring(0, 8)
+        if ($a.id -eq 'a') { foreach ($e in @([System.IO.Directory]::GetFileSystemEntries($p))) { if ([System.IO.Directory]::Exists($e)) { [System.IO.Directory]::Delete($e, $true) } else { [System.IO.File]::Delete($e) } } }
+        if ($a.id -eq 'b') { [System.IO.File]::Delete((Join-Path $p '.git')); [System.IO.File]::WriteAllText((Join-Path $p 'stray.txt'), "stray`n") }
+        $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $out = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $r58Tool -MissionRoot $m -Remove -Trees $p -ConfirmRemove ($a.name + '@' + $h8) 2>&1 | ForEach-Object { "$_" }); $code = $LASTEXITCODE } finally { $ErrorActionPreference = $prev }
+        $listed = @((Invoke-R58Git $m @('worktree', 'list', '--porcelain')).out | Where-Object { $_ -like ('worktree *' + $a.name) }).Count
+        $brLeft = ((Invoke-R58Git $m @('rev-parse', '--verify', '-q', ('refs/heads/' + $a.branch))).code -eq 0)
+        switch ($a.id) {
+            'a' { $one = ($code -eq 0) -and ($listed -eq 0) -and (-not $brLeft) -and (@($out | Where-Object { $_ -match 'is present and EMPTY' }).Count -eq 1) -and [System.IO.Directory]::Exists($p) }
+            'b' { $one = ($code -eq 4) -and $brLeft -and (@($out | Where-Object { $_ -match '^FINDING: git worktree remove refused ' }).Count -eq 1) -and (@($out | Where-Object { $_ -match '^\s+stray\.txt$' }).Count -eq 1) }
+            'c' { $one = ($code -eq 4) -and $brLeft -and (@($out | Where-Object { $_ -match ('^FINDING: git branch -d ' + $a.branch + ' refused') }).Count -eq 1) }
+        }
+        if (-not $one) { $r58Ok = $false }
+        [void]$r58Lines.Add(('    [{0}] ({1}) {2}: exit {3} (expect {4}); still registered {5}; branch {6} left {7}' -f $(if ($one) { 'ok' } else { 'NO' }), $a.id, $a.shape, $code, $a.expect, $listed, $a.branch, $brLeft))
+        foreach ($l in @($out | Where-Object { $_ -match '^(remove|branch -d|FINDING|worktree prune|  the folder|    stray)' } | Select-Object -First 6)) { [void]$r58Lines.Add('          | ' + $l) }
+    }
+} catch {
+    $r58Ok = $false
+    [void]$r58Lines.Add('    THREW: ' + $_.Exception.Message)
+}
+$r58detail = @"
+  ONE QUESTION -- does prune-worktrees.ps1 -Remove finish over a worktree whose folder is present but empty, and still
+  refuse a folder that holds something (naming what) and a branch git branch -d refuses?
+$($r58Lines -join "`n")
+  WHAT A RED ROW MEANS. (a) exit 4: the emptied-folder FINDING is back (RELEASE-2 S9). (b) exit 0 or no listing: a
+  non-empty folder was taken for an empty one, or refused unnamed. (c) exit 0: an unmerged branch was deleted.
+"@
+Check -Id 'R-58' -Title 'F-H3 (row 495 (6)): prune-worktrees -Remove over an empty worktree folder prunes the registration and deletes the branch with -d; a non-empty folder refuses with its listing; an unmerged branch still refuses' `
+      -Ok $r58Ok -Detail $r58detail
+
 # =============================================================================================
 if (-not $KeepSandbox) {
     try { Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction Stop } catch { }

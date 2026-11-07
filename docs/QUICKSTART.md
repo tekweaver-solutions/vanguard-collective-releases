@@ -1,9 +1,13 @@
-# Vanguard Collective 1.1.0 -- Quickstart
+# Vanguard Collective 1.2.0 -- Quickstart
 
 The shortest correct path from nothing to an installed project, an initialised mission, a built
 smoke mission and a first acceptance reading. Every step is a command you run in **your own
 Windows PowerShell 5.1 terminal**, never inside a Claude Code session. INSTALL.md is the full
 procedure with the output to expect; this page is the route through it.
+
+Vanguard Collective is free to use under `LICENSE` (in the release), including for commercial and
+client work; the Framework itself may not be redistributed or resold. Support is by subscription, for
+paying customers: support@tekweaver.ca.
 
 The examples use `C:\dl` for the download, `C:\src\vanguard-collective` for a clone, and
 `C:\work\my-project` for the project. Any folders will do, but keep the project path short
@@ -32,13 +36,25 @@ ZIP your browser downloaded carries the Mark of the Web; INSTALL.md step 3 says 
 Either way below gives you the same source: the release ZIP is the tagged commit's files plus one
 generated file, `RELEASE`.
 
-**A. The release assets.** Download `vanguard-collective-v1.1.0.zip`, `SHA256SUMS` and
-`MEMBERS.sha256` from the release into `C:\dl`. Check the ZIP against `SHA256SUMS`, whose first line
-names the ZIP and whose second names `MEMBERS.sha256`:
+**A. The release assets.** The public repository,
+https://github.com/tekweaver-solutions/vanguard-collective-releases, publishes each release on its
+Releases page, https://github.com/tekweaver-solutions/vanguard-collective-releases/releases, with four
+assets: `vanguard-collective-v<VERSION>.zip` (the versioned name; `<VERSION>` is the text of the
+release's `VERSION` file), the same archive as `vanguard-collective.zip` (the fixed name, so
+`.../releases/latest/download/vanguard-collective.zip` is always the latest), `SHA256SUMS` and
+`MEMBERS.sha256`. Download `vanguard-collective-v1.2.0.zip`, `SHA256SUMS` and `MEMBERS.sha256` from the
+release into `C:\dl`, from the page or with the GitHub CLI:
+
+```powershell
+gh release download v<VERSION> --repo tekweaver-solutions/vanguard-collective-releases --dir C:\dl
+```
+
+Check the ZIP against `SHA256SUMS`, whose first line names the ZIP and whose second names
+`MEMBERS.sha256`:
 
 ```powershell
 $want = ((Get-Content C:\dl\SHA256SUMS)[0] -split '  ')[0]
-(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.1.0.zip).Hash.ToLower() -eq $want
+(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.2.0.zip).Hash.ToLower() -eq $want
 ```
 
 It must print `True`; if not, stop -- the archive is not the one that was released. Check
@@ -46,8 +62,8 @@ It must print `True`; if not, stop -- the archive is not the one that was releas
 expand:
 
 ```powershell
-Unblock-File C:\dl\vanguard-collective-v1.1.0.zip
-Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.1.0.zip -DestinationPath C:\dl\vanguard-collective-v1.1.0
+Unblock-File C:\dl\vanguard-collective-v1.2.0.zip
+Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.2.0.zip -DestinationPath C:\dl\vanguard-collective-v1.2.0
 ```
 
 Optionally check every expanded file against `MEMBERS.sha256` (one line per member,
@@ -55,19 +71,19 @@ Optionally check every expanded file against `MEMBERS.sha256` (one line per memb
 same number twice:
 
 ```powershell
-Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.1.0 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
-(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.1.0 -Recurse -File -Force).Count
+Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.2.0 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
+(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.2.0 -Recurse -File -Force).Count
 ```
 
 **B. A clone at the tag.** Clone outside the project folder and check out the release tag:
 
 ```powershell
-git clone <public repository URL> C:\src\vanguard-collective
+git clone https://github.com/tekweaver-solutions/vanguard-collective-releases.git C:\src\vanguard-collective
 cd C:\src\vanguard-collective
-git checkout v1.1.0
+git checkout v1.2.0
 ```
 
-The installer accepts a clone only when HEAD is exactly the commit tag `v1.1.0` names and
+The installer accepts a clone only when HEAD is exactly the commit tag `v1.2.0` names and
 `git status --porcelain` prints nothing. Anything else -- a branch whose tip is not the tagged commit, commits on top of the tag, a
 local change, an untracked file -- is refused before anything is written, with exit 1 and a last
 line beginning `install.ps1: REFUSED:`. A local change or an untracked file is listed first: up to
@@ -77,7 +93,7 @@ local changes (git status --porcelain is not empty) -- install from a clean clon
 tag. Nothing was written.` Every other refusal of the source is that one `REFUSED:` line alone.
 Clone again, or put the clone back at the tag with nothing changed.
 
-Below, `<release>` is `C:\dl\vanguard-collective-v1.1.0` (A) or `C:\src\vanguard-collective` (B).
+Below, `<release>` is `C:\dl\vanguard-collective-v1.2.0` (A) or `C:\src\vanguard-collective` (B).
 
 ## 3. Install
 
@@ -92,7 +108,7 @@ Then install. From the ZIP, name it so `framework.lock` records its sha256; from
 `-ReleaseZip` out (the installer refuses it with a clone):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.1.0\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.1.0.zip
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.2.0\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.2.0.zip
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\src\vanguard-collective\install.ps1 -Target C:\work\my-project
 ```
 
@@ -236,8 +252,9 @@ CHECKS instrument=WP-5 result=passed checks=<n> passed=<n> failed=0 skipped=0 li
 
 On a freshly installed project some named skips are expected, because what they need does not
 exist there. A reading of a fresh install of this release (a new git project with a bare origin,
-the install with its Python set, `mission init`, the smoke mission built, the container engine down)
-failed nothing and showed fifty-nine:
+the install from the ZIP, `mission init`, the smoke mission built, the container engine up)
+failed nothing; with the Python set installed (`-Python`) it showed 67 named skips, without it
+(`-SkipPythonSet`) 70:
 
 - **WP-1 H-12; WP-2 R-16, R-B; WP-3 C-1v, C-1w, C-2d** -- the project acceptance record they
   measure against (`docs/framework/LAM-ACCEPT.md`) is not in the checkout; no release after 0.2.0
@@ -247,17 +264,21 @@ failed nothing and showed fifty-nine:
   `src\.venv`, and they are measured).
 - **WP-3 C-2c** -- no `.claude\settings.local.json` in the checkout (nor in the primary checkout).
 - **WP-3 C-3e** -- the runtime plane holds no `HALT-*` file, so there is nothing live to drive.
-- **WP-3 C-1aw** -- the container engine is down, so what a goal reads with it up cannot be measured;
-  with Docker Desktop running, **C-1bd** skips in its place (its DOWN case cannot be measured).
+- **WP-3 C-1bd** -- the container engine is up, so what a goal reads with it really down cannot be
+  measured; with the engine down, **C-1aw** skips in its place (its UP case cannot be measured).
 - **WP-4 T-42** -- the project's runner has written no spawn ledger yet. Once it has, T-42 fails;
   the release notes' known limits say why.
 - **WP-4 T-53, T-54** -- each re-read records of the project the framework was extracted from,
   which are not part of this distribution.
-- **WP-7 V-1 to V-20 and L-1 to L-16** -- the dashboard service's tests and the dashboard's source
-  stay in the framework's development repository; the release carries the service and the built
+- **WP-7 V-1 to V-20 and L-1 to L-16, U-20, U-24 and U-26** -- the dashboard service's tests and the dashboard's
+  source stay in the framework's development repository; the release carries the service and the built
   dashboard only.
-- **WP-7 F-0, U-4, U-5, U-10, U-13, U-14, U-15, U-16** -- their fixtures are fresh checkouts made by
+- **WP-7 F-0, U-4, U-5, U-10, U-13 to U-16 and U-25** -- their fixtures are fresh checkouts made by
   `mission.ps1 init` and read `VERSION`, which stay in the release tree and are not installed.
+- **WP-7 U-28 and U-29** -- each runs the release tree's `mission.ps1`, which is not installed.
+- **WP-7 U-27** -- it reads the release tree's `.gitignore`; an installed project's is its own.
+- **WP-7 U-21** -- it holds the settings template to its manifest row, and `provenance/` is not installed.
+- **WP-7 U-19, U-22 and U-30**, without the Python set only -- no `tools\.venv` interpreter to run the service on.
 
 Three members that failed on a fresh install of a build before 1.0.0 were cured in 1.0.0: WP-1
 H-26 (`mission init`

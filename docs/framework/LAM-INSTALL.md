@@ -98,7 +98,8 @@ functionality.**
 | `evidence-dispatch-end.ps1` | 9606 | `694566395549df2d` |
 | `evidence-pre-push.ps1` | 10059 | `160976931b1e7b45` |
 | `check-prepush-installed.ps1` | 2067 | `ed36ac62e4b4a468` |
-| `lib/evidence-common.ps1` | 530424 | `9b2d5712906e343a` |
+| `evidence-subagent-stop.ps1` | 2287 | `327e6965371bfc1f` |
+| `lib/evidence-common.ps1` | 533638 | `ed07a84d556fa248` |
 
 > **THIS TABLE WAS STALE IN 5 OF 6 ROWS, and the library row was off by 141,267 bytes** — it read
 > 29246 against a live 170513. (That figure read *131,946* until a later WP-5 reading subtracted it:
@@ -369,19 +370,23 @@ functionality.**
 
 ```
 next-gen has, current does not :  evidence-dispatch-end.ps1
+                                  evidence-subagent-stop.ps1
 current has, next-gen does NOT :  evidence-place-substrate.ps1
                                   evidence-verify-placement.ps1
 ```
 
 **`evidence-place-substrate.ps1` and `evidence-verify-placement.ps1` have no next-generation
-counterpart.** They are not registered in `.claude/settings.json` (only four registrations exist —
-see §2), but `tools/framework/tests/test-a15-placement-path.ps1` exercises them and two validator
+counterpart.** They are not registered in `.claude/settings.json` (its five registrations are §2's
+table, and neither is among them), but `tools/framework/tests/test-a15-placement-path.ps1` exercises them and two validator
 results reference them. **A replacement that deletes the hooks directory removes them.** The
 procedure below therefore **overlays named files** and never replaces a directory.
 
 **`evidence-dispatch-end.ps1` is new and is not a registered hook.** It is the runner-side boundary
 writer for H-1: the runner writes `DISPATCH-END` after worker exit, and the manifest finalizes on
 that marker rather than on `Stop`. It needs no settings entry; it needs to be *present*.
+
+**`evidence-subagent-stop.ps1` is new and IS a registered hook** -- the `SubagentStop` registration,
+a next-generation-only event with no A1 counterpart (§2's next-generation-only list declares it).
 
 ### 1.2 The library is dot-sourced by a RELATIVE path, and that constrains where things may live
 
@@ -413,14 +418,15 @@ in step 2.
 | `PreToolUse` | `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash\|PowerShell` | `powershell -NoProfile -ExecutionPolicy Bypass -File "$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-guard-pretooluse.ps1"` | `10` |
 | `Stop` | `*` | `powershell -NoProfile -ExecutionPolicy Bypass -File "$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-stop-finalize.ps1"` | `60` |
 | `PostToolUse` | `*` | `powershell -NoProfile -ExecutionPolicy Bypass -File "$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-post-tool-use.ps1"` | `30` |
+| `SubagentStop` | `*` | `powershell -NoProfile -ExecutionPolicy Bypass -File "$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-subagent-stop.ps1"` | `30` |
 | `PreCompact` | `*` | `powershell -NoProfile -ExecutionPolicy Bypass -File "$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-pre-compact.ps1"` | `60` |
 
-*Provenance:* re-derive this table from your own `.claude/settings.json`, read with the file tool and hashed in-process by a script invoked by path; `.claude/` is gitignored and nothing under it is tracked, so the record of the registration is THIS TABLE, not a tracked file, and it is re-derived from the live file whenever the registration moves.
+*Provenance:* re-derive this table from your own `.claude/settings.json`, read with the file tool and hashed in-process by a script invoked by path, and re-derive it whenever the registration moves. `.claude/settings.json` IS tracked: in the framework repository it is the installer's TEMPLATE (`provenance/manifest.jsonl`, destination `.claude/settings.json`), and `install.ps1` writes it into a project that has none and keeps a project's own copy (INSTALL.md section 6); only `/.claude/settings.local.json` and `/.claude/worktrees/` are ignored (mission init's rules). The five rows above are the five registrations that template carries: the four swapped and the one next-generation-only event below.
 
-**Where the swap below has been performed**, all four commands above name `tools/evidence-hooks-next/hooks/`. **What a reading of the file does not confirm:** the table above is a reading of the registration FILE, not of a probe -- it records what the file registers, not that a session loads it ("A registration you have only read is a registration you have not tested", after the READY probe below). Confirm the live swap at the terminal with section 2's READY probe and section 5.5's probe pair (next-gen deny, `docs` control allow, sealed allow); re-deriving this table and section 5.5's heading from the live registration does not discharge that. A session started in a linked worktree that carries no `.claude/settings.json` registers no project hook from its own tree; where the repository tracks that file, as the framework repository does, every worktree carries it, and a session started there runs the guard, whose seat tripwire refuses a seat's file-tool and classified-verb writes under `.mission/**` and `.mission-runtime/lam/**` (a dispatched worker's own `.mission` writes are judged by the worker rule instead), so a seat opened there writes its handoff to its scratchpad (section 11). **For a FRESH mission it is still the procedure:** `tools/framework/install-evidence-hooks.ps1` merges `tools/framework/hooks/settings.evidence-hooks.json` into it -- it reads the fragment at `:48`, takes only its `hooks` key at `:99`, drops its own earlier entries (those carrying the `tools/framework/hooks/` marker set at `:49`) and appends the fragment's entries event by event at `:124-143` (the append is `:141`), serialises the result at `:146`, and writes `.claude/settings.json` at `:166`, which only `-Apply` reaches (without it the script exits at `:154-157`) -- and that fragment's four commands name `tools/framework/hooks/` -- the SEALED A1 library -- with the same events, matchers and timeouts as above, so a fresh install starts from the pre-swap registrations and the four edits below are what move it.
+**Where the swap below has been performed**, all five commands above name `tools/evidence-hooks-next/hooks/`. **What a reading of the file does not confirm:** the table above is a reading of the registration FILE, not of a probe -- it records what the file registers, not that a session loads it ("A registration you have only read is a registration you have not tested", after the READY probe below). Confirm the live swap at the terminal with section 2's READY probe and section 5.5's probe pair (next-gen deny, `docs` control allow, sealed allow); re-deriving this table and section 5.5's heading from the live registration does not discharge that. A session started in a linked worktree that carries no `.claude/settings.json` registers no project hook from its own tree; where the repository tracks that file, as the framework repository does, every worktree carries it, and a session started there runs the guard, whose seat tripwire refuses a seat's file-tool and classified-verb writes under `.mission/**` and `.mission-runtime/lam/**` (a dispatched worker's own `.mission` writes are judged by the worker rule instead), so a seat opened there writes its handoff to its scratchpad (section 11). **For a FRESH mission it is still the procedure:** `tools/framework/install-evidence-hooks.ps1` merges `tools/framework/hooks/settings.evidence-hooks.json` into it -- it reads the fragment at `:48`, takes only its `hooks` key at `:99`, drops its own earlier entries (those carrying the `tools/framework/hooks/` marker set at `:49`) and appends the fragment's entries event by event at `:124-143` (the append is `:141`), serialises the result at `:146`, and writes `.claude/settings.json` at `:166`, which only `-Apply` reaches (without it the script exits at `:154-157`) -- and that fragment's four commands name `tools/framework/hooks/` -- the SEALED A1 library -- with the same events, matchers and timeouts as above, so a fresh install starts from the pre-swap registrations and the four edits below are what move it.
 
 **The swap is four path edits — `tools/framework/hooks/` → `tools/evidence-hooks-next/hooks/` — and
-nothing else.** Matchers do not change. No entry is added and none is removed.
+nothing else.** Matchers do not change. The swap adds no entry and removes none; the next-generation-only events below are added beside it.
 
 ```
 tools/framework/hooks/evidence-guard-pretooluse.ps1   ->  tools/evidence-hooks-next/hooks/evidence-guard-pretooluse.ps1
@@ -428,6 +434,14 @@ tools/framework/hooks/evidence-post-tool-use.ps1      ->  tools/evidence-hooks-n
 tools/framework/hooks/evidence-stop-finalize.ps1      ->  tools/evidence-hooks-next/hooks/evidence-stop-finalize.ps1
 tools/framework/hooks/evidence-pre-compact.ps1        ->  tools/evidence-hooks-next/hooks/evidence-pre-compact.ps1
 ```
+
+**Next-generation-only events -- add each, as its row reads, beside the four swapped above.** The next-generation set registers events the sealed A1 fragment `tools/framework/hooks/settings.evidence-hooks.json` never had; the sealed fragment stays as it is, and this list is where such an event is declared (WP-1 H-26 composes the registration from the fragment, the swap and this list). Today there is exactly one; same columns as the table above, `type` `command`:
+
+| event | matcher | command | timeout |
+|---|---|---|---|
+| `SubagentStop` | `*` | `powershell -NoProfile -ExecutionPolicy Bypass -File "$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-subagent-stop.ps1"` | `30` |
+
+`SubagentStop` has no A1 counterpart because A1 predates the event: the sealed fragment was written and sealed with four events, before the next-generation set had a hook for a subagent's stop.
 
 **Add one registration you may want and the smoke repo has**, if you want the zero-paste attestation
 to have a prompt register in your project as well:
@@ -751,7 +765,7 @@ obtained, not two** — so R-3's required handoff was unwritable by the role obl
 The blanket deny is gone from `worker.json` and **enforcement is here**.
 
 **Cut from** `tools/evidence-hooks-next/hooks/lib/evidence-common.ps1` **lines 4188-4264**, whose
-file sha256 (16) is **`9b2d5712906e343a`** over 530424 bytes — **BASIS: LF-NORMALISED BYTES**, the
+file sha256 (16) is **`ed07a84d556fa248`** over 533638 bytes — **BASIS: LF-NORMALISED BYTES**, the
 same basis as §1's tables and reproduced by the block above them. (On a checkout whose working
 copy has CRLF line endings, `Get-FileHash` answers another hash over more bytes; that is the
 working copy's basis and it is *not* what this line states. The two bases are named here on purpose: the round that cut this excerpt is
@@ -2274,7 +2288,7 @@ evidence plane at all — strictly worse than the leak it would prevent. This is
 independently confirmed three times.
 
 **What is in force instead**, and what each template now carries as a checkable field rather than
-prose (ADR-036):
+prose (LM2-ADR-036):
 
 | role | `separation_obtained` |
 |---|---|

@@ -57,10 +57,26 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$SmokeRoot
+    [string]$SmokeRoot,
+    # INTERNAL (RELEASE-4 S2 F-H18): the build runs as a child of the invocation, so every environment variable it sets
+    # (the fixed identity, GIT_CONFIG_*, the removal of every GIT_* it inherits) dies with that child and the caller's
+    # process is left as it was -- the operator's next commit in the same terminal carried the fixture identity before.
+    # The parent makes the isolation folder (the absent global configuration git is pointed at), hands it over, and
+    # removes it when the child ends; nothing is written beside the smoke root.
+    [switch]$BuilderChild,
+    [string]$IsolationDir
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $BuilderChild) {
+    $iso = Join-Path ([System.IO.Path]::GetTempPath()) ('lam-smoke-iso-' + [guid]::NewGuid().ToString('N').Substring(0, 12))
+    $null = [System.IO.Directory]::CreateDirectory($iso)
+    $childArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-BuilderChild', '-IsolationDir', $iso)
+    if ($SmokeRoot) { $childArgs += @('-SmokeRoot', $SmokeRoot) }
+    try { & (Join-Path $PSHOME 'powershell.exe') @childArgs; $childExit = $LASTEXITCODE }
+    finally { try { [System.IO.Directory]::Delete($iso, $true) } catch { } }
+    exit $childExit
+}
 $repoRoot   = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $sourceRoot = Join-Path $PSScriptRoot 'smoke-mission'
 $utf8       = New-Object System.Text.UTF8Encoding($false)
@@ -273,7 +289,9 @@ if ($realRoot -ne $SmokeRoot) { Say "lands at    : $realRoot" }
 # that do not exist, so a host's global ignore cannot hide a mission file from `git add` and its global attributes
 # cannot re-encode one. Every other GIT_* variable was removed above. Repositories are made with an empty template, so
 # no template hook is copied in.
-$noGlobal = Join-Path $parentDir 'lam-smoke.no-global-gitconfig'
+# F-H18: inside the isolation folder the parent made (and removes), never beside the smoke root.
+if (-not $IsolationDir) { $IsolationDir = Join-Path ([System.IO.Path]::GetTempPath()) ('lam-smoke-iso-' + [guid]::NewGuid().ToString('N').Substring(0, 12)); $null = [System.IO.Directory]::CreateDirectory($IsolationDir) }
+$noGlobal = Join-Path $IsolationDir 'no-global-gitconfig'
 if (Test-Path -LiteralPath $noGlobal) { Refuse "$noGlobal exists; the builder names it as the global configuration, ignore and attributes file git must find absent" }
 $env:GIT_AUTHOR_NAME     = $identity.name; $env:GIT_AUTHOR_EMAIL    = $identity.email
 $env:GIT_COMMITTER_NAME  = $identity.name; $env:GIT_COMMITTER_EMAIL = $identity.email

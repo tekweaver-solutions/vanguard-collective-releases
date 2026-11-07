@@ -61,7 +61,7 @@ def mission_errors(events, streams, ahead_days):
     for did, d in sorted(derive.dispatches(events).items()):
         f = d["finalized"]
         if f is not None and derive.is_partial(f):
-            out.append(_error("partial_manifest", f, "dispatch %s finalized with manifest_state %s" % (did, f["line"]["payload"].get("manifest_state")), identity))
+            out.append(_error("partial_manifest", f, "dispatch %s finalized with %s" % (did, ", ".join(derive.partial_fields(f))), identity))
     v = derive.latest_verify(events)
     if v is not None:
         p = v["line"]["payload"]

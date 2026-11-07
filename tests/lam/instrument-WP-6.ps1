@@ -186,6 +186,20 @@ function Write-Wp6Member {
     }
 }
 function ReadText { param([string]$P) if (Test-Path -LiteralPath $P) { return [System.IO.File]::ReadAllText($P) } return '' }
+function Test-Wp6H3Applied {
+    # F-H9 (RELEASE-4 S2; row 495 (8)): THE H-3 ROW READS THE PATCH's CODE, NEVER ITS COMMENTARY. In 1.0.0 F-0 matched
+    # '.mission/evidence/session-' anywhere in tools/mission-lib.ps1, and the only lines that matched were COMMENTS (the D9
+    # exemption itself dropped from the code, the comment explaining why left): the row passed on prose. The H-3 patch
+    # (tools/evidence-hooks-next/patches/clean-tree-exemption.patch) installs the admitted-porcelain reader; the row is
+    # its two calls, on code lines -- '<# ... #>' blocks and '#' lines removed before anything is read.
+    param([AllowNull()][string]$Text)
+    if (-not $Text) { return $false }
+    $t = [regex]::Replace(($Text -replace "`r`n", "`n"), '(?s)<#.*?#>', '')
+    $code = @($t -split "`n" | Where-Object { $_.Trim() -and -not $_.TrimStart().StartsWith('#') })
+    $porc = @($code | Where-Object { $_ -match '\bGet-LamPorcelainState\s+-MissionRoot\b' }).Count
+    $decl = @($code | Where-Object { $_ -match '\bGet-LamDeclaredAdmittedPorcelain\s+-MissionRoot\b' }).Count
+    return (($porc -ge 1) -and ($decl -ge 1))
+}
 function Get-LfBasisSha256 {
     # THE LF/BLOB BASIS, WHICH IS ALREADY THIS REPOSITORY'S UNIT FOR EVERY FILE TABLE. F-0 compared
     # two checkouts BYTE FOR BYTE, and the two differ by EOL normalisation alone: the repository of
@@ -332,7 +346,7 @@ $assertions   = @()
 if (Test-Path -LiteralPath (Join-Path $missionDir 'contract\assertions')) {
     $assertions = @(Get-ChildItem -LiteralPath (Join-Path $missionDir 'contract\assertions') -File -Filter '*.yaml' -ErrorAction SilentlyContinue)
 }
-$patchApplied = (ReadText (Join-Path $SmokeRoot 'tools\mission-lib.ps1')) -match '\.mission/evidence/session-'
+$patchApplied = Test-Wp6H3Applied -Text (ReadText (Join-Path $SmokeRoot 'tools\mission-lib.ps1'))
 
 # THE TWO GIT ROWS SKIP ONLY AT A FILES-ONLY ROOT (no .git entry: a folder of copied files). At a LIVE
 # repository they are measured, and a git that cannot answer there MISSES them; an ABSENT root still
@@ -443,7 +457,7 @@ function New-F1SmokeFiles {
     # arm can carry them -- the git-init'd sibling and the tracked-fixture folder inside the mirror.
     param([string]$Dir, [string]$SchemaMode, [byte[]]$SrcBytes)
     New-F1Text -Path (Join-Path $Dir '.claude\settings.local.json') -Text '{ "hooks": "tools/evidence-hooks-next/hooks/pre-tool-use.ps1" }'
-    New-F1Text -Path (Join-Path $Dir 'tools\mission-lib.ps1') -Text "# F-1 fixture stub -- carries the H-3 marker F-0 looks for:`n# .mission/evidence/session-`n"
+    New-F1Text -Path (Join-Path $Dir 'tools\mission-lib.ps1') -Text "# F-1 fixture stub -- carries, as CODE, the H-3 patch's calls F-0 reads (Test-Wp6H3Applied):`n`$porc = Get-LamPorcelainState -MissionRoot `$Root`n`$decl = Get-LamDeclaredAdmittedPorcelain -MissionRoot `$Root`n"
     foreach ($n in 1..5) { New-F1Text -Path (Join-Path $Dir ".mission\contract\assertions\a$n.yaml") -Text "id: a$n`n" }
     $fSchema = Join-Path $Dir 'docs\framework\evidence-manifest.schema.json'
     $null = New-Item -ItemType Directory -Path (Split-Path -Parent $fSchema) -Force
@@ -706,6 +720,23 @@ Check -Id 'F-1' -Title 'F-0''s location dependence is the named DEFAULT''s: the 
       -Ok (-not ($f1Rows.Values -contains $false)) -Detail $f1Detail.TrimEnd()
 
 }
+
+# =============================================================================================
+# F-2 -- F-H9 (RELEASE-4 S2; row 495 (8)): F-0's H-3 ROW READS THE PATCH's CODE, NOT COMMENT TEXT
+# =============================================================================================
+# The predicate F-0 uses (Test-Wp6H3Applied), over the smoke mission's own tools/mission-lib.ps1, over that file with
+# every comment line removed (the code unchanged: still applied), and over a text holding the old marker and both calls
+# only inside comments (not applied). RED at fc9dc67, where F-0 matched the whole text: comments-only read applied and
+# the stripped file read not applied.
+$f2Real = ReadText (Join-Path $SmokeRoot 'tools\mission-lib.ps1')
+$f2Stripped = ((($f2Real -replace "`r`n", "`n") -split "`n") | Where-Object { -not $_.TrimStart().StartsWith('#') }) -join "`n"
+$f2Comments = "# .mission/evidence/session-`n#   `$porc = Get-LamPorcelainState -MissionRoot `$Root`n#   `$decl = Get-LamDeclaredAdmittedPorcelain -MissionRoot `$Root`n<#`n`$porc = Get-LamPorcelainState -MissionRoot `$Root`n`$decl = Get-LamDeclaredAdmittedPorcelain -MissionRoot `$Root`n#>`n"
+$f2 = [ordered]@{
+    'the smoke mission''s tools/mission-lib.ps1 reads applied, by its code' = [bool](Test-Wp6H3Applied -Text $f2Real)
+    'the same file with every comment line removed still reads applied'      = [bool]($f2Real -and (Test-Wp6H3Applied -Text $f2Stripped))
+    'the marker and both calls only inside comments read NOT applied'        = (-not (Test-Wp6H3Applied -Text $f2Comments))
+}
+Write-Wp6Member -Id 'F-2' -Title 'F-H9 (row 495 (8)): F-0''s H-3 row is decided by the H-3 patch''s code (the admitted-porcelain reader''s two calls), never by comment text' -Rows $f2
 
 # =============================================================================================
 # S-1 -- dispatch D-1 authored, run, handoff valid, anchors present
