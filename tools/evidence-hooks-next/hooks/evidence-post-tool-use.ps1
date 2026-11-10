@@ -150,8 +150,19 @@ try {
                 Remove-MissionTelemetryMarker -Root $root -Name ('session-' + $sessionId)
             }
         }
+        $evPayload = [ordered]@{ tool = $toolName; exit_code = $evExit; paths = $evPaths; session_id = $sessionId; dispatch_id = $dispatchId }
+        # UI-2 S2 B-12 (decision 11): a SUBAGENT's own call. The harness stamps a subagent's hooks with the PARENT's
+        # session_id and adds agent_id and agent_type to its PostToolUse payload (read live at A-3, Claude Code 2.1.312);
+        # the line carries them, so the dashboard attributes the call to that subagent under its parent. A parent's own
+        # call carries neither field. Optional payload properties, schema 1.2: a reader without them reads the line as before.
+        $evAgentId = [string](Get-HookField $payload 'agent_id' '')
+        if ($evAgentId) {
+            $evPayload['agent_id'] = $evAgentId
+            $evAgentType = [string](Get-HookField $payload 'agent_type' '')
+            if ($evAgentType) { $evPayload['agent_type'] = $evAgentType }
+        }
         $null = Write-MissionEvent -Root $root -Kind 'tool_call' -SourcePath $evSource -Hook 'PostToolUse' -SessionId $sessionId -DispatchId $dispatchId `
-                    -Payload ([ordered]@{ tool = $toolName; exit_code = $evExit; paths = $evPaths; session_id = $sessionId; dispatch_id = $dispatchId })
+                    -Payload $evPayload
         if (@('Write', 'Edit', 'MultiEdit', 'NotebookEdit') -contains $toolName) {
             foreach ($evP in $evPaths) {
                 $evRel = ConvertTo-MissionEventRelPath -Root $root -Path $evP

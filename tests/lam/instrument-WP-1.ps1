@@ -8582,7 +8582,7 @@ Check -Id 'H-25' -Title 'the seat tripwire: a mission-plane write from a session
 # So WP-E does not write it. It ships the EXACT proposed content as
 # tools/evidence-hooks-next/claude-settings.proposed.json and the operator's steps, and this
 # member READS:
-#   (P) THE PROPOSAL -- present, passing the reader below, and equal, line for line, to THIS MEMBER'S RESTATEMENT
+#   (P) THE PROPOSAL -- present, passing the reader below, and equal (parsed, S2-AM3 below) to THIS MEMBER'S RESTATEMENT
 #       of the installer's composition (install-evidence-hooks.ps1:48-146: the TRACKED fragment
 #       tools/framework/hooks/settings.evidence-hooks.json's hooks merged into an empty settings object and
 #       serialised by PS 5.1's ConvertTo-Json -Depth 20, whose key order is that hashtable's), then LAM-INSTALL
@@ -8599,6 +8599,13 @@ Check -Id 'H-25' -Title 'the seat tripwire: a mission-plane write from a session
 #       The installer itself is not
 #       driven (it writes .claude/settings.json). WP-E measured the same restatement sha256-EQUAL to the live root
 #       file without opening it, so a fragment that moves turns this row red and the proposal must be re-derived.
+#       S2-AM3 (the chat's amendment, UI-2 S2, 2026-11-09): "equal" is read PARSED, not line for line -- the same
+#       events, each event's groups in order, each group's matcher and hooks in order, each hook's type, command and
+#       timeout, and the one added key, with object key order not compared. The reason, measured: the composition
+#       run verbatim orders the six events Stop, PreCompact, SessionEnd, SubagentStop, PostToolUse, PreToolUse
+#       under powershell.exe 5.1 in every process, and differently in each process under pwsh 7 (.NET's per-process
+#       string-hash randomisation behind @{}, with pwsh's own JSON indentation), so no one byte order equals both,
+#       and the line comparison passed at 17befc0 under 5.1 only and never under PowerShell 7.
 #   (R) THE READER, over a fixture table with a control in each direction: it passes the proposal and refuses
 #       each defect -- the key absent, true, a string; a PreToolUse matcher missing a tool; the sealed A1
 #       library registered instead of the next-gen one; a hook event missing; not JSON; SubagentStop missing;
@@ -8635,8 +8642,8 @@ function Read-Wp1H26NextGenOnly {
     $i = $mk[0] + 1
     while ($i -lt $s3 -and -not $doc[$i].StartsWith('|')) { $i++ }
     if (($i + 1) -ge $s3) { [void]$f.Add('the next-gen-only events list carries no table'); return @{ found = $false; rows = @(); findings = $f.ToArray() } }
-    if ($doc[$i].Trim() -cne '| event | matcher | command | timeout |') { [void]$f.Add('the list''s header is not the section''s own columns: ' + $doc[$i].Trim()) }
-    if ($doc[$i + 1].Trim() -cne '|---|---|---|---|') { [void]$f.Add('the list''s separator row is not |---|---|---|---|') }
+    if (-not [string]::Equals($doc[$i].Trim(), '| event | matcher | command | timeout |', [System.StringComparison]::Ordinal)) { [void]$f.Add('the list''s header is not the section''s own columns: ' + $doc[$i].Trim()) }
+    if (-not [string]::Equals($doc[$i + 1].Trim(), '|---|---|---|---|', [System.StringComparison]::Ordinal)) { [void]$f.Add('the list''s separator row is not |---|---|---|---|') }
     for ($j = $i + 2; $j -lt $s3 -and $doc[$j].StartsWith('|'); $j++) {
         $raw = $doc[$j].Trim()
         $cells = @([regex]::Split($raw.Substring(1, $raw.Length - 2), '(?<!\\)\|') | ForEach-Object { $_.Trim() })
@@ -8657,8 +8664,10 @@ function Read-Wp1H26NextGenOnly {
 }
 function Test-Wp1H26Registration {
     # THE READER: @{ ok; findings } for one JSON text. Strict about the TYPE of autoMemoryEnabled, the EXACT
-    # PreToolUse matcher, and the next-gen script behind each of the five events (the four swapped and
-    # SubagentStop, the one next-gen-only event LAM-INSTALL section 2 declares).
+    # PreToolUse matcher, and the next-gen script behind each of the five events it names (the four swapped and
+    # SubagentStop). LAM-INSTALL section 2 declares two next-gen-only events since UI-2 S2 B-14, SubagentStop and
+    # SessionEnd; SessionEnd is not among the five -- (P)'s comparison holds it, and every event present is read
+    # below for the sealed path.
     param([AllowNull()][string]$Text)
     $f = New-Object System.Collections.Generic.List[string]
     $o = $null
@@ -8687,7 +8696,7 @@ function Test-Wp1H26Registration {
                 $cmd = if ($hNames -contains 'command') { [string]$h.command } else { '' }
                 $typ = if ($hNames -contains 'type') { [string]$h.type } else { '' }
                 [void]$allCommands.Add($cmd)
-                if (($matcher -ceq $want[$ev][0]) -and ($typ -eq 'command') -and $cmd.Contains('$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/' + $want[$ev][1])) { $found = $true }
+                if ([string]::Equals($matcher, $want[$ev][0], [System.StringComparison]::Ordinal) -and [string]::Equals($typ, 'command', [System.StringComparison]::Ordinal) -and $cmd.Contains('$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/' + $want[$ev][1])) { $found = $true }
             }
         }
         if (-not $found) { [void]$f.Add($ev + ': no command hook, matcher ' + $want[$ev][0] + ', naming the next-gen ' + $want[$ev][1]) }
@@ -8718,6 +8727,97 @@ function ConvertTo-Wp1H26Hashtable {
     if ($Obj -is [System.Management.Automation.PSCustomObject]) { $h = @{}; foreach ($p in @($Obj.PSObject.Properties)) { $h[$p.Name] = ConvertTo-Wp1H26Hashtable $p.Value }; return $h }
     return $Obj
 }
+function Get-Wp1H26KeysSorted {
+    # S2-AM3: a parsed JSON object's keys, ordinal-sorted (none for anything not an object).
+    param($Obj)
+    if ($null -eq $Obj -or $Obj -isnot [System.Management.Automation.PSCustomObject]) { return }
+    $k = [string[]]@($Obj.PSObject.Properties | ForEach-Object { $_.Name })
+    [Array]::Sort($k, [System.StringComparer]::Ordinal)
+    return $k
+}
+function ConvertTo-Wp1H26Canonical {
+    # S2-AM3: one parsed JSON value as a canonical string -- object keys ordinal-sorted, arrays in their order, strings
+    # length-prefixed, numbers by value (5.1 parses 30 as Int32, PowerShell 7 as Int64; 30.0 and 30 alike under both,
+    # R5-5), booleans and null by name. R6-2: the value is the IEEE double an ECMAScript JSON.parse reads ('R' format), so
+    # 5.1's exact decimal of 59.99999999999999999999 reads 60 as pwsh's double does.
+    param($V)
+    if ($null -eq $V) { return 'null' }
+    if ($V -is [bool]) { if ($V) { return 'true' } else { return 'false' } }
+    if ($V -is [string]) { return ('s' + $V.Length + ':' + $V) }
+    if ($V -is [byte] -or $V -is [int16] -or $V -is [int] -or $V -is [long] -or $V -is [decimal] -or $V -is [double] -or $V -is [single]) { return ('n:' + ([double]$V).ToString('R', [System.Globalization.CultureInfo]::InvariantCulture)) }
+    if ($V -is [System.Management.Automation.PSCustomObject]) {
+        $parts = New-Object System.Collections.Generic.List[string]
+        foreach ($k in @(Get-Wp1H26KeysSorted $V)) { [void]$parts.Add((ConvertTo-Wp1H26Canonical $k) + '=' + (ConvertTo-Wp1H26Canonical $V.$k)) }
+        return ('{' + ($parts.ToArray() -join ',') + '}')
+    }
+    if ($V -is [System.Collections.IEnumerable]) {
+        $parts = New-Object System.Collections.Generic.List[string]
+        foreach ($x in $V) { [void]$parts.Add((ConvertTo-Wp1H26Canonical $x)) }
+        return ('[' + ($parts.ToArray() -join ',') + ']')
+    }
+    return ('?' + $V.GetType().FullName + ':' + [string]$V)
+}
+function Test-Wp1H26PlainJsonText {
+    # R5-6 (UI-2 S2 validator round 5): the proposal's TEXT is plain JSON, read the same under both shells -- pwsh's
+    # ConvertFrom-Json accepts a comment and a trailing comma that 5.1's refuses, and both keep one of two duplicated keys
+    # silently. Returns '' or the first defect: a character JSON does not allow outside a string (a comment's slash among
+    # them), a comma before a closing bracket, or a key repeated within one object.
+    # R6-1 and R6-3 (UI-2 S2 validator round 6; HALT-U2FW2B-05's ruling): the tokens are JSON's grammar exactly (RFC 8259) --
+    # whitespace only space, tab, LF and CR (any other white space, U+00A0, U+000B, U+000C, U+0085, U+2028, U+3000 among
+    # them, is a defect); a number -?(0|[1-9][0-9]*)(.[0-9]+)?([eE][+-]?[0-9]+)? with ASCII digits only (a leading zero is a
+    # defect); a string with only the escapes \" \\ \/ \b \f \n \r \t \uXXXX and no raw character U+0000-U+001F; and a
+    # repeated key is found after unescaping, compared ordinally ("SessionEnd" repeats SessionEnd).
+    param([string]$Text)
+    $pattern = '(?<str>"(?:[^"\\\x00-\x1F]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*")' +
+               '|(?<badstr>"(?:[^"\\]|\\[\s\S])*"?)' +
+               '|(?<num>-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?(?![0-9A-Za-z.+\-]))' +
+               '|(?<lead0>-?0[0-9]+)' +
+               '|(?<lit>(?:true|false|null)(?![0-9A-Za-z]))' +
+               '|(?<punct>[{}\[\]:,])' +
+               '|(?<ws>[ \t\n\r]+)' +
+               '|(?<bad>[\s\S])'
+    $stack = New-Object System.Collections.Generic.List[object]
+    $prev = ''; $prevKind = ''
+    foreach ($m in [regex]::Matches($Text, $pattern)) {
+        $t = $m.Value
+        if ($m.Groups['ws'].Success) { continue }
+        if ($m.Groups['badstr'].Success) { return ('a string JSON does not allow (an invalid escape, a raw control character U+0000-U+001F, or no closing quote) at char ' + $m.Index) }
+        if ($m.Groups['lead0'].Success) { return ('a number with a leading zero: ' + $t + ' at char ' + $m.Index) }
+        if ($m.Groups['bad'].Success) { return ('a character JSON does not allow outside a string: U+' + ([int][char]$t).ToString('X4') + ' at char ' + $m.Index) }
+        if ([string]::Equals($t, '}', [System.StringComparison]::Ordinal) -or [string]::Equals($t, ']', [System.StringComparison]::Ordinal)) {
+            if ([string]::Equals($prev, ',', [System.StringComparison]::Ordinal)) { return ('a trailing comma before ' + $t + ' at char ' + $m.Index) }
+        }
+        if ([string]::Equals($t, ':', [System.StringComparison]::Ordinal) -and $stack.Count -and [string]::Equals($stack[$stack.Count - 1].kind, '{', [System.StringComparison]::Ordinal) -and ($prevKind -eq 'str')) {
+            $key = ConvertFrom-Wp1H26JsonString $prev
+            if (-not $stack[$stack.Count - 1].seen.Add($key)) { return ('the key ' + $prev + ' twice in one object (compared after unescaping), at char ' + $m.Index) }
+        }
+        if ([string]::Equals($t, '{', [System.StringComparison]::Ordinal)) { [void]$stack.Add(@{ kind = '{'; seen = (New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList ([System.StringComparer]::Ordinal)) }) }
+        elseif ([string]::Equals($t, '[', [System.StringComparison]::Ordinal)) { [void]$stack.Add(@{ kind = '['; seen = $null }) }
+        elseif ([string]::Equals($t, '}', [System.StringComparison]::Ordinal) -or [string]::Equals($t, ']', [System.StringComparison]::Ordinal)) { if ($stack.Count) { $stack.RemoveAt($stack.Count - 1) } }
+        $prev = $t
+        $prevKind = if ($m.Groups['str'].Success) { 'str' } else { 'other' }
+    }
+    return ''
+}
+function Test-Wp1H26SameList {
+    # R6-2: two string lists equal element by element, ordinally (no join, so no separator can blur two keys into one).
+    param([string[]]$A, [string[]]$B)
+    $a1 = @($A); $b1 = @($B)
+    if ($a1.Count -ne $b1.Count) { return $false }
+    for ($i = 0; $i -lt $a1.Count; $i++) { if (-not [string]::Equals($a1[$i], $b1[$i], [System.StringComparison]::Ordinal)) { return $false } }
+    return $true
+}
+function ConvertFrom-Wp1H26JsonString {
+    # R6-3: one JSON string token (quotes included, already held to the grammar) to the string it spells.
+    param([string]$Token)
+    $inner = $Token.Substring(1, $Token.Length - 2)
+    $ev = [System.Text.RegularExpressions.MatchEvaluator]{
+        param($mm)
+        if ($mm.Groups[1].Success) { return [string][char][Convert]::ToInt32($mm.Groups[1].Value, 16) }
+        switch -CaseSensitive ($mm.Groups[2].Value) { 'b' { return [string][char]8 } 'f' { return [string][char]12 } 'n' { return "`n" } 'r' { return "`r" } 't' { return "`t" } default { return $mm.Groups[2].Value } }
+    }
+    return [regex]::Replace($inner, '\\(?:u([0-9a-fA-F]{4})|(["\\/bfnrt]))', $ev)
+}
 try {
     # ---- (P) THE PROPOSAL ------------------------------------------------------------------------------
     $h26PropPresent = Test-Path -LiteralPath $h26PropPath -PathType Leaf
@@ -8741,12 +8841,42 @@ try {
             $setH['hooks'][$r.event] = @($grp)
         }
         $composed = ($setH | ConvertTo-Json -Depth 20).Replace('tools/framework/hooks/', 'tools/evidence-hooks-next/hooks/')
-        $cLines = @(($composed -replace "`r`n", "`n") -split "`n")
-        $pLines = @($h26PropText -split "`n")
-        $added = '    "autoMemoryEnabled":  false,'
-        $expected = @($cLines[0], $added) + @($cLines[1..($cLines.Count - 1)])
-        $h26Derived = (($expected -join "`n") -ceq ($pLines -join "`n"))
-        $h26DerivedMsg = ('the fragment''s {0} event(s) + {1} next-gen-only event(s) LAM-INSTALL section 2 declares ({2}): composed {3} line(s) + 1 added = {4}; the proposal has {5}; equal: {6}' -f $fragCount, @($h26Ng.rows).Count, $(if (@($h26Ng.rows).Count) { (@($h26Ng.rows) | ForEach-Object { $_.event + ' ' + $_.matcher + ' ' + (($_.command -split '/')[-1]).TrimEnd('"') + ' ' + $_.timeout }) -join '; ' } else { 'none' }), $cLines.Count, $expected.Count, $pLines.Count, $h26Derived)
+        # S2-AM3 (the chat's amendment, UI-2 S2, 2026-11-09): the composition and the proposal are compared PARSED, as
+        # registrations -- every event, its groups in order, each group's matcher and hooks in order, each hook's type,
+        # command (the hook path) and timeout, and the one added key autoMemoryEnabled the boolean false -- with object
+        # KEY ORDER not compared. $setH is a hashtable: its key order is .NET's hash order, fixed under PS 5.1 and
+        # randomised per process under PowerShell 7 (whose ConvertTo-Json also indents differently), so the earlier
+        # line-for-line comparison held under 5.1 only by that order and never held under PowerShell 7.
+        $cObj = $composed | ConvertFrom-Json
+        $cObj | Add-Member -NotePropertyName 'autoMemoryEnabled' -NotePropertyValue $false
+        $pObj = $null; try { $pObj = $h26PropText | ConvertFrom-Json -ErrorAction Stop } catch { $pObj = $null }
+        $cEv = @(Get-Wp1H26KeysSorted $cObj.hooks)
+        $pEv = if ($null -ne $pObj -and $null -ne $pObj.PSObject.Properties['hooks']) { @(Get-Wp1H26KeysSorted $pObj.hooks) } else { @() }
+        $h26Differ = New-Object System.Collections.Generic.List[string]
+        $h26Plain = Test-Wp1H26PlainJsonText -Text $h26PropText
+        if ($h26Plain) { [void]$h26Differ.Add('the proposal is not plain JSON (R5-6): ' + $h26Plain) }
+        if ($null -eq $pObj) { [void]$h26Differ.Add('the proposal is not JSON') }
+        else {
+            # R6-2 (UI-2 S2 validator round 6; HALT-U2FW2B-05's ruling): every equality here is ORDINAL --
+            # [string]::Equals(a, b, Ordinal) -- never PowerShell's culture-aware -ceq/-cne, under which an equal-length
+            # look-alike (ss for a sharp s, a soft hyphen, the fi ligature) read equal under 5.1.
+            $ord = [System.StringComparison]::Ordinal
+            $cTop = @(Get-Wp1H26KeysSorted $cObj); $pTop = @(Get-Wp1H26KeysSorted $pObj)
+            if (-not (Test-Wp1H26SameList $cTop $pTop)) { [void]$h26Differ.Add(('top-level keys composed [{0}], proposal [{1}]' -f ($cTop -join ','), ($pTop -join ','))) }
+            elseif (-not [string]::Equals((ConvertTo-Wp1H26Canonical $cObj.autoMemoryEnabled), (ConvertTo-Wp1H26Canonical $pObj.autoMemoryEnabled), $ord)) { [void]$h26Differ.Add('autoMemoryEnabled differs') }
+            # R5-1 (UI-2 S2 validator round 5): the event keys compared EXACTLY, letter case included -- the per-event
+            # lookups below ignore case, as PowerShell's property access does, so without this a STOP or a sessionEnd passed.
+            if (-not (Test-Wp1H26SameList $cEv $pEv)) { [void]$h26Differ.Add(('event keys composed [{0}], proposal [{1}] (compared exactly, letter case included)' -f ($cEv -join ','), ($pEv -join ','))) }
+            $evAll = New-Object 'System.Collections.Generic.SortedSet[string]' -ArgumentList ([System.StringComparer]::Ordinal)
+            foreach ($x in (@($cEv) + @($pEv))) { [void]$evAll.Add($x) }
+            foreach ($ev in $evAll) {
+                $cv = if ($null -ne $cObj.hooks.PSObject.Properties[$ev]) { ConvertTo-Wp1H26Canonical $cObj.hooks.$ev } else { '(absent)' }
+                $pv = if ($null -ne $pObj.PSObject.Properties['hooks'] -and $null -ne $pObj.hooks.PSObject.Properties[$ev]) { ConvertTo-Wp1H26Canonical $pObj.hooks.$ev } else { '(absent)' }
+                if (-not [string]::Equals($cv, $pv, $ord)) { [void]$h26Differ.Add(('{0}: composed {1}; proposal {2}' -f $ev, $cv, $pv)) }
+            }
+        }
+        $h26Derived = ($h26Differ.Count -eq 0)
+        $h26DerivedMsg = ('the fragment''s {0} event(s) + {1} next-gen-only event(s) LAM-INSTALL section 2 declares ({2}): composed events {3}; the proposal''s events {4}; registrations equal, key order not compared (S2-AM3): {5}{6}' -f $fragCount, @($h26Ng.rows).Count, $(if (@($h26Ng.rows).Count) { (@($h26Ng.rows) | ForEach-Object { $_.event + ' ' + $_.matcher + ' ' + (($_.command -split '/')[-1]).TrimEnd('"') + ' ' + $_.timeout }) -join '; ' } else { 'none' }), ($cEv -join ', '), ($pEv -join ', '), $h26Derived, $(if ($h26Differ.Count) { ' -- ' + ($h26Differ.ToArray() -join ' | ') } else { '' }))
     }
     $h26NgOk = $h26Ng.found -and ($h26NgFind.Count -eq 0)
     if (-not ($h26PropPresent -and $h26PropRead.ok -and $h26Derived -and $h26NgOk)) { $h26Ok = $false }
@@ -8815,7 +8945,7 @@ try {
         $blob = Invoke-Wp1H18Git -Dir $repoRoot -GitArgs @('cat-file', '-p', ('HEAD:' + $h26Rel))
         $liveText = ([string]$blob.out) -replace "`r`n", "`n"
         $lr = Test-Wp1H26Registration -Text $liveText
-        $eq = ($liveText.TrimEnd("`n") -ceq $h26PropText.TrimEnd("`n"))
+        $eq = [string]::Equals($liveText.TrimEnd("`n"), $h26PropText.TrimEnd("`n"), [System.StringComparison]::Ordinal)   # R6-2: ordinal
         $ci1 = Invoke-Wp1H18Git -Dir $repoRoot -GitArgs @('check-ignore', '-q', '--no-index', ($h26Cl + '/settings.local.json'))
         $ci2 = Invoke-Wp1H18Git -Dir $repoRoot -GitArgs @('check-ignore', '-q', '--no-index', ($h26Cl + '/worktrees/x'))
         $ignOk = ($ci1.code -eq 0) -and ($ci2.code -eq 0)

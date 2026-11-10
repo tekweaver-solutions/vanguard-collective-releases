@@ -3,6 +3,7 @@ projection's raw events -- never stored, never computed twice. Every value carri
 window. Time spans are differences of the feed's own ts values, never this host's clock.
 """
 import re
+import statistics
 from datetime import timedelta
 
 from ui import derive, errors
@@ -561,3 +562,130 @@ def fleet_stats(missions, fleet_figures, clock, window):
         "series": series([m["events"] for m in missions], clock, window),
         "slowest_milestones": _stat(slow, "every mission's elapsed_per_milestone runs, slowest first (elapsed_s descending, unmeasured last)", window),
     }
+
+
+
+# =================================================================================================
+# UI-2 S2, GROUP B (the S2 contract B-1..B-11; register rows 501, 498): the figures of the feature roll-up, the validator
+# rounds, the HALT card, elapsed per milestone, the verify card and the per-mission Stats face. Every value carries its
+# formula and window; a figure the feed cannot give is None ("no data" on the face), never 0.
+# =================================================================================================
+def feature_rollups(events):
+    """feature id (None for unbound assertions) -> {members, rollup} (derive.feature_members, derive.rollup)."""
+    return {fid: {"members": ms, "rollup": derive.rollup(ms)} for fid, ms in derive.feature_members(events).items()}
+
+
+def validator_rounds(events, window):
+    """B-4: the mission's round series, the latest round, and each dispatch's series over its assertion_targets."""
+    series = derive.round_series(events)
+    by_d = {did: derive.round_series(events, set(t)) for did, t in sorted(derive.dispatch_targets(events).items())}
+    return _stat(series if series else None, "per round r: the assertions confirmed and refuted in r (" + derive.ROUND_RULE + ")", window,
+                 latest=series[-1] if series else None, by_dispatch=by_d,
+                 dispatch_rule="a dispatch's series = the mission's restricted to its assertion_targets (validator results name no dispatch)")
+
+
+def halt_card(events, clock, window):
+    """B-6: open, answered (and withdrawn) HALTs; mean and median time to resolve over answered HALTs whose two times are
+    known (answered_at - raised_at, seconds, never negative); the answered HALTs whose time could not be read (unknown, never
+    a zero); the oldest open HALT's age against the mission clock."""
+    t = derive.halt_times(events)
+    rows = [dict(v, halt_id=k) for k, v in sorted(t.items())]
+    ans = [r for r in rows if r["state"] == "answered"]
+    opn = [r for r in rows if r["state"] == "open"]
+    spans, unknown = [], []
+    for r in ans:
+        s = _seconds(r["raised_at"], r["answered_at"]) if (r["raised_at"] and r["answered_at"]) else None
+        if s is None or s < 0:
+            unknown.append(r["halt_id"])
+        else:
+            r["ttr_s"] = s
+            spans.append(s)
+    oldest = None
+    for r in opn:
+        age = _seconds(r["raised_at"], clock) if (r["raised_at"] and clock) else None
+        r["age_s"] = age
+        if age is not None and age >= 0 and (oldest is None or age > oldest["age_s"]):
+            oldest = {"halt_id": r["halt_id"], "age_s": age, "raised_at": r["raised_at"], "raised_basis": r["raised_basis"]}
+    open_unknown = [r["halt_id"] for r in opn if r.get("age_s") is None or r["age_s"] < 0]
+    return _stat(len(opn), "HALTs open (" + derive.HALT_PRECEDENCE + ")", window, open=len(opn), answered=len(ans),
+                 withdrawn=sum(1 for r in rows if r["state"] == "withdrawn"),
+                 mean_ttr_s=round(sum(spans) / len(spans), 3) if spans else None,
+                 median_ttr_s=round(statistics.median(spans), 3) if spans else None, measured=len(spans),
+                 unknown=unknown, oldest_open=oldest, open_unknown=open_unknown, clock=clock, against=MISSION_CLOCK,
+                 precedence=derive.HALT_PRECEDENCE, halts=rows)
+
+
+MILESTONE_TIMING = ("elapsed = closed_at - opened_at; for a milestone not closed, " + MISSION_CLOCK + " - opened_at, marked running; "
+                    "dispatches = those first seen (dispatch_opened, else the first snapshot naming them) within [opened_at, closed_at "
+                    "or the clock]")
+
+
+def milestone_timing(events, clock, window):
+    """B-8: per milestone of the latest snapshot's map, in the milestones' natural order: opened_at, closed_at (derive's
+    first-seen rule), elapsed_s, running, and the dispatches first seen within it."""
+    snap = derive.latest_snapshot(events)
+    mm = derive.snapshot_map(snap, "milestones")
+    times, seen = derive.milestone_times(events), derive.dispatch_first_seen(events)
+    rows = []
+    for mid in sorted(mm, key=_natural):
+        m = mm[mid] if isinstance(mm[mid], dict) else {}
+        t = times.get(mid) or {"opened_at": None, "opened_basis": None, "closed_at": None, "closed_basis": None}
+        st = derive.milestone_status(m.get("status"))
+        running = t["opened_at"] is not None and t["closed_at"] is None
+        end = t["closed_at"] if t["closed_at"] is not None else (clock if running else None)
+        el = _seconds(t["opened_at"], end) if (t["opened_at"] and end) else None
+        if el is not None and el < 0:
+            el = None
+        lo, hi = derive.parse_ts(t["opened_at"]), derive.parse_ts(end)
+        ids = sorted(d for d, ts in seen.items() if lo is not None and hi is not None and derive.parse_ts(ts) is not None and lo <= derive.parse_ts(ts) <= hi)
+        rows.append(dict(t, id=mid, title=m.get("title"), status=st, elapsed_s=el, running=running,
+                         dispatch_count=len(ids) if lo is not None else None, dispatch_ids=ids))
+    return _stat(rows if rows else None, MILESTONE_TIMING, window, clock=clock)
+
+
+def verify_card(events, window):
+    """B-10: the latest verify_result's divergences, each listed (path, kind, the two digests' sha8s where both exist), from
+    its additive divergence_list; with no such list, its divergences count only, and the list "not carried"."""
+    v = derive.latest_verify(events)
+    if v is None:
+        return _stat(None, "no verify_result line", window, listed=None, count=None, carried=False)
+    d = derive.verify_divergences(v)
+    p = v["line"]["payload"]
+    if d is None:
+        return _stat(p.get("divergences"), "the latest verify_result's divergences count (it carries no divergence_list)", window,
+                     listed=None, count=p.get("divergences"), carried=False, verdict=p.get("verdict"), ts=v["ts"], seq=v["seq"])
+    return _stat(len(d["listed"]), "the latest verify_result's divergence_list: kinds " + ", ".join(sorted(derive.DIVERGENCE_KINDS)) +
+                 "; kept-equal (a kept file now equal to upstream) is no divergence", window, listed=d["listed"], count=len(d["listed"]),
+                 carried=True, unrecognized=d["unrecognized"], kept_equal=d["kept_equal"], verdict=p.get("verdict"), ts=v["ts"], seq=v["seq"])
+
+
+def sessions_card(events, window):
+    """B-11: sessions running and stopped, subagents finished -- None (no data) when the feed holds no session line."""
+    lines = derive.of_kind(events, "session_start", "session_stop", "subagent_stop")
+    if not lines:
+        return _stat(None, "no session_start, session_stop or subagent_stop line", window, running=None, stopped=None, subagents_finished=None)
+    started = {derive._id(e["line"]["payload"]["session_id"]) for e in derive.of_kind(events, "session_start", "session_stop")}
+    running = derive.open_sessions(events)
+    return _stat(len(running), "running = sessions whose session_start has no session_stop after it; stopped = the other sessions named; "
+                 "subagents finished = subagent_stop lines", window, running=len(running), stopped=len(started - set(running)),
+                 subagents_finished=sum(len(v) for v in derive.subagents_finished(events).values()))
+
+
+def dispatches_card(events, window):
+    """B-11: dispatches by state -- on the feed (open / finalized / partial) and as the artifacts state them (the latest
+    snapshot's dispatch_detail: open / handed_off / superseded); None (no data) where neither is carried."""
+    disp = derive.dispatches(events)
+    feed = None
+    if disp:
+        fin = [d["finalized"] for d in disp.values() if d["finalized"] is not None]
+        partial = sum(1 for f in fin if derive.is_partial(f))
+        feed = {"open": sum(1 for d in disp.values() if d["opened"] is not None and d["finalized"] is None), "finalized": len(fin) - partial, "partial": partial}
+    det = derive.snapshot_map(derive.latest_snapshot(events), "dispatch_detail")
+    art = None
+    if det:
+        art = {}
+        for d in det.values():
+            s = d.get("state") if isinstance(d, dict) else None
+            art[str(s)] = art.get(str(s), 0) + 1
+    return _stat(None if feed is None and art is None else (feed or art), "the feed's dispatch_opened / dispatch_finalized lines; the snapshot's dispatch_detail states",
+                 window, feed=feed, artifacts=art)

@@ -514,6 +514,8 @@ function Show-LamConsolePreview {
     $lines.Add("  line ends after its <LF>); <0xNN> is any other control byte, any non-ASCII byte, and the '<' character.")
     $lines.Add(('  {0,-40} : {1}' -f 'mission root (resolved, absolute)', (Format-LamConsoleVisibleText -Text $MissionRoot)))
     $lines.Add(('  {0,-40} : {1}' -f 'gates directory (absolute)', (Format-LamConsoleVisibleText -Text $gatesDir)))
+    # UI-2 S1 A-10 (register row 512, ruled at REC-P: one line on the console's face): the two clocks a reader compares.
+    $lines.Add(('  {0,-40} : {1}' -f 'created_at (the artifact''s, below)', "composed at preview -- fixed once by the console before this preview; the feed's gate_minted ts is the write time, after the confirm act, and may trail it"))
     $n = 0
     foreach ($w in $allWrites) {
         $n++

@@ -1,4 +1,4 @@
 name: vanguard-collective
-version: 1.2.0
-framework_repo_tip: ca68916afd713370c798881669eaf40c816834b4
-manifest_sha256: 6901f52d4e23c8289950f7dc12fcd6eb460d0e82b566f69486d4f11c65523526
+version: 1.3.0
+framework_repo_tip: 6fc441b8a99314cce706825fd7e88312c460892e
+manifest_sha256: 255252c06443a2c5024e2946ceae47729f223f4e860f84ff77b9dccc5ff6e65c

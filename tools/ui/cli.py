@@ -47,11 +47,12 @@ def ui(
     rebuild: bool = typer.Option(False, "--rebuild", help="Delete the projection (ui.db) and regenerate it from the feeds before serving."),
     home: str = typer.Option(None, "--home", help="The Vanguard home holding projects.yaml and ui.db (default $VANGUARD_HOME, else ~/.vanguard)."),
     ahead_days: int = typer.Option(cfg.DEFAULT_AHEAD_DAYS, "--ahead-days", min=1, help="N for the error 'main ahead of origin beyond N days'."),
+    tail_window_bytes: int = typer.Option(cfg.DEFAULT_TAIL_WINDOW_BYTES, "--tail-window-bytes", min=1, help="The tail window: the bytes before a stream's stored offset whose hash resume compares (the user guide, section 12)."),
 ):
     """Serve the read-only dashboard: /api/missions, /api/missions/{id}, .../events, .../stats, /api/stream."""
     from ui.app import create_app
 
-    settings = cfg.Settings(home=cfg.vanguard_home(home), host=host, port=port, ahead_days=ahead_days)
+    settings = cfg.Settings(home=cfg.vanguard_home(home), host=host, port=port, ahead_days=ahead_days, tail_window_bytes=tail_window_bytes)
     if rebuild:
         store.delete(settings.db_path)
     print("vanguard ui: http://%s:%d/  (home %s)" % (host, port, settings.home), flush=True)

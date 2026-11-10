@@ -473,6 +473,12 @@ def offer_ledger_row(ledger, entry):
         for name in list(env):
             if name in GIT_REDIRECTS or name.startswith("GIT_CONFIG_KEY_") or name.startswith("GIT_CONFIG_VALUE_"):
                 env.pop(name, None)
+        # Windows PowerShell builds its own module path when none is given; a PSModulePath inherited from a PowerShell 7
+        # parent names 7's module folders first, and the 5.1 child then fails to emit (UI-2 S1c, register row 522).
+        if os.path.basename(shell).lower().startswith("powershell"):
+            for name in list(env):
+                if name.lower() == "psmodulepath":
+                    env.pop(name, None)
         subprocess.run([shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", entry_point,
                         "-Root", top, "-Kind", "ledger_row", "-SourcePath", source, "-Hook", "commit-ledger",
                         "int:entry=" + str(entry), "null:row", "str:type=commit"],

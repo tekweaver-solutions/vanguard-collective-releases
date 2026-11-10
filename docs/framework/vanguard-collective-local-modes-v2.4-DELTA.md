@@ -143,7 +143,7 @@ and byte comparison**, not by the validator's account of itself.
 
 ### E15 — verify's suite arm is an unimplemented increment boundary
 It makes LM2-ADR-022 unsatisfiable for build-class dispatches: `suite.passed/failed/skipped` are
-hardcoded `ABSENT`. **Interim cure: PASS-DIB** (LM2-ADR-036 below). The real cure is
+hardcoded `ABSENT`. **Interim cure: PASS-DIB** (LM2-ADR-037 below). The real cure is
 verify increment 2 (suite execution), registered as follow-on work outside this build. **LM2-ADR-022's
 v2.4 text must name PASS-DIB a transitional verdict class that dissolves when the arm lands.**
 

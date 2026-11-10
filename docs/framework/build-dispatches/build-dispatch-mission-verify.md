@@ -57,7 +57,8 @@ shifted, and building on it would produce an artifact nobody can re-derive.
 
 - **spec, "# `mission verify` -- Specification"** -- the sealed specification this builds to.
 - **design, "### 4.3 Automated cross-session verification (`mission verify`)"** and
-  **design, "### 11.4 ADR-022 -- `mission verify` as a dispatch gate"** -- specify the gate itself.
+  **design, "### 11.4 ADR-022 -- `mission verify` as a dispatch gate"** (the design's heading as it reads; the
+  decision is LM2-ADR-022, not the on-disk adr-022) -- specify the gate itself.
 - **local-modes v2.3 (`docs/framework/vanguard-collective-local-modes-v2.3.md`), "## 14. Adoption Sequence -- status at v2.3, and the complete remaining backlog"**
   -- registers this dispatch as backlog item 14 (D1), at `tools/mission-verify.ps1`, needing its
   own amendment.

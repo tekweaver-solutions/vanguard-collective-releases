@@ -820,13 +820,13 @@ Ranges are the ones **actually read**, re-derived from my own heading map before
 | # | Subject | v2.2 read | v2.3 read | Outcome |
 |---|---|---|---|---|
 | 1 | SS 4.3 `mission verify` | :182-195 | :196-209 | **No divergence found.** Byte-identical across versions, including "The manually-ceremonied P0 becomes a gate." (v2.2:184 / v2.3:198) which spec:29 quotes, and the Principle-11 sentence spec:571-572 quotes (v2.2:190 / v2.3:204). |
-| 2 | SS 11.4 ADR-022 gate | :490-498 | :568-576 | **No divergence found.** Byte-identical. The tradeoff clause spec:110-112 quotes ("mitigated by making `verify` itself trivially auditable...") is unchanged at v2.2:495-497 / v2.3:573-575. Also confirms the draft's OPEN-2 derivation: the "anti-fabrication rider" sentence is identical at v2.2:497 and v2.3:575. |
+| 2 | SS 11.4 LM2-ADR-022 gate | :490-498 | :568-576 | **No divergence found.** Byte-identical. The tradeoff clause spec:110-112 quotes ("mitigated by making `verify` itself trivially auditable...") is unchanged at v2.2:495-497 / v2.3:573-575. Also confirms the draft's OPEN-2 derivation: the "anti-fabrication rider" sentence is identical at v2.2:497 and v2.3:575. |
 | 3 | SS 2 Core Principles | :70-93 | :84-107 | **No divergence found.** Byte-identical, Principle 11 included. See COR-2: this row is what resolves OPEN-2's first referent in-repo. |
 | 4 | SS 4.1 Hook-captured evidence store | :121-172 | :135-186 | **No divergence found within the row** -- byte-identical, all three layers (a)/(b)/(c) unchanged, so spec:693-695's inheritance still resolves. **But four of its assumptions are declared FALSE by v2.3 SS 4.6**, which left SS 4.1 itself unedited. See DP-10, DP-11, DP-09. |
 | 5 | SS 4.4 Evidence-channel doctrine | :196-214 | :210-228 | **No divergence found.** Byte-identical. spec:499-500 and spec:580 both still resolve. |
 | 6 | SS 4.5 Evidence-plane laws | :215-258 | :229-276 | **DIVERGENCE: two.** DP-01 (law 9's earning evidence: an errata count in one program -> a larger count across the program). DP-02 (law 10 added in v2.3). Laws 1-9 numbering and rule text otherwise identical, so every numbered citation the spec makes still resolves. |
 | 7 | SS 10 Human Touchpoints (item 10.5 located by content) | :421-447 | :499-525 | **No divergence found.** Byte-identical. Item 5 is push authorization in both; its closing sentence "Operator browser confirmation of the origin tip after push remains standing law." (v2.2:435-436 / v2.3:513-514) is what spec:37, :394-396 and :408-409 cite. |
-| 8 | SS 11.5 ADR-033 Push authorization | :499-509 | :577-587 | **No divergence found.** Byte-identical. Its "As specified in SS10.5" (v2.2:501 / v2.3:579) is the locator that establishes the `SS<n>.<m>` in-body-item convention -- the convention COR-3 and DP-05 turn on. |
+| 8 | SS 11.5 LM2-ADR-033 Push authorization | :499-509 | :577-587 | **No divergence found.** Byte-identical. Its "As specified in SS10.5" (v2.2:501 / v2.3:579) is the locator that establishes the `SS<n>.<m>` in-body-item convention -- the convention COR-3 and DP-05 turn on. |
 | 9 | SS 12.2 Handoff / ValidatorResult / Report | :520-551 | :598-629 | **No divergence found within the row** -- byte-identical, `runner_anchors` block and all three prose paragraphs. **But v2.3 SS 14 item 22 names a different home for this section's expected-failure manifest.** See DP-03, DP-04. |
 | 10 | SS 12.4 Push Authorization artifact | :576-588 | :654-666 | **No divergence found.** Byte-identical. spec:405's TOCTOU/single-use citation still resolves. |
 | 11 | SS 14 / the `14.2` citation | :620-643 | :698-768 | **DIVERGENCE: the row's principal one.** The citation **resolves** (COR-3), contrary to the draft's expectation -- and both re-points and inverts in v2.3. See DP-05, DP-06, DP-07. Additional in-row deltas: v2.3 restructures 7 forward-plan items into 24 Done/Remaining backlog items; item 22 sources DP-03; item 14's E5-i note sources DP-11. |
@@ -849,7 +849,7 @@ v2.2 SS 5 "Runtime Substrate -- v2 Decisions" (:259-281) has **no v2.3 heading a
 the spec cites no `design SS5`, so it is outside the closure. Re-derived here, and the observation
 is **larger than the draft's**: v2.3 did not remove the section -- it removed only the **heading**.
 v2.2's `## 5. Runtime Substrate — v2 Decisions` (:259) is gone, while its intro line and its entire
-ADR-023..ADR-035 table survive verbatim at **v2.3:339-356**, now falling inside SS 4.7's body with
+LM2-ADR-023..LM2-ADR-035 table survive verbatim at **v2.3:339-356**, now falling inside SS 4.7's body with
 no heading of their own. v2.3 SS 14 item 15 (:743) still cites them as "ratified in v2.2 SS5, none
 built", a pointer to a section number v2.3 no longer has. Stated as a structural observation only.
 **The derivation's own bound, restated:** the heading search covered levels 2-4 only.

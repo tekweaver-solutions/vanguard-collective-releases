@@ -2868,8 +2868,14 @@ if ($c3lvSkip) {
     $c3lvScannedNames = @($c3lvScanned | ForEach-Object { $_.name } | Sort-Object -Unique)
     $c3lvOpen = @($c3lvNew.openNames | Sort-Object -Unique)
     $c3lvByGate = @($c3lvNew.byGate | ForEach-Object { ([string]$_ -replace ' -- .*$', '') } | Sort-Object -Unique)
-    $c3lvRows.Add(('      reading today: files copied {0}; scanned {1}; skipped as tooling {2} [{3}]; skipped as citation sidecars {4} [{5}]' -f `
-        $c3lvAll.Count, $c3lvScanned.Count, $c3lvSkippedTool.Count, ($c3lvSkippedTool -join ', '), $c3lvSkippedSide.Count, ($c3lvSkippedSide -join ', ')))
+    # THE COUNTING RULE, ONE FOR BOTH SIDES (UI-2 S1 A-7, register row 517): RELEASE-4 compared a RAW count on one side
+    # (the evaluator's OPEN list under the allowlist, one entry per file) with a DEDUPLICATED one on the other (the OPEN
+    # HALTs, by name), so a byte copy of a HALT under a scratch subfolder of the plane moved the verdict. Every count
+    # below is now of DISTINCT HALT IDS -- a HALT's id is its file name, read without regard to case (Sort-Object
+    # -Unique), so an exact byte copy of a HALT under another path is the same HALT and counts once -- on both sides.
+    $c3lvRows.Add('      C-3e RULE: every count is of distinct HALT ids -- a HALT''s id is its file name, read without regard to case; an exact byte copy of a HALT under another path is the same HALT, counted once -- the plane''s side (the files scanned) and the evaluator''s (OPEN, ANSWERED by a gate, honoured, OPEN under the allowlist) alike')
+    $c3lvRows.Add(('      reading today: files copied {0}; scanned {1} distinct HALT id(s) ({2} file(s)); skipped as tooling {3} [{4}]; skipped as citation sidecars {5} [{6}]' -f `
+        $c3lvAll.Count, $c3lvScannedNames.Count, $c3lvScanned.Count, $c3lvSkippedTool.Count, ($c3lvSkippedTool -join ', '), $c3lvSkippedSide.Count, ($c3lvSkippedSide -join ', ')))
     $c3lvRows.Add(('      reading today: OPEN under the new rule {0}; ANSWERED by a live halt-ruling gate {1}; live halt-ruling gates on the plane {2}' -f `
         $c3lvOpen.Count, $c3lvByGate.Count, $c3lvRulingGates.Count))
     $c3lvGateAnsweredOk = (@($c3lvByGate | Where-Object { $c3lvRulingGates -notcontains ('halt-ruling-' + [System.IO.Path]::GetFileNameWithoutExtension($_) + '.yaml') }).Count -eq 0)
@@ -2903,6 +2909,7 @@ if ($c3lvSkip) {
     }
     $c3lvLegacy = Invoke-C3Goal -Evaluator $goalCheck -Root $c3lvRoot -GoalId 'G-C3E-LEGACY' -Detectors ("  - type: halt_absent`n    legacy_answered_allowlist: `"" + ($c3lvEntries -join ', ') + "`"`n")
     $c3lvHonoured = @($c3lvLegacy.byLegacy | ForEach-Object { ([string]$_ -replace '@.*$', '') } | Sort-Object -Unique)
+    $c3lvLegacyOpen = @($c3lvLegacy.openNames | Sort-Object -Unique)   # distinct HALT ids, the rule above (it was the raw list)
     # SINCE THE REVIEW an entry is honoured only for a FROZEN-CENSUS member at its census bytes. The
     # eleven were census members at capture; one whose live bytes have moved since is named here, and must be
     # REPORTED not-in-legacy-census -- a drift this row states, rather than a failure it hides.
@@ -2911,14 +2918,14 @@ if ($c3lvSkip) {
     $c3lvExpectHonoured = @($c3lvEleven | Where-Object { ($c3lvBaseAnswered -ccontains $_) -and ($c3lvByGate -notcontains $_) -and ($c3lvElevenDrift -notcontains $_) } | Sort-Object -Unique)
     $c3lvRows.Add(('      LEGACY ALLOWLIST over the eleven: {0} read ANSWERED under it [{1}]; changed since the census capture {2}' -f $c3lvHonoured.Count, ($c3lvHonoured -join ', '), $c3lvElevenDrift.Count))
     foreach ($c3lvRep in @($c3lvLegacy.report)) { $c3lvRows.Add('        not honoured: ' + $c3lvRep) }
-    $c3lvRows.Add(('      and under it the goal still reads {0}, with {1} HALT(s) OPEN' -f $c3lvLegacy.verdict, @($c3lvLegacy.openNames).Count))
+    $c3lvRows.Add(('      and under it the goal still reads {0}, with {1} distinct HALT id(s) OPEN ({2} entr(ies) as the evaluator lists them)' -f $c3lvLegacy.verdict, $c3lvLegacyOpen.Count, @($c3lvLegacy.openNames).Count))
     $c3lvReportNames = @($c3lvLegacy.report | ForEach-Object { ([string]$_ -replace '@.*$', '') })
     $c3lvEveryOtherReported = (@($c3lvEleven | Where-Object { ($c3lvHonoured -notcontains $_) -and ($c3lvReportNames -notcontains $_) }).Count -eq 0) -and
                               ($c3lvReportNames.Count -eq ($c3lvEleven.Count - $c3lvHonoured.Count))
     $c3lvDriftReported = (@($c3lvElevenDrift | Where-Object { $dn = $_; @($c3lvLegacy.report | Where-Object { ([string]$_).StartsWith($dn + '@') -and ([string]$_).Contains(' -- NOT HONOURED -- not-in-legacy-census') }).Count -ne 1 }).Count -eq 0)
     Add-C3lvRow 'LEGACY: honours exactly the eleven that are census members at their bytes with an ANSWERED marker, reports every other' `
         (((($c3lvHonoured | Sort-Object) -join '|') -ceq (($c3lvExpectHonoured | Sort-Object) -join '|')) -and $c3lvEveryOtherReported -and $c3lvDriftReported -and
-         (@($c3lvLegacy.openNames).Count -eq ($c3lvOpen.Count - $c3lvHonoured.Count))) ("honoured=$($c3lvHonoured.Count) expected=$($c3lvExpectHonoured.Count) reported=$($c3lvReportNames.Count) drift=$($c3lvElevenDrift.Count) drift-reported=$c3lvDriftReported")
+         ($c3lvLegacyOpen.Count -eq ($c3lvOpen.Count - $c3lvHonoured.Count))) ("honoured=$($c3lvHonoured.Count) expected=$($c3lvExpectHonoured.Count) reported=$($c3lvReportNames.Count) drift=$($c3lvElevenDrift.Count) drift-reported=$c3lvDriftReported open-under-allowlist=$($c3lvLegacyOpen.Count) (distinct ids) = open $($c3lvOpen.Count) - honoured $($c3lvHonoured.Count)")
 
     # THE CENSUS AGAINST TODAY'S PLANE. PRINTED: how many members are still on the plane at their census bytes,
     # changed, or gone, and how many live HALTs are not members (raised or edited since). ASSERTED: every member

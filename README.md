@@ -19,8 +19,9 @@ release: the framework in a repository of its own, with an installer that instal
 or from a clone of the public repository at its release tag and upgrades a project in place, and agents
 that authenticate with a Claude subscription or an Anthropic API key. Version 1.1.0 adds the dashboard, `vanguard ui`: a
 read-only, local view of every project registered on the machine, fed by the mission-event feed the
-hooks and lifecycle commands now append. The current release is 1.2.0, the licence release; its notes are
-[docs/RELEASE-NOTES-v1.2.0.md](docs/RELEASE-NOTES-v1.2.0.md), known limits first.
+hooks and lifecycle commands now append. Version 1.2.0 was the licence release. The current release is 1.3.0, in
+which the dashboard reads what a mission proved, round by round, and how long it took, and a session's end is written by
+a SessionEnd hook; its notes are [docs/RELEASE-NOTES-v1.3.0.md](docs/RELEASE-NOTES-v1.3.0.md), known limits first.
 
 New to the framework? Start with [docs/QUICKSTART.md](docs/QUICKSTART.md), then read the operator's
 guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguard-collective-user-guide.md).
@@ -30,7 +31,7 @@ guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguar
 | path | what it holds |
 |---|---|
 | `tools/lam/` | the LAM toolchain: the runner (`mission-dispatch.ps1`), the goal evaluator and Stop hook (`mission-goal-check.ps1`), the gate tool and the operator console (`mission-gate.ps1`, `lam-console.ps1`), the instrument-run helper, the role settings templates under `settings/`, and the smoke-mission builder (`build-smoke-mission.ps1`) with its sources under `smoke-mission/` |
-| `tools/evidence-hooks-next/` | the evidence hooks: the PreToolUse guard, PostToolUse capture, the Stop finalizer, PreCompact, the runner's dispatch-end writer and the pre-push decider |
+| `tools/evidence-hooks-next/` | the evidence hooks: the PreToolUse guard, PostToolUse capture, the Stop finalizer, PreCompact, SubagentStop, SessionEnd, the runner's dispatch-end writer and the pre-push decider |
 | `tools/mission-cli/` | mission configuration: the ADR registry, model routing, expected failures, the MCP tool selection |
 | `docs/framework/` | the design documents, the operator's install procedure (`LAM-INSTALL.md`) and the schemas -- the first host's acceptance record, `LAM-ACCEPT.md`, is not a framework document and is not shipped |
 | `tools/ui/` | the dashboard's service, `vanguard ui` (FastAPI and uvicorn, its pinned set in `requirements.txt`, the command `vanguard.cmd`) |
@@ -40,7 +41,7 @@ guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguar
 
 Beside these, `tools/framework/` holds the first-generation hooks the next generation delegates to,
 and `tools/mission-*.ps1` are the mission lifecycle commands. What is installed into a project is
-exactly the set the release's `provenance/manifest.jsonl` defines (378 files in the release, `ui/dist/`
+exactly the set the release's `provenance/manifest.jsonl` defines (385 files in the release, `ui/dist/`
 and `THIRD-PARTY-NOTICES` among them); `provenance/` and this repository's own files are not installed.
 
 ## Prerequisites

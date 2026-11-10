@@ -119,8 +119,10 @@ Over a project 1.1.0 installed, in your own Windows PowerShell 5.1 terminal, fro
    (upgraded 22, installed 24): it reads 1.1.0's set from the tag's tree,
    whose manifest names none of the files a release generates, so it counts `ui/dist/` and `THIRD-PARTY-NOTICES`
    installed and none retired.
-2. **Kept files stay as they were.** Of the 11, only `.claude/settings.json` differs from this release's
-   version, by the SubagentStop registration; the run prints:
+2. **Kept files stay as they were.** Of the 11, `.claude/settings.json` differs from this release's version in a
+   project left as 1.1.0 installed it, by the SubagentStop registration. The kept set is `.claude/settings.json` and
+   any other file the installer reports kept: a template or host-config file the project edited differs too, and gets
+   its own NOTICE line. For `.claude/settings.json` the run prints:
 
    ```text
    install.ps1: NOTICE kept .claude/settings.json -- kept: the project's own copy is not changed, and it differs from this release's version (fold-crlf-text basis), which is at C:\dl\vanguard-collective-v1.2.0\.claude\settings.json

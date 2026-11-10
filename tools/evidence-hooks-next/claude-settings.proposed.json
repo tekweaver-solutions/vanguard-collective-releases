@@ -49,6 +49,18 @@
                                            "matcher":  "*"
                                        }
                                    ],
+                  "SessionEnd":  [
+                                     {
+                                         "hooks":  [
+                                                       {
+                                                           "command":  "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-session-end.ps1\"",
+                                                           "timeout":  30,
+                                                           "type":  "command"
+                                                       }
+                                                   ],
+                                         "matcher":  "*"
+                                     }
+                                 ],
                   "PreCompact":  [
                                      {
                                          "hooks":  [

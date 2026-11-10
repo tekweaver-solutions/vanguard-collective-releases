@@ -72,22 +72,33 @@ try {
     $owned = Test-EvidenceRunnerOwned   -Root $root -DispatchId $did
     $ended = Test-EvidenceDispatchEnded -Root $root -DispatchId $did
 
-    # THE MISSION-EVENT FEED (UI-1 S1): session_stop on every Stop, with the manifest as it is on disk after
-    # this hook's own work; dispatch_finalized after it when this Stop is the one that sealed the store (the
-    # manifest's bytes changed across the A1 run). Never fails the hook: Write-MissionEvent does not throw,
-    # and the composition around it is caught.
+    # THE MISSION-EVENT FEED (UI-1 S1; UI-2 S1 A-2, register row 500; UI-2 S2 B-14, register row 528): dispatch_finalized
+    # when the store was sealed -- by this Stop (the manifest's bytes changed across the A1 run) or by an earlier Stop of the
+    # same dispatch that was only a TURN's end. A Stop whose payload lists a background task still running
+    # (background_tasks[].status running: the Agent call runs in the background, A-3) is the end of the parent's turn: it
+    # writes NO feed line, and a seal it made is held in a once-only marker (the telemetry folder's, never the evidence
+    # store) until a later Stop of the session says it. Stop fires at the end of EVERY turn, so it says NO session_stop
+    # (B-14): the session's end is SessionEnd's (evidence-session-end.ps1), so an interactive session reads running between
+    # its turns. The evidence store is sealed exactly as before; only what the feed says changes.
+    # Never fails the hook: Write-MissionEvent does not throw, and the composition around it is caught.
     function Send-StopTelemetry {
         param([string]$ManifestShaBefore, $Sidecar, [bool]$MaySeal)
         try {
             if (-not (Test-MissionTelemetryStream -Root $root)) { return }
             $sf = Get-MissionEvidenceStopFacts -Root $root -DispatchId $did
-            $null = Write-MissionEvent -Root $root -Kind 'session_stop' -SourcePath $sf.source -Hook 'Stop' -SessionId $sessionId -DispatchId $did `
-                        -Payload ([ordered]@{ session_id = $sessionId; dispatch_id = $did; manifest_state = $sf.manifest_state; entry_count = $sf.entry_count; evidence_state = $sf.evidence_state })
-            if ($MaySeal -and $sf.manifest_sha -and ($sf.manifest_sha -ne $ManifestShaBefore)) {
+            $sealedHere = $MaySeal -and $sf.manifest_sha -and ($sf.manifest_sha -ne $ManifestShaBefore)
+            $pending = 'dispatch-finalized-pending-' + $did
+            if ((Get-MissionStopRunningTasks -Payload $parsed) -gt 0) {
+                if ($sealedHere) { Set-MissionTelemetryMarker -Root $root -Name $pending }
+                return
+            }
+            $held = Test-MissionTelemetryMarker -Root $root -Name $pending
+            if ($sealedHere -or ($held -and $sf.manifest_sha)) {
                 $gaps = 0
                 if ($null -ne $Sidecar) { try { $gaps = [int]$Sidecar.count } catch { $gaps = 0 } }
-                $null = Write-MissionEvent -Root $root -Kind 'dispatch_finalized' -SourcePath $sf.source -Hook 'Stop' -SessionId $sessionId -DispatchId $did `
+                $ok = Write-MissionEvent -Root $root -Kind 'dispatch_finalized' -SourcePath $sf.source -Hook 'Stop' -SessionId $sessionId -DispatchId $did `
                             -Payload ([ordered]@{ dispatch_id = $did; manifest_state = $sf.manifest_state; partial = (($sf.manifest_state -ne 'FINALIZED') -or ($gaps -gt 0)); capture_gaps_count = $gaps })
+                if ($ok -and $held) { Remove-MissionTelemetryMarker -Root $root -Name $pending }
             }
         } catch { }
     }

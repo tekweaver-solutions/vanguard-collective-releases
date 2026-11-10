@@ -25,10 +25,12 @@ import os
 import sqlite3
 
 from ui import registry as reg
+from ui import settings as cfg
 
 _SQLITE_MAX = 2 ** 63 - 1
-# the bytes immediately before the stored offset whose hash resume compares (UI-1 S4 C-1): more than any one line
-TAIL_BYTES = 4096
+# the bytes immediately before the stored offset whose hash resume compares (UI-1 S4 C-1): more than any one line. The
+# default of the service setting tail_window_bytes (register row 525; settings.py THE TAIL WINDOW states the limit).
+TAIL_BYTES = cfg.DEFAULT_TAIL_WINDOW_BYTES
 
 
 def _sha(b):
@@ -81,6 +83,7 @@ class Ingestor:
 
     def _tail(self, conn, row):
         offset, line_no, last_seq, head, tail = self._state(conn, row)
+        tw = getattr(self.settings, "tail_window_bytes", TAIL_BYTES)
         try:
             size = os.path.getsize(row.feed)
         except FileNotFoundError:
@@ -95,8 +98,8 @@ class Ingestor:
             if offset > 0:
                 first = f.readline()
                 if size >= offset:
-                    f.seek(offset - min(offset, TAIL_BYTES))
-                    before = f.read(min(offset, TAIL_BYTES))
+                    f.seek(offset - min(offset, tw))
+                    before = f.read(min(offset, tw))
                 if size < offset or _sha(first) != head or _sha(before) != tail:
                     # truncated, replaced, or regrown past the offset: what was ingested no longer stands
                     self._reset(conn, row.key)
@@ -118,7 +121,7 @@ class Ingestor:
         if offset == 0:
             head = _sha(chunk[:chunk.find(b"\n") + 1])
         conn.execute("UPDATE streams SET byte_offset = ?, line_no = ?, last_seq = ?, head_sha256 = ?, tail_sha256 = ? WHERE stream_key = ?",
-                     (offset + len(chunk), line_no, last_seq, head, _sha((before + chunk)[-TAIL_BYTES:]), row.key))
+                     (offset + len(chunk), line_no, last_seq, head, _sha((before + chunk)[-tw:]), row.key))
         conn.commit()
         return len(lines)
 

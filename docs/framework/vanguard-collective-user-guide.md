@@ -1,4 +1,4 @@
-# Vanguard Collective 1.2.0 -- the operator's guide
+# Vanguard Collective 1.3.0 -- the operator's guide
 
 This guide says what the parts of the framework are, what each one records, who may write it, and
 how to read what the acceptance instruments say about it. It does not repeat the procedures: the
@@ -178,7 +178,7 @@ the operator's check at install time.
 
 ## 5. The evidence plane
 
-**What it is.** Four hooks registered in `.claude\settings.json` keep a record of every session
+**What it is.** Six hooks registered in `.claude\settings.json` keep a record of every session
 that agents cannot write:
 
 - **PreToolUse guard** (`evidence-guard-pretooluse.ps1`), on `Write`, `Edit`, `MultiEdit`,
@@ -193,9 +193,15 @@ that agents cannot write:
 - **Stop finalizer** (`evidence-stop-finalize.ps1`): seals the session's manifest. For a session the
   runner owns it does nothing until the runner's `DISPATCH-END`, so a worker's repeated stops seal
   nothing early; the dispatch-end writer then finalizes it. Growth after finalizing reads `GREW`,
-  and mutation reads `TAMPERED`.
+  and mutation reads `TAMPERED`. From 1.3.0 it writes no `session_stop` on the mission-event feed.
 - **PreCompact** (`evidence-pre-compact.ps1`): marks a compaction in the session log (a
   `_precompact` line, which the call counter does not count as a tool call).
+- **SubagentStop** (`evidence-subagent-stop.ps1`): appends one `subagent_stop` line to the feed for a
+  subagent that finished -- its `agent_id` and its parent's session -- and never a `session_stop`.
+- **SessionEnd** (`evidence-session-end.ps1`): appends the session's one `session_stop` when the
+  session itself ends.
+
+The last two are next-generation-only events (LAM-INSTALL.md section 2).
 
 The manifest's shape is `docs/framework/evidence-manifest.schema.json`.
 
@@ -548,6 +554,14 @@ line valid against `docs\framework\mission-event.schema.json` (expanded-schemas 
 `source_path@sha256` it reports; a line without it is rejected and counted. The service tails every
 registered feed into a disposable projection, `ui.db`, in the Vanguard home; `vanguard ui --rebuild`
 deletes it and regenerates it from the feeds.
+
+**The tail window -- a stated limit.** On each poll, and after a restart, the service resumes a feed from the
+byte where it stopped. Before it reads on, it compares the feed's first line and the last 4096 bytes before
+that position with what it read. A feed that shrank, or whose first line or those bytes changed, was
+replaced, and is re-read whole. A feed truncated and regrown past that position, with its first line and
+those last bytes as they were, is not seen as replaced. 4096 bytes -- more than any one line the hooks
+write -- is the default of the service setting `--tail-window-bytes`; the Fleet stats screen shows the
+value the service runs with (`/api/missions`, `settings.tail_window_bytes`).
 
 **The registry.** The Vanguard home is `%USERPROFILE%\.vanguard\` (or the folder `VANGUARD_HOME` names, or
 `--home`). It holds `host-id`, this machine's id, made once, and `projects.yaml`, one row per registered

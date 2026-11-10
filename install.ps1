@@ -108,6 +108,9 @@
   target, a run that writes also registers the host (UI-1 S1, ADR-045): <home>/host-id, minted once, and,
   when the target already carries a mission, its row in <home>/projects.yaml (home = $env:VANGUARD_HOME,
   else ~/.vanguard). The telemetry folder inside the target is mission init's to make, not this script's.
+  A target that has its row already gets that row's framework_version rewritten to this release's, its other
+  fields and every other row byte for byte as they were (UI-2 S1 A-5, register row 526); a target without
+  one is registered only as before, never by the rewrite.
 
   framework.lock -- JSON lines, LF, UTF-8 without BOM, rewritten whole by every run that writes; lock_format 2.
   Line 1 is the header: lock, lock_format, eol_rule, version, previous_version (null on a fresh install),
@@ -154,8 +157,13 @@
   source carried. It does NOT Unblock-File its own tree: a marked install.ps1 is refused by a
   RemoteSigned policy before its first line runs, so an unblock inside it could only ever run where
   it was not needed, and stripping streams from the operator's download is the operator's act. It
-  REPORTS a marked tree instead (install.ps1 or mission.ps1 carrying a Zone.Identifier stream).
-  INSTALL.md records what was measured and which step is the operator's.
+  REPORTS a marked tree instead: before the plan, one line naming how many of install.ps1, mission.ps1
+  and the installer-owned source files carry a Zone.Identifier stream, and the fix; after the write,
+  every member written is read for the stream and one found is removed from it, and one line says
+  how many were written and how many carry it after (0) -- the same under Windows PowerShell 5.1 and
+  PowerShell 7 (UI-2 S1c A-11, register row 522). A stream that cannot be removed stops the run
+  before the lock, exit 1, naming the files. INSTALL.md section 3 records what was measured and which
+  step is the operator's.
 
 .PARAMETER Target
   The folder to install into. Created, with any folder above it that is missing, if it does not exist.
@@ -165,7 +173,12 @@
   Decide and print every disposition and the planned counts; write nothing. The exit code is the real run's.
 .PARAMETER Verify
   Re-judge every file framework.lock lists in the target (EOL above; each path through the guard first);
-  print each difference; write nothing. Reads lock_format 1 and 2, and says which it read. A not-written row
+  print each difference; write nothing under the target's installed set or its lock. Where the target is a registered
+  telemetry stream, append ONE verify_result line to its mission-event feed listing each difference printed
+  (divergence_list; UI-2 S2, contract amendment S1-AM1 to A-8); elsewhere write nothing at all. A kept file now
+  byte-equal to this release's (its row's upstream_sha256)
+  reads 'kept, now equal to upstream' and is no difference; one equal to neither reads CHANGED, 'kept, differs
+  from upstream' (UI-2 S1 A-8, register row 518). Reads lock_format 1 and 2, and says which it read. A not-written row
   names no file the framework wrote, and is passed over and counted.
 .PARAMETER Python
   The CPython 3.14 (win-amd64) interpreter THE PYTHON SET makes tools\.venv with, where the target has none.
@@ -176,7 +189,9 @@
   EXIT: 0 done, or already installed and verified (or nothing to report); 2 refused, nothing written;
   3 -Verify, or a run over a target already at this version, found differences; 1 the source or the
   target could not be used -- a clone off its release tag, or with local changes, or one git cannot
-  confirm, among them; 4 the files and the lock are installed, and the Python set is not (THE PYTHON SET).
+  confirm, among them; 4 the files and the lock are installed, and the Python set is not (THE PYTHON SET);
+  5 the files and the lock are installed, and the target's host registry row could not be rewritten to this
+  release's framework_version (UI-2 S1 A-5, register row 526; the registry is named).
 #>
 [CmdletBinding()]
 param(
@@ -192,6 +207,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $script:Utf8NoBom    = New-Object System.Text.UTF8Encoding($false)
+$script:RegistryRowFailure = $null   # UI-2 S1 A-5: set when the target's registry row could not be rewritten (exit 5)
 $script:OwnedClasses = @('MOVE', 'TEMPLATE', 'HOST-CONFIG')
 $script:Kinds        = @{ 'MOVE' = 'move'; 'TEMPLATE' = 'template'; 'HOST-CONFIG' = 'host-config' }
 $script:LockName     = 'framework.lock'
@@ -351,11 +367,21 @@ function Invoke-Git {
 function Invoke-GitIsolated {
     # Invoke-Git with git's redirecting variables cleared for the one call and restored after it, so git answers
     # for the repository Root lies in: for the target (Get-TrackedState) and for the source (THE SOURCE).
+    # PowerShell 7 (UI-2 S1c A-12, register row 522): $null handed to a .NET string parameter arrives as '', and under
+    # PowerShell 7 SetEnvironmentVariable(name, '') leaves the variable SET and empty -- an empty GIT_DIR, and git exits
+    # 128. [NullString]::Value removes it under 5.1 and 7 alike; Set-ProcessVariable restores a saved $null the same way.
     param([Parameter(Mandatory = $true)][string]$Root, [Parameter(Mandatory = $true)][string[]]$GitArgs)
     $saved = @{}
-    foreach ($v in $script:GitRedirects) { $saved[$v] = [System.Environment]::GetEnvironmentVariable($v, 'Process'); [System.Environment]::SetEnvironmentVariable($v, $null, 'Process') }
+    foreach ($v in $script:GitRedirects) { $saved[$v] = [System.Environment]::GetEnvironmentVariable($v, 'Process'); [System.Environment]::SetEnvironmentVariable($v, [NullString]::Value, 'Process') }
     try { return (Invoke-Git -Root $Root -GitArgs $GitArgs) }
-    finally { foreach ($v in $script:GitRedirects) { [System.Environment]::SetEnvironmentVariable($v, $saved[$v], 'Process') } }
+    finally { foreach ($v in $script:GitRedirects) { Set-ProcessVariable -Name $v -Value $saved[$v] } }
+}
+
+function Set-ProcessVariable {
+    # A process environment variable set to a value, or removed when the value is $null, under 5.1 and 7 alike.
+    param([Parameter(Mandatory = $true)][string]$Name, $Value)
+    if ($null -eq $Value) { [System.Environment]::SetEnvironmentVariable($Name, [NullString]::Value, 'Process') }
+    else { [System.Environment]::SetEnvironmentVariable($Name, [string]$Value, 'Process') }
 }
 
 function Get-TrackedState {
@@ -552,10 +578,53 @@ function Install-PythonSet {
     return ''
 }
 
+function Get-RegistryRowEdit {
+    # UI-2 S1 A-5 (register row 526): THE TARGET'S ROW, ITS framework_version SET TO THIS RELEASE'S. The registry text is
+    # split before each '- ' row start (a split that keeps every byte, so the parts rejoin to the text), the target's row
+    # found by its checkout_path (the comparison the registration makes), and in that row only the framework_version
+    # value replaced -- quoted, as the rows are written -- or, in a row that carries none, the field appended to it. Every
+    # other byte of the registry is the file's own. Returns found, old (null for none or null), changed, text.
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text, [Parameter(Mandatory = $true)][string]$TargetRoot, [Parameter(Mandatory = $true)][string]$Version)
+    $full = [System.IO.Path]::GetFullPath($TargetRoot).TrimEnd('\', '/')
+    $parts = [regex]::Split($Text, '(?m)^(?=-\s)')
+    for ($i = 0; $i -lt $parts.Count; $i++) {
+        $blk = $parts[$i]
+        $cp = [regex]::Match($blk, "(?m)^\s*(?:-\s+)?checkout_path:\s*'((?:[^']|'')*)'\s*\r?$")
+        if (-not $cp.Success) { continue }
+        if (-not [string]::Equals((($cp.Groups[1].Value -replace "''", "'").TrimEnd('\', '/')), $full, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+        $fv = [regex]::Match($blk, "(?m)^[ \t]+framework_version:[ \t]*([^\r\n]*?)[ \t]*\r?$")
+        $quoted = "'" + ($Version -replace "'", "''") + "'"
+        if ($fv.Success) {
+            $raw = $fv.Groups[1].Value
+            $old = $raw.Trim()
+            if ($old.Length -ge 2 -and (($old.StartsWith("'") -and $old.EndsWith("'")) -or ($old.StartsWith('"') -and $old.EndsWith('"')))) { $old = $old.Substring(1, $old.Length - 2) -replace "''", "'" }
+            if ($old -eq '' -or $old -eq 'null' -or $old -eq '~') { $old = $null }
+            $newBlk = $blk.Substring(0, $fv.Groups[1].Index) + $quoted + $blk.Substring($fv.Groups[1].Index + $fv.Groups[1].Length)
+        } else {
+            $old = $null
+            $nl = if ($blk.Contains("`r`n")) { "`r`n" } else { "`n" }
+            $newBlk = $(if ($blk.EndsWith("`n")) { $blk } else { $blk + $nl }) + "  framework_version: $quoted$nl"
+        }
+        $changed = -not ($null -ne $old -and $old -ceq $Version)
+        $parts[$i] = $newBlk
+        return @{ found = $true; old = $old; changed = $changed; text = ($parts -join '') }
+    }
+    return @{ found = $false; old = $null; changed = $false; text = $Text }
+}
+
+function Read-RegistryText {
+    # The registry's text and whether its bytes began with a UTF-8 BOM (kept on a rewrite).
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $b = [System.IO.File]::ReadAllBytes($Path)
+    $bom = ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF)
+    $t = if ($bom) { $script:Utf8NoBom.GetString($b, 3, $b.Length - 3) } else { $script:Utf8NoBom.GetString($b) }
+    return @{ text = $t; bom = $bom }
+}
+
 function Get-RegistrationPlan {
     # -WhatIf's reading of THE HOST REGISTRATION at the end of this script and of the feed's ignore rule: the same
     # decisions, read only, written nothing. Returns two lines.
-    param([Parameter(Mandatory = $true)][string]$TargetRoot)
+    param([Parameter(Mandatory = $true)][string]$TargetRoot, [string]$Version = $script:version)
     $vgHome = if ($env:VANGUARD_HOME) { $env:VANGUARD_HOME } else { Join-Path $env:USERPROFILE '.vanguard' }
     $idPath = Join-Path $vgHome 'host-id'
     $idText = if ([System.IO.File]::Exists($idPath)) { "host-id $(([System.IO.File]::ReadAllText($idPath)).Trim()) in $vgHome, kept" } else { "a host-id would be minted in $vgHome" }
@@ -577,6 +646,11 @@ function Get-RegistrationPlan {
             }
         }
         $rowText = if ($known) { "the target already has its row in $reg" } else { "a row for the target (mission $mission) would be added to $reg" }
+        if ($known) {
+            # UI-2 S1 A-5 (row 526): the row's framework_version, read as the real run would rewrite it
+            $ed = Get-RegistryRowEdit -Text (Read-RegistryText -Path $reg).text -TargetRoot $TargetRoot -Version $Version
+            if ($ed.found -and $ed.changed) { $rowText = "the target's row in $reg would be rewritten: framework_version $(if ($null -eq $ed.old) { '(none)' } else { "'" + $ed.old + "'" }) -> '$Version' (its other fields kept)" }
+        }
     }
     $gi = Join-Path $TargetRoot '.gitignore'
     $held = $false
@@ -729,27 +803,93 @@ function Invoke-Verify {
     Say $read
     $diff = 0
     $notWritten = 0
+    $keptEqual = 0   # UI-2 S1 A-8: kept files the project has made this release's file since
     $eolCount = [ordered]@{}
     foreach ($k in $script:EolValues) { $eolCount[$k] = 0 }
     $lockKeys = [string[]]@($Lock.files.Keys)
     [System.Array]::Sort($lockKeys, [System.StringComparer]::Ordinal)
+    # UI-2 S2 (open decision 2, ruled; contract amendment S1-AM1 to A-8): each difference printed is also kept, kind as
+    # printed -- CHANGED, MISSING, REFUSED, or kept-differs for a kept file equal to neither of its sha256s -- for the one
+    # verify_result line -Verify appends to a registered project's feed. A kept file now equal to upstream is no difference
+    # and is not listed.
+    $script:VerifyDivergences = New-Object System.Collections.Generic.List[object]
+    $addDiv = { param([string]$Path, [string]$Kind, $LockSha, $NowSha, $UpSha)
+        $o = [ordered]@{ path = $Path; kind = $Kind; lock_sha256 = $LockSha; now_sha256 = $NowSha }
+        if ($UpSha) { $o['upstream_sha256'] = $UpSha }
+        $script:VerifyDivergences.Add($o) }
     foreach ($p in $lockKeys) {
         $e = $Lock.files[$p]
         # The framework wrote nothing there; a file the project put there since is the project's.
         if ($e.disposition -ceq 'not-written') { $notWritten++; continue }
         if ($e.eol) { $eolCount[$e.eol]++ }
         $why = Get-PathRefusal -Rel $p -Root $TargetRoot
-        if ($why) { $diff++; Say "  REFUSED  $p  -- path guard: $why"; continue }
+        if ($why) { $diff++; Say "  REFUSED  $p  -- path guard: $why"; & $addDiv $p 'REFUSED' $e.sha256 $null $null; continue }
         $full = Join-Path $TargetRoot ($p -replace '/', '\')
-        if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { $diff++; Say "  MISSING  $p"; continue }
+        if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { $diff++; Say "  MISSING  $p"; & $addDiv $p 'MISSING' $e.sha256 $null $null; continue }
         $bytes = [System.IO.File]::ReadAllBytes($full)
         $now = Get-HeldSha256 -Lock $Lock -Judged (Get-JudgedForm -Bytes $bytes) -Bytes $bytes -Recorded $e.sha256
-        if ($now -ne $e.sha256) { $diff++; Say "  CHANGED  $p  lock=$($e.sha256) now=$now" }
+        if ($now -ne $e.sha256) {
+            # UI-2 S1 A-8 (register row 518): A KEPT FILE judged against both of its lock's sha256s. The row records the
+            # bytes the run kept (the project's own) and upstream_sha256, this release's file. A project that has since made
+            # its copy this release's file -- the NOTICE block added, the file now byte-equal to upstream on the lock's
+            # basis -- has no difference: it reads 'kept, now equal to upstream', is counted apart, and -Verify still
+            # writes nothing (the row stands as the upgrade wrote it). A kept file matching neither is CHANGED, as before.
+            if (($e.disposition -ceq 'kept') -and $e.upstream) {
+                if ($now -ceq $e.upstream) { $keptEqual++; Say "  KEPT     $p  -- kept, now equal to upstream: the project's copy is this release's file (the lock's row records the bytes the run kept; -Verify writes nothing under the installed set or the lock)"; continue }
+                $diff++; Say "  CHANGED  $p  lock=$($e.sha256) now=$now  -- kept, differs from upstream (upstream=$($e.upstream))"; & $addDiv $p 'kept-differs' $e.sha256 $now $e.upstream; continue
+            }
+            $diff++; Say "  CHANGED  $p  lock=$($e.sha256) now=$now"; & $addDiv $p 'CHANGED' $e.sha256 $now $null
+        }
     }
     $eolText = (@($script:EolValues | ForEach-Object { "$_=$($eolCount[$_])" }) -join ' ')
     if (-not $Lock.folded) { $eolText = 'not recorded (a lock with no eol_rule)' }
-    Say "verify: $($Lock.files.Count) file(s) listed$(if ($notWritten -gt 0) { ", $notWritten not written" }), $diff difference(s); eol $eolText."
+    Say "verify: $($Lock.files.Count) file(s) listed$(if ($notWritten -gt 0) { ", $notWritten not written" }), $diff difference(s); eol $eolText.$(if ($keptEqual -gt 0) { " $keptEqual kept file(s) now equal to upstream." })"
     return $diff
+}
+
+function Send-VerifyResult {
+    # UI-2 S2 (open decision 2, ruled; B-10's emitter). Contract amendment S1-AM1 to A-8: "-Verify writes nothing under the
+    # target's installed set or its lock; where the project is registered it appends one verify_result line to the feed".
+    # The line is the mission-event feed's verify_result (expanded-schemas SS14, schema 1.2): verdict PASS or FAIL,
+    # arms_run [install-verify], against framework.lock, divergences = the differences counted, and divergence_list = each
+    # one as printed ({path, kind, lock_sha256, now_sha256[, upstream_sha256]}). It is written by THIS release's own
+    # Write-MissionEvent (tools\evidence-hooks-next\hooks\lib\evidence-common.ps1 beside this script -- never the target's
+    # copy, which is what -Verify judges), in a child process of this shell, and only where the target is a registered
+    # telemetry stream (its .mission-runtime\telemetry folder and a registry row for it): elsewhere it writes nothing at
+    # all. It never changes -Verify's exit code; one line says what it did.
+    param([string]$TargetRoot, [int]$Diff, [object[]]$Divergences)
+    try {
+        $lib = Join-Path $PSScriptRoot 'tools\evidence-hooks-next\hooks\lib\evidence-common.ps1'
+        if (-not (Test-Path -LiteralPath $lib -PathType Leaf)) { Say "verify: no feed line -- this release's feed writer is not beside install.ps1 ($lib)"; return }
+        $spec = [ordered]@{ root = $TargetRoot; lib = $lib; verdict = $(if ($Diff -gt 0) { 'FAIL' } else { 'PASS' }); divergences = $Diff; divergence_list = @($Divergences) }
+        $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('vg-verify-' + [guid]::NewGuid().ToString('N') + '.json')
+        [System.IO.File]::WriteAllText($tmp, ($spec | ConvertTo-Json -Depth 8 -Compress), (New-Object System.Text.UTF8Encoding($false)))
+        $child = @'
+param([string]$Spec)
+$ErrorActionPreference = 'Stop'
+try {
+    $s = [System.IO.File]::ReadAllText($Spec) | ConvertFrom-Json
+    . $s.lib
+    if (-not (Test-MissionTelemetryStream -Root $s.root)) { 'VG-VERIFY-RESULT NOSTREAM'; exit 0 }
+    $list = @(@($s.divergence_list) | Where-Object { $null -ne $_ } | ForEach-Object {
+        $o = [ordered]@{ path = [string]$_.path; kind = [string]$_.kind; lock_sha256 = $_.lock_sha256; now_sha256 = $_.now_sha256 }
+        if ($_.PSObject.Properties.Name -contains 'upstream_sha256') { $o['upstream_sha256'] = $_.upstream_sha256 }
+        $o })
+    $p = [ordered]@{ verdict = [string]$s.verdict; arms_run = @('install-verify'); against = 'framework.lock'; divergences = [int]$s.divergences; divergence_list = $list }
+    if (Write-MissionEvent -Root $s.root -Kind 'verify_result' -Payload $p -SourcePath 'framework.lock' -Hook 'install-verify') { 'VG-VERIFY-RESULT APPENDED' } else { 'VG-VERIFY-RESULT FAILED' }
+} catch { 'VG-VERIFY-RESULT FAILED ' + $_.Exception.Message }
+'@
+        $childFile = Join-Path ([System.IO.Path]::GetTempPath()) ('vg-verify-' + [guid]::NewGuid().ToString('N') + '.ps1')
+        [System.IO.File]::WriteAllText($childFile, $child, (New-Object System.Text.UTF8Encoding($false)))
+        $exe = (Get-Process -Id $PID).Path
+        try { $out = @(& $exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $childFile -Spec $tmp 2>&1 | ForEach-Object { "$_" }) }
+        finally { Remove-Item -LiteralPath $tmp, $childFile -Force -ErrorAction SilentlyContinue }
+        $r = @($out | Where-Object { $_ -like 'VG-VERIFY-RESULT *' } | Select-Object -Last 1)
+        $word = if ($r.Count) { $r[0].Substring(17) } else { 'FAILED (no answer)' }
+        if ($word -ceq 'APPENDED') { Say "verify: one verify_result line appended to the project's feed ($Diff difference(s) listed); nothing under the installed set or the lock was written" }
+        elseif ($word -ceq 'NOSTREAM') { Say "verify: the project is not a registered telemetry stream; no feed line was written" }
+        else { Say "verify: the verify_result line could not be appended to the project's feed: $word" }
+    } catch { Say "verify: the verify_result line could not be composed: $($_.Exception.Message)" }
 }
 
 # ------------------------------------------------------------------------------------------------
@@ -773,6 +913,7 @@ if ($Verify) {
     if ($null -eq $lock) { Stop-Install 1 "no framework.lock at $targetRoot -- nothing was installed there, so there is nothing to verify." }
     Say "verify: target $targetRoot"
     $diff = Invoke-Verify -Lock $lock -TargetRoot $targetRoot
+    Send-VerifyResult -TargetRoot $targetRoot -Diff $diff -Divergences $script:VerifyDivergences.ToArray()
     if ($diff -gt 0) { exit 3 }
     exit 0
 }
@@ -1004,9 +1145,13 @@ if ($sourceKind -eq 'clone') {
     if ($tip -ne $sourceCommit) { $tipNote = "; its RELEASE names framework_repo_tip $tip" }
     Say "source $sourceRoot (clone at tag $sourceTag, commit $sourceCommit$tipNote, version $version)"
 } else { Say "source $sourceRoot ($sourceKind at $tip, version $version)" }
-$marked = @(@('install.ps1', 'mission.ps1') | Where-Object { Test-MarkOfTheWeb -Path (Join-Path $sourceRoot $_) })
+# MARK OF THE WEB (header; UI-2 S1c A-11, register row 522): this script, mission.ps1 and every installer-owned source
+# file are read for a Zone.Identifier stream; the members it then writes are checked after the write (below).
+$marked = @(@('install.ps1', 'mission.ps1') + @($ownedSorted | ForEach-Object { $_.path }) | Select-Object -Unique | Where-Object { Test-MarkOfTheWeb -Path (Join-Path $sourceRoot ($_ -replace '/', '\')) })
 if ($marked.Count -gt 0) {
-    Say ("NOTE: this tree carries the Mark of the Web -- a Zone.Identifier stream on {0}. Every file written below is written fresh and carries none. Run mission.ps1 from this tree with -ExecutionPolicy Bypass, or Unblock-File the ZIP before expanding it (INSTALL.md)." -f ($marked -join ' and '))
+    $markedNamed = @($marked | Select-Object -First 3) -join ', '
+    if ($marked.Count -gt 3) { $markedNamed += ", and $($marked.Count - 3) more" }
+    Say ("MARK OF THE WEB: this tree carries a Zone.Identifier stream on {0} file(s) ({1}). Every file written below is written fresh, without it, and is checked after the write. The fix for the tree: Unblock-File the ZIP before expanding it, or run install.ps1 and mission.ps1 from it with -ExecutionPolicy Bypass (INSTALL.md section 3)." -f $marked.Count, $markedNamed)
 }
 Say "target $targetRoot$(if ($WhatIf) { ' -- WhatIf: nothing will be written' })"
 Say ("manifest sha256 {0}; installer-owned {1} (MOVE {2}, TEMPLATE {3}, HOST-CONFIG {4}); framework.lock {5}" -f $manifestSha, $ownedSorted.Count, $classCount['MOVE'], $classCount['TEMPLATE'], $classCount['HOST-CONFIG'], $(if ($null -eq $lock) { 'absent' } else { "present (lock_format $($lock.format), version $($lock.version), $($lock.files.Count) file(s))" }))
@@ -1241,6 +1386,25 @@ foreach ($d in $toWrite) {
     }
     $moved++
 }
+# MARK OF THE WEB, after the write (header): every member written above is read for a Zone.Identifier stream, and one
+# found is removed from that member -- a written file carries none, whichever shell ran this script. Said when the
+# source carried the mark, or when a stream had to be removed.
+$motwCleared = @()
+foreach ($d in $toWrite) {
+    $tp = Join-Path $targetRoot ($d.path -replace '/', '\')
+    if (Test-MarkOfTheWeb -Path $tp) {
+        try { Remove-Item -LiteralPath $tp -Stream 'Zone.Identifier' -ErrorAction Stop } catch { }
+        $motwCleared += $d.path
+    }
+}
+$motwLeft = @($toWrite | Where-Object { Test-MarkOfTheWeb -Path (Join-Path $targetRoot ($_.path -replace '/', '\')) } | ForEach-Object { $_.path })
+if ($marked.Count -gt 0 -or $motwCleared.Count -gt 0) {
+    Say ("MARK OF THE WEB: {0} file(s) written; carrying a Zone.Identifier stream after the write: {1} (removed from {2})." -f $toWrite.Count, $motwLeft.Count, ($motwCleared.Count - $motwLeft.Count))
+}
+if ($motwLeft.Count -gt 0) {
+    try { [System.IO.Directory]::Delete($stage, $true) } catch { }
+    Stop-Install 1 ("MARK OF THE WEB NOT CLEARED: {0} written file(s) still carry a Zone.Identifier stream ({1}) that could not be removed, and framework.lock was not rewritten. Unblock-File the ZIP before expanding it (INSTALL.md section 3) and run the same release again." -f $motwLeft.Count, (@($motwLeft | Select-Object -First 3) -join ', '))
+}
 # The lock by File.Replace, never by delete-then-move: on every failure ReplaceFile reports, the old lock is
 # still in place or is put back. It goes to a backup name in the staging folder, where a failure can leave it.
 $backup = Join-Path $stage ($script:LockName + '.previous')
@@ -1299,7 +1463,32 @@ try {
                 if ([string]::Equals((($vgRow.Groups[1].Value -replace "''", "'").TrimEnd('\', '/')), $vgPath, [System.StringComparison]::OrdinalIgnoreCase)) { $vgKnown = $true }
             }
         }
-        if ($vgKnown) { $vgNote = "host-id $vgHostId; the target already has its row in $vgReg" }
+        if ($vgKnown) {
+            $vgNote = "host-id $vgHostId; the target already has its row in $vgReg"
+            # UI-2 S1 A-5 (register row 526): THE ROW'S framework_version IS THIS RELEASE'S after a run that writes -- an
+            # upgrade above all, which before 1.3.0 left the row at the version first registered. Only that value changes
+            # (Get-RegistryRowEdit); the file is rewritten whole through a temporary file beside it and File.Replace, so a
+            # reader sees the old bytes or the new ones. A registry that cannot be written is NOT a note: the row would go
+            # on naming a version the target no longer has, so the run says so, naming the registry, and exits 5 once
+            # the install itself is reported (every file and the lock stand).
+            $vgRt = Read-RegistryText -Path $vgReg
+            $vgEd = Get-RegistryRowEdit -Text $vgRt.text -TargetRoot $targetRoot -Version $version
+            if ($vgEd.found -and $vgEd.changed) {
+                $vgOld = if ($null -eq $vgEd.old) { '(none)' } else { "'" + $vgEd.old + "'" }
+                $vgTmp = $vgReg + '.install-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.tmp'
+                try {
+                    $vgNew = $vgUtf8.GetBytes($vgEd.text)
+                    if ($vgRt.bom) { $vgNew = [byte[]](@(0xEF, 0xBB, 0xBF) + $vgNew) }
+                    [System.IO.File]::WriteAllBytes($vgTmp, $vgNew)
+                    [System.IO.File]::Replace($vgTmp, $vgReg, [NullString]::Value)   # no backup file ($null would be passed as '')
+                    $vgNote = "host-id $vgHostId; the target's row in ${vgReg}: framework_version $vgOld rewritten to '$version', its other fields kept"
+                } catch {
+                    try { if ([System.IO.File]::Exists($vgTmp)) { [System.IO.File]::Delete($vgTmp) } } catch { }
+                    $script:RegistryRowFailure = "the host registry row was NOT updated: $vgReg still says framework_version $vgOld for $targetRoot, and this run installed '$version' ($($_.Exception.Message)); make the file writable and run the same release again -- every file is judged already-identical and the row is rewritten"
+                    $vgNote = "host-id $vgHostId; $($script:RegistryRowFailure)"
+                }
+            }
+        }
         else {
             $vgText = ''
             if (-not [System.IO.File]::Exists($vgReg)) { $vgText = "# Vanguard host registry -- one row per registered checkout, appended by install.ps1 and mission init`n# (ADR-045). Read by ``vanguard ui``. Rows are never pruned: a row whose path is gone is shown as stale.`n" }
@@ -1328,5 +1517,6 @@ Say "done: $countText"
 Say ("framework.lock written: {0} line(s) for {1} file(s), sha256 {2}" -f $lockLines.Count, $plan.Count, (Get-FileSha256Hex -Path $lockPath))
 if ($mode -eq 'upgrade') { Say "upgraded $previous to $version in $targetRoot." }
 else { Say "installed $version into $targetRoot." }
+if ($script:RegistryRowFailure) { Say "REGISTRY NOT UPDATED: $($script:RegistryRowFailure)"; exit 5 }
 if ($pySetWhy) { exit 4 }
 exit 0

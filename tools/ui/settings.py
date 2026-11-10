@@ -7,6 +7,12 @@ DEFAULT_PORT = 8765
 # F2: "main ahead of origin beyond N days" -- N is a service setting, 7 by default.
 DEFAULT_AHEAD_DAYS = 7
 POLL_SECONDS = 0.25
+# THE TAIL WINDOW (register row 525; 505 (i)): on resume the tailer hashes the last N bytes before its stored offset and
+# re-ingests a stream whose bytes there changed. A feed truncated and regrown between two polls, or while the service was
+# down, with its first line and those N bytes as they were, is not seen as replaced: the limit, stated in the user
+# guide's section 12 (and INSTALL.md section 5) and shown on the Fleet stats face. N is a service setting (--tail-window-bytes), 4096 by default -- more
+# than any one line the hooks write.
+DEFAULT_TAIL_WINDOW_BYTES = 4096
 
 _TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRAMEWORK_ROOT = os.path.dirname(_TOOLS)
@@ -39,6 +45,7 @@ class Settings:
     port: int = DEFAULT_PORT
     ahead_days: int = DEFAULT_AHEAD_DAYS
     poll_seconds: float = POLL_SECONDS
+    tail_window_bytes: int = DEFAULT_TAIL_WINDOW_BYTES
 
     @property
     def registry_path(self):

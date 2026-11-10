@@ -149,9 +149,21 @@
         registration under the scratch root's VANGUARD_HOME, the project's origin the scratch bare origin, nothing
         else made; a non-empty scratch root refused (exit 2); -EngineDown read against the engine as it stands (up:
         exit 3, nothing made; down: it proceeds). The acceptance step itself is S4's to run, with both arms
-    h7  PowerShell 7 and the Mark of the Web (RELEASE-4 S2 F-H7): with no pwsh on PATH, SKIPPED BY NAME (unmeasured, carried
-        to the 1.2.0 notes); with one, a local ZIP fetched by Invoke-WebRequest under pwsh and expanded, its streams printed,
-        and INSTALL.md held to naming PowerShell 7 and Zone.Identifier
+    h7  PowerShell 7 and the Mark of the Web (RELEASE-4 S2 F-H7; UI-2 S1c A-11, register row 522): a marked ZIP expanded
+        under each shell, its member's streams printed; the tagged clone's install.ps1 and one installer-owned member given
+        a Zone.Identifier stream, then -WhatIf and the install under Windows PowerShell 5.1 and under pwsh: each names the 2
+        marked files once with the fix, the install says after the write that 0 written files carry the stream, no target
+        file carries one (read here), and the two shells' dispositions and counts are equal; INSTALL.md names PowerShell 7,
+        Zone.Identifier, Expand-Archive and the MARK OF THE WEB lines. No pwsh on PATH: the pwsh half SKIPPED BY NAME
+    h11 the release tree's eol pin (RELEASE-4 S2 F-H11, carried; UI-2 S1c A-14, register row 520): a fresh install from
+        the tagged clone; every framework.lock row recorded lf or crlf names a release file and an installed file with
+        exactly those line endings; planted, one lf member rewritten with CR LF: -Verify reads no difference (fold basis),
+        and the pin names exactly that member
+    d524 the kept set in the docs (UI-2 S1c, register row 524): INSTALL.md section 6 and the 1.2.0 notes' item 3.2 say
+        the kept set is .claude/settings.json and any other file the installer reports kept, never "only" settings.json
+    p7  the install path under PowerShell 7 (UI-2 S1c A-12, register row 522): the same inputs driven once under 5.1 and
+        once under pwsh -- -WhatIf, the install, -Verify, mission init, smoke, register and the installed smoke builder --
+        each step's exit code and count line equal across the shells. No pwsh on PATH: SKIPPED BY NAME
     h8  the installer warns on a git-ignored member (RELEASE-4 S2 F-H8): a git project whose .gitignore holds dist/, *.cmd
         and a negated rule -- -WhatIf and the install, one WARNING per member *.cmd hides naming .gitignore:2 and the rule,
         none other, the files written; a git project with no rules, none; (RELEASE-4 S3 F-X3) a git project whose *.cmd rule
@@ -197,9 +209,18 @@
         ADR-045 bare outside v2.3 (the schema WP-7 U-17 pins by sha256 listed, not cured)
     enc every tracked *.md and LICENSE is UTF-8 without a BOM, with no mojibake sequence and no whitespace-only line
         (RELEASE-4 S3 F-ENC); expanded-schemas-base.md, whose bytes two documents cite by sha256 prefix, listed, not cured
+    rg1 the host registry row after an upgrade (UI-2 S1 A-5; register row 526): an upgrade rewrites the target's row's
+        framework_version to the version it installs, every other registry byte kept, and -WhatIf announces it; a
+        target not yet registered is not registered by it; a read-only registry leaves the row and exits non-zero
+        naming the registry
+    kv1 -Verify over a kept file the project made byte-equal to its upstream (UI-2 S1 A-8; register row 518): 'kept,
+        now equal to upstream', 0 differences, exit 0, the lock unchanged; one byte changed: CHANGED 'kept, differs
+        from upstream', exit 3
+    kv2 the step after the NOTICE block is added (UI-2 S1 A-9; row 518): INSTALL.md section 6 and the 1.3.0 notes name
+        -Verify and 'kept, now equal to upstream'
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('a', 'b', 'c', 'd', 'e', 'f', 'g', 'gu', 'ga', 'gh', 'py', 'u', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'v', 'k1', 'k2', 'k3', 'k4', 'h4', 'h5', 'h6', 'h7', 'h8', 'h10', 'h14', 'h16', 'h18', 'l1', 'l6', 'l2', 'l3', 'l4', 'l5', 'l8', 'enc')][string]$Case,
+    [Parameter(Mandatory)][ValidateSet('a', 'b', 'c', 'd', 'e', 'f', 'g', 'gu', 'ga', 'gh', 'py', 'u', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'v', 'k1', 'k2', 'k3', 'k4', 'h4', 'h5', 'h6', 'h7', 'h8', 'h10', 'h14', 'h16', 'h18', 'l1', 'l6', 'l2', 'l3', 'l4', 'l5', 'l8', 'enc', 'rg1', 'kv1', 'kv2', 'p7', 'h11', 'd524')][string]$Case,
     [Parameter(Mandatory)][string]$Repo,
     [Parameter(Mandatory)][string]$Out,
     [string]$Tag = 'vc-r1',
@@ -286,10 +307,13 @@ function OwnedSet { param([string]$ManifestPath)
         if ($r.source -eq 'host' -and @('MOVE', 'TEMPLATE', 'HOST-CONFIG') -contains $r.class -and $null -ne $r.destination) { $s[$r.destination] = $r } }
     return $s
 }
+# A lock's JSON read with every stamp kept the string it is (HALT-U2FW4-03): PowerShell 7's ConvertFrom-Json types an ISO
+# date string as DateTime, so a stamp compared as text failed there; Windows PowerShell 5.1 already keeps strings.
+function ConvertFrom-JsonText { param([Parameter(ValueFromPipeline = $true)][string]$Text) process { if ($PSVersionTable.PSVersion.Major -ge 7) { $Text | ConvertFrom-Json -DateKind String } else { $Text | ConvertFrom-Json } } }
 function ReadLock { param([string]$Target)
     $raw = [System.IO.File]::ReadAllBytes((Join-Path $Target 'framework.lock'))
     $ls = @($NoBom.GetString($raw).Split([char]10) | Where-Object { $_ })
-    return [pscustomobject]@{ raw = $raw; sha = (Sha $raw); header = ($ls[0] | ConvertFrom-Json); rows = @($ls | Select-Object -Skip 1 | ForEach-Object { $_ | ConvertFrom-Json }); lines = $ls }
+    return [pscustomobject]@{ raw = $raw; sha = (Sha $raw); header = ($ls[0] | ConvertFrom-JsonText); rows = @($ls | Select-Object -Skip 1 | ForEach-Object { $_ | ConvertFrom-JsonText }); lines = $ls }
 }
 function TextUnset { param([string]$Dir, [string[]]$Paths)
     # The paths git reads as -text in the checkout Dir (git check-attr text: unset): no line-ending conversion reaches them.
@@ -1475,8 +1499,8 @@ switch ($Case) {
     L "marked install.ps1, host policy: exit=$($r.code)"; $r.out | Select-Object -First 4 | ForEach-Object { L "  | $_" }
     Check 'REFUSED under RemoteSigned: "not digitally signed", non-zero exit, no target created' (($r.code -ne 0) -and ((Count $r.out 'is not digitally signed') -ge 1) -and -not (Test-Path -LiteralPath $tgt))
     $r = Run-Child @('-File', (Join-Path $x 'install.ps1'), '-Target', $tgt) -Bypass
-    L "marked install.ps1, -ExecutionPolicy Bypass: exit=$($r.code)"; $r.out | Where-Object { $_ -cmatch '^install\.ps1: (NOTE: |done:|installed \d+\.\d+\.\d+ |REFUSED)' } | ForEach-Object { L "  | $_" }
-    Check "RUNS under Bypass: exit 0, done: written=$N, and it reports the marked tree (NOTE)" (($r.code -eq 0) -and (Has $r.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0") -and ((Count $r.out '^install\.ps1: NOTE: this tree carries the Mark of the Web') -eq 1))
+    L "marked install.ps1, -ExecutionPolicy Bypass: exit=$($r.code)"; $r.out | Where-Object { $_ -cmatch '^install\.ps1: (MARK OF THE WEB: |done:|installed \d+\.\d+\.\d+ |REFUSED)' } | ForEach-Object { L "  | $_" }
+    Check "RUNS under Bypass: exit 0, done: written=$N, and it reports the marked tree (MARK OF THE WEB)" (($r.code -eq 0) -and (Has $r.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0") -and ((Count $r.out '^install\.ps1: MARK OF THE WEB: this tree carries a Zone\.Identifier stream on \d+ file\(s\)') -eq 1))
     $mt = Marked $tgt
     Check "installed files carry no mark ($($mt.marked) of $($mt.all))" ($mt.marked -eq 0)
     $r = Run-Child @('-File', (Join-Path $x 'mission.ps1'), 'init', '-Target', $tgt)
@@ -2644,27 +2668,162 @@ switch ($Case) {
     Check "(h6) -EngineDown reads the engine and, the engine $(if ($up) { 'UP: refuses, exit 3, nothing made' } else { 'DOWN: proceeds, exit 0' })" ($(if ($up) { ($r3.code -eq 3) -and -not (Test-Path -LiteralPath (Join-Path $Work 'p3\release')) } else { $r3.code -eq 0 }))
 }
 'h7' {
-    # F-H7 (RELEASE-4 S2; row 495 (9)): POWERSHELL 7, Invoke-WebRequest AND THE MARK OF THE WEB. The measurement is an
-    # operator block on a PS7 host (the S2 seat's handoff carries its text); this member reads whether this host has one.
-    # With none -- no pwsh on PATH -- it SKIPS BY NAME: unmeasured, carried to the 1.2.0 notes (operator ruling 2026-11-06).
-    # With one, it fetches a local file through Invoke-WebRequest under pwsh, expands it, and prints the streams each holds;
-    # it holds INSTALL.md section 3 to naming PowerShell 7 and Zone.Identifier once the operator's paste has been recorded.
+    # F-H7 (RELEASE-4 S2; row 495 (9)), measured and cured at UI-2 S1c (contract A-11, register row 522): POWERSHELL 7 AND
+    # THE MARK OF THE WEB. (1) What each shell's Expand-Archive does with a ZIP carrying a Zone.Identifier stream: printed,
+    # not asserted (it is the shell's behaviour; measured 2026-11-08: neither 5.1's Archive 1.0.1 nor 7.6.9's 1.2.6 carries
+    # it to the members). (2) The GREEN rule, under Windows PowerShell 5.1 and under pwsh alike: the tagged clone's
+    # install.ps1 and one installer-owned member given a Zone.Identifier stream (ZoneId=3, as Explorer's Extract All
+    # leaves); -WhatIf and the install each name the 2 marked files once; the install says after the write that 0 written
+    # files carry the stream; read here, no file in the target carries one; both shells' dispositions and counts are
+    # equal. (3) INSTALL.md section 3 names PowerShell 7, Zone.Identifier and the measurement. No pwsh on PATH: the 5.1
+    # half runs and the pwsh half SKIPS BY NAME (a skip, never a pass).
     $pw = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $pw) {
-        L 'CHECK SKIP  (h7) F-H7 UNMEASURED: no PowerShell 7 host here (pwsh is not on PATH) -- recorded in the 1.2.0 notes as unmeasured and carried (operator ruling 2026-11-06); the measurement is the S2 handoff''s operator block'
-    } else {
-        $d = Join-Path $Work 'motw'; $null = New-Item -ItemType Directory -Force -Path $d
-        $z = Join-Path $d 'src.zip'; $null = New-Item -ItemType Directory -Force -Path (Join-Path $d 'in')
-        [System.IO.File]::WriteAllText((Join-Path $d 'in\a.txt'), "a`n"); Compress-Archive -Path (Join-Path $d 'in\*') -DestinationPath $z
-        $probe = Join-Path $d 'probe.ps1'
-        [System.IO.File]::WriteAllText($probe, ("`$ErrorActionPreference='Stop'; `$o = Join-Path '$d' 'got.zip'; Invoke-WebRequest -Uri ([uri]'$z').AbsoluteUri -OutFile `$o; " +
-            "'PS ' + `$PSVersionTable.PSVersion; 'zip streams: ' + ((Get-Item `$o -Stream * | ForEach-Object Stream) -join ','); " +
-            "Expand-Archive `$o -DestinationPath (Join-Path '$d' 'x'); 'expanded streams: ' + ((Get-Item (Join-Path '$d' 'x\a.txt') -Stream * | ForEach-Object Stream) -join ',')"))
-        $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $po = @(& $pw.Source -NoProfile -File $probe 2>&1 | ForEach-Object { "$_" }); $pc = $LASTEXITCODE } finally { $ErrorActionPreference = $prev }
-        L "(h7) pwsh at $($pw.Source): exit $pc"; $po | ForEach-Object { L "  | $_" }
-        $im3 = DocText (Join-Path $Repo 'INSTALL.md')
-        Check '(h7) a PS7 host: the measurement ran, and INSTALL.md names PowerShell 7 and Zone.Identifier (the operator''s paste recorded)' (($pc -eq 0) -and $im3.Contains('PowerShell 7') -and $im3.Contains('Zone.Identifier'))
+    $ps51 = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $shells = @([pscustomobject]@{ n = 'ps51'; exe = $ps51 })
+    if ($pw) { $shells += [pscustomobject]@{ n = 'pwsh'; exe = $pw.Source } }
+    else { L 'CHECK SKIP  (h7) the pwsh half: no PowerShell 7 host here (pwsh is not on PATH) -- the 5.1 half is measured, the pwsh half is not' }
+    function RunH7 { param([string]$Exe, [string]$Script, [string[]]$A)
+        $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $o = @(& $Exe -NoProfile -ExecutionPolicy Bypass -File $Script @A 2>&1); $c = $LASTEXITCODE } finally { $ErrorActionPreference = $p }
+        return [pscustomobject]@{ code = $c; out = @($o | ForEach-Object { "$_" }) }
+    }
+    function MarkedIn { param([string]$Root) @(Get-ChildItem -LiteralPath $Root -Recurse -File -Force -ErrorAction SilentlyContinue | Where-Object { @(Get-Item -LiteralPath $_.FullName -Stream * -ErrorAction SilentlyContinue | Where-Object { $_.Stream -eq 'Zone.Identifier' }).Count -gt 0 }).Count }
+    $zi = "[ZoneTransfer]`r`nZoneId=3"
+    # (1) Expand-Archive, per shell
+    $d = Join-Path $Work 'motw'; $null = New-Item -ItemType Directory -Force -Path (Join-Path $d 'in')
+    [System.IO.File]::WriteAllText((Join-Path $d 'in\a.txt'), "a`n"); $z = Join-Path $d 'src.zip'
+    Compress-Archive -Path (Join-Path $d 'in\*') -DestinationPath $z; Set-Content -LiteralPath $z -Stream Zone.Identifier -Value $zi
+    $probe = Join-Path $d 'probe.ps1'
+    [System.IO.File]::WriteAllText($probe, "param([string]`$Z, [string]`$X)`n`$ErrorActionPreference = 'Stop'`n'PS ' + `$PSVersionTable.PSVersion + ', Archive ' + (Get-Command Expand-Archive).Version`n'zip streams: ' + ((Get-Item -LiteralPath `$Z -Stream * | ForEach-Object Stream) -join ',')`nExpand-Archive -LiteralPath `$Z -DestinationPath `$X`n'expanded member streams: ' + ((Get-Item -LiteralPath (Join-Path `$X 'a.txt') -Stream * | ForEach-Object Stream) -join ',')`n")
+    foreach ($s in $shells) {
+        $r = RunH7 $s.exe $probe @('-Z', $z, '-X', (Join-Path $d "x-$($s.n)"))
+        L "(h7) Expand-Archive of a marked ZIP under $($s.n): exit $($r.code)"; $r.out | ForEach-Object { L "  | $_" }
+        Check "(h7) the Expand-Archive measurement ran under $($s.n) (exit 0; what it does with the stream is printed above)" ($r.code -eq 0)
+    }
+    # (2) the installer over a marked source
+    $member = @($owned.Keys | Where-Object { $owned[$_].class -eq 'MOVE' } | Sort-Object)[0]
+    foreach ($m in @('install.ps1', $member)) { Set-Content -LiteralPath (Join-Path $Tagged.root ($m -replace '/', '\')) -Stream Zone.Identifier -Value $zi }
+    L "(h7) marked in the tagged clone: install.ps1 and $member (Zone.Identifier ZoneId=3); git status there: $(((RunGit $Tagged.root @('status', '--porcelain')).out -join ' ').Trim())"
+    $faces = @{}
+    foreach ($s in $shells) {
+        $t = Join-Path $Work "t-$($s.n)"; $null = New-Item -ItemType Directory -Force -Path $t
+        $prevVh = $env:VANGUARD_HOME; $env:VANGUARD_HOME = Join-Path $Work "vh-$($s.n)"
+        try {
+            $w = RunH7 $s.exe $installer @('-Target', $t, '-WhatIf', '-SkipPythonSet')
+            $wWrote = @(Get-ChildItem -LiteralPath $t -Force -ErrorAction SilentlyContinue).Count
+            $r = RunH7 $s.exe $installer @('-Target', $t, '-SkipPythonSet')
+        } finally { if ($null -eq $prevVh) { Remove-Item Env:VANGUARD_HOME -ErrorAction SilentlyContinue } else { $env:VANGUARD_HOME = $prevVh } }
+        $pre = '^install\.ps1: MARK OF THE WEB: this tree carries a Zone\.Identifier stream on 2 file\(s\) \(install\.ps1, ' + [regex]::Escape($member) + '\)\. .*Unblock-File.*INSTALL\.md section 3'
+        $post = '^install\.ps1: MARK OF THE WEB: \d+ file\(s\) written; carrying a Zone\.Identifier stream after the write: 0 \(removed from \d+\)\.$'
+        L "(h7) under $($s.n): -WhatIf exit $($w.code), install exit $($r.code)"
+        @($r.out | Where-Object { $_ -match 'MARK OF THE WEB|done: ' }) | ForEach-Object { L "  | $_" }
+        $inT = MarkedIn $t
+        Check "(h7) under $($s.n): -WhatIf names the 2 marked files once, with the fix, and writes nothing" (($w.code -eq 0) -and ((Count $w.out $pre) -eq 1) -and ($wWrote -eq 0))
+        Check "(h7) under $($s.n): the install exits 0, names the 2 marked files once, and says after the write that 0 written files carry the stream" (($r.code -eq 0) -and ((Count $r.out $pre) -eq 1) -and ((Count $r.out $post) -eq 1))
+        Check "(h7) under $($s.n): read here, no file in the target carries a Zone.Identifier stream ($inT)" ($inT -eq 0)
+        $faces[$s.n] = @($r.out | Where-Object { $_ -match '^install\.ps1:   \S' -or $_ -match '^install\.ps1: (done|MARK OF THE WEB): ' })
+    }
+    if ($pw) { Check "(h7) the install's dispositions, its MARK OF THE WEB lines and its counts are the same under 5.1 and pwsh ($($faces['ps51'].Count) / $($faces['pwsh'].Count) lines)" (Same $faces['ps51'] $faces['pwsh']) }
+    # (3) the docs
+    $im3 = DocText (Join-Path $Repo 'INSTALL.md')
+    Check '(h7) INSTALL.md names PowerShell 7, Zone.Identifier, Expand-Archive and the installer''s MARK OF THE WEB lines' ($im3.Contains('PowerShell 7') -and $im3.Contains('Zone.Identifier') -and $im3.Contains('Expand-Archive') -and $im3.Contains('MARK OF THE WEB'))
+}
+'d524' {
+    # UI-2 S1c register row 524 (RELEASE-4 retrospective section 5): INSTALL.md section 6 and the 1.2.0 notes' item 3.2 said
+    # only .claude/settings.json differs among the kept files -- true of an unedited install only. Both now say the kept set
+    # is .claude/settings.json and any other file the installer reports kept, and neither says "only".
+    foreach ($doc in @('INSTALL.md', 'docs/RELEASE-NOTES-v1.2.0.md')) {
+        $txt = DocText (Join-Path $Repo ($doc -replace '/', '\'))
+        if ($doc -ceq 'INSTALL.md') { $m = [regex]::Match($txt, '## 6\. .*?(?=## 7\. )'); $txt = if ($m.Success) { $m.Value } else { '' } }
+        $only = [regex]::Matches($txt, 'only `?\.claude/settings\.json`? differs').Count
+        $set = $txt.Contains('The kept set is `.claude/settings.json` and any other file the installer reports kept')
+        L "(d524) $doc$(if ($doc -ceq 'INSTALL.md') { ' section 6' }): 'only ... settings.json differs' $only time(s); names the kept set as settings.json and any other file reported kept: $set"
+        Check "(d524) $doc says the kept set is .claude/settings.json and any other file the installer reports kept, and never 'only .claude/settings.json differs'" (($only -eq 0) -and $set)
+    }
+}
+'h11' {
+    # F-H11 (RELEASE-4 S2, carried), as UI-2 S1c A-14 restates it (register row 520): THE RELEASE TREE'S EOL PIN, held by a
+    # member that reads the lock and the files. -Verify judges on the fold-crlf-text basis, so a member whose line endings
+    # drift reads no difference there; this member holds every framework.lock row whose eol is lf or crlf to (a) the
+    # release source file's own line endings (the tagged clone, the tree the lock recorded) and (b) the installed file's.
+    # Planted: one lf member rewritten with CR LF in the target -- -Verify still reads 0 differences, and the member names it.
+    function EolPinMisses { param($Lk, [string]$Target)
+        $miss = @()
+        foreach ($r in @($Lk.rows | Where-Object { @('lf', 'crlf') -contains [string]$_.eol })) {
+            $rel = $r.path -replace '/', '\'
+            $se = EolOf ([System.IO.File]::ReadAllBytes((Join-Path $Tagged.root $rel)))
+            $tp = Join-Path $Target $rel
+            $te = if (Test-Path -LiteralPath $tp -PathType Leaf) { EolOf ([System.IO.File]::ReadAllBytes($tp)) } else { '(absent)' }
+            if (($se -cne $r.eol) -or ($te -cne $r.eol)) { $miss += "$($r.path) lock=$($r.eol) release=$se target=$te" }
+        }
+        return , $miss
+    }
+    $t = Join-Path $Work 't'; $null = New-Item -ItemType Directory -Force -Path $t
+    $ri = Run $installer @('-Target', $t)
+    Check '(h11) a fresh install from the tagged clone, exit 0' ($ri.code -eq 0)
+    $lk = ReadLock $t
+    $pinned = @($lk.rows | Where-Object { @('lf', 'crlf') -contains [string]$_.eol })
+    $c = EolCensus $lk.rows
+    $m0 = EolPinMisses $lk $t
+    L "(h11) lock rows $($lk.rows.Count): $(CensusText $c); rows the pin holds (lf or crlf): $($pinned.Count); misses $($m0.Count)"
+    $m0 | Select-Object -First 5 | ForEach-Object { L "  | $_" }
+    Check "(h11) every framework.lock row recorded lf or crlf ($($pinned.Count), crlf $($c['crlf'])) names a release file and an installed file with exactly those line endings" (($pinned.Count -gt 0) -and ($m0.Count -eq 0))
+    # PLANTED: one lf member rewritten with CR LF in the target
+    $victim = @($pinned | Where-Object { $_.eol -ceq 'lf' } | Sort-Object path)[0].path
+    $vp = Join-Path $t ($victim -replace '/', '\')
+    WriteBytes $vp (Bytes ($L1.GetString([System.IO.File]::ReadAllBytes($vp)).Replace("`r`n", "`n").Replace("`n", "`r`n")))
+    $v = Run $installer @('-Target', $t, '-Verify')
+    $m1 = EolPinMisses $lk $t
+    L "(h11) PLANTED $victim rewritten with CR LF: -Verify exit $($v.code), $(@($v.out | Where-Object { $_ -match 'verify: \d+ file' }) -join ''); the pin's misses $($m1.Count)"
+    $m1 | ForEach-Object { L "  | $_" }
+    Check "(h11) PLANTED: -Verify reads the drift as no difference (the fold basis; exit 0), and the eol pin names exactly $victim" (($v.code -eq 0) -and ($m1.Count -eq 1) -and ($m1[0] -like "$victim lock=lf release=lf target=crlf"))
+}
+'p7' {
+    # UI-2 S1c A-12 (register row 522): THE INSTALL PATH UNDER POWERSHELL 7. The same inputs -- the tagged clone, a fresh
+    # git project with a bare origin and one empty commit pushed, its own VANGUARD_HOME -- driven once with every step a
+    # child of Windows PowerShell 5.1 and once of pwsh: install.ps1 -WhatIf, the install, -Verify, mission.ps1 init (then
+    # committed and pushed), smoke and register, and the installed tools\lam\build-smoke-mission.ps1. Each step's exit
+    # code and its count line (paths made neutral) are equal across the shells. No pwsh on PATH: SKIPPED BY NAME.
+    $pw = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $pw) { L 'CHECK SKIP  (p7) no PowerShell 7 host here (pwsh is not on PATH): the install path under pwsh is not measured' }
+    else {
+        $ps51 = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $mis = Join-Path $Tagged.root 'mission.ps1'
+        $id = @('-c', 'user.name=p7', '-c', 'user.email=p7@example.invalid', '-c', 'core.autocrlf=false')
+        $read = @{}
+        foreach ($s in @([pscustomobject]@{ n = 'ps51'; exe = $ps51 }, [pscustomobject]@{ n = 'pwsh'; exe = $pw.Source })) {
+            $sr = Join-Path $Work "p7-$($s.n)"; $o = Join-Path $sr 'origin.git'; $t = Join-Path $sr 'project'
+            $null = New-Item -ItemType Directory -Force -Path $sr
+            $null = RunGit $sr @('init', '-q', '--bare', '-b', 'main', $o); $null = RunGit $sr @('clone', '-q', $o, $t)
+            $null = RunGit $t ($id + @('commit', '-q', '--allow-empty', '-m', 'empty')); $null = RunGit $t @('push', '-q', 'origin', 'main')
+            $prevVh = $env:VANGUARD_HOME; $env:VANGUARD_HOME = Join-Path $sr 'vh'
+            $steps = [ordered]@{}
+            function P7 { param([string]$Name, [string]$Script, [string[]]$A, [string]$Key)
+                $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+                try { $x = @(& $s.exe -NoProfile -ExecutionPolicy Bypass -File $Script @A 2>&1 | ForEach-Object { "$_" }); $c = $LASTEXITCODE } finally { $ErrorActionPreference = $p }
+                $k = @($x | Where-Object { $_ -match $Key } | ForEach-Object { $_.Replace($sr, '<scratch>') })
+                $steps[$Name] = "exit $c | $($k -join ' / ')"
+                L "(p7) $($s.n) $Name : exit $c$(if ($k.Count) { ' | ' + ($k -join ' / ') })"
+                if ($c -ne 0) { @($x | Select-Object -Last 4) | ForEach-Object { L "    | $_" } }
+            }
+            try {
+                P7 'whatif'  $installer @('-Target', $t, '-SkipPythonSet', '-WhatIf') '^install\.ps1: planned: '
+                P7 'install' $installer @('-Target', $t, '-SkipPythonSet') '^install\.ps1: done: '
+                P7 'verify'  $installer @('-Target', $t, '-Verify') '^install\.ps1: verify: \d+ file'
+                P7 'init'    $mis @('init', '-Target', $t) '^mission\.ps1: initialised an empty mission'
+                $null = RunGit $t @('add', '-A'); $null = RunGit $t ($id + @('commit', '-q', '-m', 'init')); $null = RunGit $t @('push', '-q', 'origin', 'main')
+                P7 'smoke'    $mis @('smoke', '-Target', $t) '^mission\.ps1: smoke: '
+                P7 'register' $mis @('register', '-Target', $t) '^mission\.ps1: registered on this host'
+                P7 'build'    (Join-Path $t 'tools\lam\build-smoke-mission.ps1') @('-SmokeRoot', (Join-Path $sr 'lam-smoke')) '^EXIT: '
+            } finally { if ($null -eq $prevVh) { Remove-Item Env:VANGUARD_HOME -ErrorAction SilentlyContinue } else { $env:VANGUARD_HOME = $prevVh } }
+            $read[$s.n] = $steps
+        }
+        foreach ($k in $read['ps51'].Keys) {
+            # the mission id and the host id are minted per run: compared by shape
+            $a = $read['ps51'][$k] -replace '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<uuid>'
+            $b = $read['pwsh'][$k] -replace '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<uuid>'
+            Check "(p7) $k reads the same under 5.1 and pwsh, exit 0: $a" (($a -ceq $b) -and ($a -like 'exit 0 |*'))
+        }
     }
 }
 'h14' {
@@ -2965,8 +3124,9 @@ switch ($Case) {
     # first uses the namespaces (before its first citation), naming LM2-ADR-0NN, the on-disk folder and the adr-040
     # collision; (2) the DELTA holds no bare ADR-0NN citation; (3) no file under docs/framework cites ADR-036..ADR-040 bare
     # (the DELTA's five, the collision's series), nor ADR-045 bare outside the family documents that mint it in their own
-    # namespace (v2.3) -- but docs/framework/mission-event.schema.json, whose bytes WP-7 U-17 pins by sha256 (listed, an
-    # open decision, not cured).
+    # namespace (v2.3). UI-2 S1c (register row 523): mission-event.schema.json's ADR-045 is qualified (LM2-ADR-045) and WP-7
+    # U-17 re-pinned, so no file is listed aside any more; and a dispatch's "## AUTHORITY" section, which quotes its sources
+    # as they read, is read apart -- a bare citation there is a quotation, and the file says beside it which decision it is.
     $fw = @((RunGit $Repo @('-c', 'core.quotePath=false', 'ls-files', '--', 'docs/framework')).out | Where-Object { $_ })
     $bare = '(?<![-A-Za-z0-9])ADR-0(\d\d)(?![0-9])'
     $delta = 'docs/framework/vanguard-collective-local-modes-v2.4-DELTA.md'
@@ -2981,12 +3141,21 @@ switch ($Case) {
     L "(l8) bare ADR-0NN citations in the DELTA: $($dBare.Count)$(if ($dBare.Count) { ' -- ' + (($dBare | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ', ') })"
     Check "(l8) the v2.4 DELTA cites every decision explicitly: 0 bare ADR-0NN" ($dBare.Count -eq 0)
     $mint = @('docs/framework/vanguard-collective-local-modes-v2.3.md')
-    $pinned = @('docs/framework/mission-event.schema.json')
+    $pinned = @()
+    # A "## AUTHORITY" section, from its heading to the next "## " heading, read apart (row 523): its lines are blanked here.
+    function NoAuthority { param([string]$Text)
+        $out = New-Object System.Collections.Generic.List[string]; $in = $false
+        foreach ($ln in $Text.Split([char]10)) {
+            if ($ln -match '^## ') { $in = ($ln -match '^## AUTHORITY\b') }
+            if ($in) { $out.Add('') } else { $out.Add($ln) }
+        }
+        return ($out -join "`n")
+    }
     $hits = New-Object System.Collections.Generic.List[string]; $known = New-Object System.Collections.Generic.List[string]
     foreach ($p in $fw) {
         $fp = Join-Path $Repo ($p -replace '/', '\'); if (-not (Test-Path -LiteralPath $fp -PathType Leaf)) { continue }
         $b = [System.IO.File]::ReadAllBytes($fp); if (IsBinary $b) { continue }
-        $ls = $NoBom.GetString($b).Split([char]10)
+        $ls = (NoAuthority $NoBom.GetString($b)).Split([char]10)
         for ($i = 0; $i -lt $ls.Count; $i++) {
             foreach ($m in [regex]::Matches($ls[$i], $bare)) {
                 $n = [int]$m.Groups[1].Value
@@ -2999,41 +3168,41 @@ switch ($Case) {
         }
     }
     L "(l8) bare ADR-036..ADR-040 anywhere, and bare ADR-045 outside v2.3, under docs/framework ($($fw.Count) file(s)): $($hits.Count)$(if ($hits.Count) { ' -- ' + ($hits -join '; ') }); KNOWN, not cured (bytes pinned by WP-7 U-17): $($known -join '; ')"
-    Check "(l8) docs/framework cites the DELTA's five and ADR-045 explicitly: 0 bare ADR-036..ADR-040 and 0 bare ADR-045 outside v2.3 (the pinned schema aside, listed)" ($hits.Count -eq 0)
+    Check "(l8) docs/framework cites the DELTA's five and ADR-045 explicitly: 0 bare ADR-036..ADR-040 and 0 bare ADR-045 outside v2.3, the schema included" (($hits.Count -eq 0) -and ($known.Count -eq 0))
     # (RELEASE-4 S3 validator round 1, claim 6) THE COUNT THE FACE ALLOWS, outside the family documents that mint the namespace
     # (v2.1, v2.2, v2.3): the bare ADR-0NN citations under docs/framework are EXACTLY a pinned list -- per file, the ordered sequence of
     # numbers (validator round 2: a count ceiling let a swapped or a dropped citation through). The design brief, the user guide and the
     # DELTA hold none. The KNOWN files: expanded-schemas.md, expanded-schemas-project.md and evidence-manifest.schema.json cite on-disk
     # decisions under their own convention (bare = the tools/mission-cli/config file: adr-032, adr-023, adr-012, adr-003) -- correct,
-    # nothing to cure; mission-event.schema.json's 045 (no on-disk adr-045) is pinned by WP-7 U-17; v35-08-FINDINGS-delta-pass.md (22 33
-    # 23 35) and build-dispatch-mission-verify.md (22) are ambiguous and NOT judged here -- an open decision, listed. Any other bare
-    # citation, one more, one fewer or one changed, FAILS.
+    # nothing to cure. UI-2 S1c (register row 523) cured the rest: mission-event.schema.json's 045 now LM2-ADR-045 (U-17 re-pinned),
+    # v35-08-FINDINGS-delta-pass.md's four (22 33 23 35) now LM2-, and build-dispatch-mission-verify.md's 22 is a quotation inside its
+    # "## AUTHORITY" section, read apart, with LM2-ADR-022 named beside it. Any other bare citation outside an AUTHORITY section, one
+    # more, one fewer or one changed, FAILS.
     $family = @('docs/framework/vanguard-collective-local-modes-v2.1.md', 'docs/framework/vanguard-collective-local-modes-v2.2.md', 'docs/framework/vanguard-collective-local-modes-v2.3.md')
     $known = @{ 'docs/framework/expanded-schemas.md' = '32 32 23 32 32 32 32 23 32 32 12 32 32 32 32'
                 'docs/framework/expanded-schemas-project.md' = '32 32 23 32 32 32 32 23 32 32 12 32 32 32 32'
-                'docs/framework/evidence-manifest.schema.json' = '03'; 'docs/framework/mission-event.schema.json' = '45'
-                'docs/framework/v35-08-FINDINGS-delta-pass.md' = '22 33 23 35'; 'docs/framework/build-dispatches/build-dispatch-mission-verify.md' = '22' }
+                'docs/framework/evidence-manifest.schema.json' = '03' }
     $per = @{}
     foreach ($p in $fw) {
         if ($family -contains $p) { continue }
         $fp = Join-Path $Repo ($p -replace '/', '\'); if (-not (Test-Path -LiteralPath $fp -PathType Leaf)) { continue }
         $b = [System.IO.File]::ReadAllBytes($fp); if (IsBinary $b) { continue }
-        $sq = (@([regex]::Matches($NoBom.GetString($b), $bare) | ForEach-Object { $_.Groups[1].Value })) -join ' '; if ($sq) { $per[$p] = $sq }
+        $sq = (@([regex]::Matches((NoAuthority $NoBom.GetString($b)), $bare) | ForEach-Object { $_.Groups[1].Value })) -join ' '; if ($sq) { $per[$p] = $sq }
     }
     $off = @(@($per.Keys) + @($known.Keys) | Select-Object -Unique | Where-Object { [string]$per[$_] -cne [string]$known[$_] } | ForEach-Object { "$_ is '$($per[$_])', pinned '$($known[$_])'" })
     L "(l8) bare ADR-0NN outside v2.1-v2.3, per file (ordered numbers): $((@($per.Keys | Sort-Object | ForEach-Object { "$_ [$($per[$_])]" })) -join '; '); off the pinned list: $($off.Count)$(if ($off.Count) { ' -- ' + ($off -join '; ') })"
-    Check "(l8) outside the family documents the bare ADR-0NN citations are exactly the pinned list, per file and in order (on-disk citations, the U-17-pinned schema, two ambiguous files listed); none in the design brief, the user guide or the DELTA" ($off.Count -eq 0)
+    Check "(l8) outside the family documents and AUTHORITY sections the bare ADR-0NN citations are exactly the pinned list, per file and in order (the three files citing on-disk decisions under their own convention, and nothing else); none in the design brief, the user guide, the DELTA, the schema or the delta pass" ($off.Count -eq 0)
 }
 'enc' {
     # F-ENC (RELEASE-4 S3): EVERY TRACKED MARKDOWN FILE AND LICENSE IS UTF-8 WITHOUT A BOM, WITH NO MOJIBAKE AND NO
     # WHITESPACE-ONLY LINE. -Repo's working files: each read as strict UTF-8 (an invalid sequence is a FAIL), no EF BB BF,
     # none of the sequences a UTF-8 text read as Windows-1252 leaves (C3 82 C2 A7 for a section sign, C3 A2 E2 82 AC for the
     # dashes and quotes, C3 83 C2 A9 for e-acute: built from code points here), and no line holding only spaces or tabs
-    # (its line ending aside). KNOWN, not cured: docs/framework/expanded-schemas-base.md, whose bytes expanded-schemas.md and
-    # expanded-schemas-project.md cite by sha256 prefix 57ed463c (an open decision; its count is printed).
+    # (its line ending aside). UI-2 S1c (register row 523) cured the one file listed aside before, expanded-schemas-base.md
+    # (125 whitespace-only lines emptied, its two sha256-prefix citations re-derived to 3fe8439a): no file is exempt now.
     $strict = New-Object System.Text.UTF8Encoding($false, $true)
     $moj = @(([string][char]0xC2 + [char]0xA7), ([string][char]0xE2 + [char]0x20AC), ([string][char]0xC3 + [char]0xA9))
-    $cited = @('docs/framework/expanded-schemas-base.md')
+    $cited = @()
     $files = @((RunGit $Repo @('-c', 'core.quotePath=false', 'ls-files')).out | Where-Object { $_ -and ($_ -match '\.md$' -or $_ -ceq 'LICENSE') })
     $bad = New-Object System.Collections.Generic.List[string]; $known = 0
     foreach ($p in $files) {
@@ -3050,6 +3219,119 @@ switch ($Case) {
     $byFile = @($bad | ForEach-Object { ($_ -split '[: ]')[0] } | Group-Object | ForEach-Object { "$($_.Name) $($_.Count)" })
     L "(enc) $($files.Count) tracked *.md and LICENSE: $($bad.Count) finding(s)$(if ($bad.Count) { ' -- by file: ' + ($byFile -join ', ') + '; first: ' + ((@($bad) | Select-Object -First 5) -join '; ') }); KNOWN, not cured: $($cited -join ', ') $known whitespace-only line(s) (its bytes cited by sha256 prefix)"
     Check "(enc) every tracked *.md and LICENSE: UTF-8, no BOM, no mojibake sequence, no whitespace-only line ($($files.Count) file(s); the cited base document aside, listed)" ($bad.Count -eq 0)
+}
+'rg1' {
+    # UI-2 S1 A-5 (register row 526): an upgrade rewrites the target's registry row's framework_version to the version it
+    # installs -- that value only, every other byte of the registry kept -- and -WhatIf announces it; a target not yet
+    # registered is not registered by the upgrade; a registry the installer cannot write leaves the row as it was, and the
+    # installer exits non-zero naming the registry. Two synthetic releases built from this checkout's set and HEAD's
+    # installer (1.2.1, then 1.2.2); a scratch VANGUARD_HOME, saved and put back.
+    $vgPrev = $env:VANGUARD_HOME
+    $vh = Join-Path $Work 'vghome'; $env:VANGUARD_HOME = $vh
+    try {
+        $srcA = New-Source -Dir (Join-Path $Work 'src-a') -Version '1.2.1' -From $Repo -Set $owned -Installer $installer
+        $srcB = New-Source -Dir (Join-Path $Work 'src-b') -Version '1.2.2' -From $Repo -Set $owned -Installer $installer
+        $mkT = { param([string]$Name, [bool]$Feed)
+            $t = Join-Path $Work $Name
+            WriteBytes (Join-Path $t '.mission\mission.yaml') (Bytes "id: m-$Name`n")
+            if ($Feed) { $null = New-Item -ItemType Directory -Force -Path (Join-Path $t '.mission-runtime\telemetry') }
+            return $t }
+        $reg = Join-Path $vh 'projects.yaml'
+        $rowOf = { param([string]$T)
+            if (-not (Test-Path -LiteralPath $reg)) { return $null }
+            $txt = [System.IO.File]::ReadAllText($reg)
+            $full = [System.IO.Path]::GetFullPath($T).TrimEnd('\')
+            foreach ($blk in ([regex]::Split($txt, '(?m)^(?=- )'))) {
+                $m = [regex]::Match($blk, "(?m)^\s*(?:-\s+)?checkout_path:\s*'((?:[^']|'')*)'\s*\r?$")
+                if ($m.Success -and [string]::Equals(($m.Groups[1].Value -replace "''", "'").TrimEnd('\'), $full, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $v = [regex]::Match($blk, "(?m)^\s+framework_version:[ \t]*'?([^'\r\n]*)'?\s*\r?$")
+                    return [pscustomobject]@{ block = $blk; version = $(if ($v.Success) { $v.Groups[1].Value } else { $null }) } }
+            }
+            return $null }
+        # (1) a registered target at 1.2.1, then the upgrade to 1.2.2
+        $t = & $mkT 'rg1-t' $true
+        $r = Run $srcA.installer @('-Target', $t)
+        $row0 = & $rowOf $t
+        L "(rg1) fresh install of 1.2.1: exit $($r.code); its registry row framework_version '$(if ($row0) { $row0.version })'"
+        Check "(rg1) a fresh 1.2.1 install into a target carrying a mission and the feed's folder registers it at '1.2.1'" (($r.code -eq 0) -and $row0 -and ($row0.version -ceq '1.2.1'))
+        # a second row, another checkout's, which the upgrade must not touch
+        $other = "- host_id: 00000000-0000-4000-8000-0000000000aa`n  checkout_path: 'C:\work\another-checkout'`n  mission_id: 'm-other'`n  registered_at: '2026-11-01T00:00:00.000Z'`n  framework_version: '1.1.0'`n"
+        [System.IO.File]::AppendAllText($reg, $other, $NoBom)
+        $reg0 = [System.IO.File]::ReadAllBytes($reg)
+        $w = Run $srcB.installer @('-Target', $t, '-WhatIf')
+        $wl = @($w.out | Where-Object { $_ -match '^install\.ps1: planned host registration: ' })
+        L "(rg1) -WhatIf of the upgrade to 1.2.2: exit $($w.code); $(if ($wl.Count) { $wl[0] } else { '(no planned host registration line)' })"
+        $wantW = "the target's row in $reg would be rewritten: framework_version '1.2.1' -> '1.2.2' (its other fields kept)"
+        Check "(rg1) -WhatIf announces the registry rewrite as a planned act ('$wantW') and writes no registry byte" (($w.code -eq 0) -and ($wl.Count -eq 1) -and $wl[0].EndsWith($wantW) -and ((Sha ([System.IO.File]::ReadAllBytes($reg))) -ceq (Sha $reg0)))
+        $u = Run $srcB.installer @('-Target', $t)
+        $ul = @($u.out | Where-Object { $_ -match '^install\.ps1: host registration: ' })
+        L "(rg1) the upgrade to 1.2.2: exit $($u.code); $(if ($ul.Count) { $ul[0] } else { '(no host registration line)' })"
+        $row1 = & $rowOf $t
+        $reg1 = [System.IO.File]::ReadAllBytes($reg)
+        $expect = $NoBom.GetString($reg0).Replace(($row0.block), ($row0.block -replace "(?m)^(\s+framework_version:[ \t]*)'1\.2\.1'", "`${1}'1.2.2'"))
+        Check "(rg1) after the upgrade the row reads framework_version '1.2.2' (the lock's version), and the host registration line says the rewrite" (($u.code -eq 0) -and $row1 -and ($row1.version -ceq '1.2.2') -and ($ul.Count -eq 1) -and $ul[0].Contains("framework_version '1.2.1' rewritten to '1.2.2'"))
+        Check "(rg1) every other byte of the registry is kept: the file equals its prior bytes with that one value changed (the other checkout's row included)" ((Sha $reg1) -ceq (Sha ($NoBom.GetBytes($expect))))
+        $lk = ReadLock $t
+        Check "(rg1) the lock reads version 1.2.2, the row's version" ($lk.header.version -ceq $row1.version)
+        # (2) a target not yet registered (a mission, no feed folder): the upgrade registers nothing
+        $t2 = & $mkT 'rg1-u' $false
+        $null = Run $srcA.installer @('-Target', $t2)
+        $before2 = Sha ([System.IO.File]::ReadAllBytes($reg))
+        $u2 = Run $srcB.installer @('-Target', $t2)
+        Check "(rg1) a target not yet registered is not registered by the upgrade: no row for it, the registry's bytes unchanged" (($u2.code -eq 0) -and ($null -eq (& $rowOf $t2)) -and ((Sha ([System.IO.File]::ReadAllBytes($reg))) -ceq $before2))
+        # (3) PLANTED: the registry read-only -- the row stays, the installer exits non-zero naming the registry
+        $t3 = & $mkT 'rg1-ro' $true
+        $null = Run $srcA.installer @('-Target', $t3)
+        $ro0 = [System.IO.File]::ReadAllBytes($reg)
+        (Get-Item -LiteralPath $reg).IsReadOnly = $true
+        try { $u3 = Run $srcB.installer @('-Target', $t3) } finally { (Get-Item -LiteralPath $reg).IsReadOnly = $false }
+        $named = @($u3.out | Where-Object { $_.Contains($reg) -and $_ -match 'NOT (updated|rewritten)' })
+        L "(rg1) the upgrade with the registry read-only: exit $($u3.code); $(if ($named.Count) { $named[0] } else { '(no line naming the registry)' })"
+        Check "(rg1) PLANTED read-only registry: the row is unchanged ('1.2.1'), the registry's bytes unchanged, and the installer exits non-zero naming $reg" (
+            ($u3.code -ne 0) -and ($named.Count -ge 1) -and ((& $rowOf $t3).version -ceq '1.2.1') -and ((Sha ([System.IO.File]::ReadAllBytes($reg))) -ceq (Sha $ro0)))
+    } finally { $env:VANGUARD_HOME = $vgPrev }
+}
+'kv1' {
+    # UI-2 S1 A-8 (register row 518): -Verify over a KEPT file the project later made byte-equal to its upstream. HEAD's
+    # installer installs into a target that already holds its own .claude/settings.json, which a fresh install keeps (the
+    # lock row: sha256 the project's bytes, disposition kept, upstream_sha256 the release's). The project then copies the
+    # release's file over its own -- the NOTICE block added -- and -Verify must say 'kept, now equal to upstream', count
+    # no difference and exit 0, the lock unchanged; with one byte changed, 'kept, differs from upstream' and exit 3.
+    $t = Join-Path $Work 't'
+    $set = '.claude/settings.json'
+    WriteBytes (Join-Path $t ($set -replace '/', '\')) (Bytes "{`n  `"hooks`": {}`n}`n")
+    $r = Run $installer @('-Target', $t)
+    $lk0 = ReadLock $t
+    $row0 = @($lk0.rows | Where-Object { $_.path -ceq $set })
+    Check "(kv1) a fresh install over the project's own $set keeps it: exit 0, its lock row kept, sha256 the project's, upstream_sha256 the release's" (
+        ($r.code -eq 0) -and ($row0.Count -eq 1) -and ($row0[0].disposition -ceq 'kept') -and ($row0[0].sha256 -ceq (FoldSha ([System.IO.File]::ReadAllBytes((Join-Path $t ($set -replace '/', '\')))))) -and ($row0[0].upstream_sha256 -ceq $srcFold[$set]))
+    # the project makes its copy the release's file
+    WriteBytes (Join-Path $t ($set -replace '/', '\')) ([System.IO.File]::ReadAllBytes((Join-Path $Tagged.root ($set -replace '/', '\'))))
+    $lockBefore = FileSha (Join-Path $t 'framework.lock')
+    $v = Run $installer @('-Target', $t, '-Verify')
+    L "(kv1) -Verify over the kept file now equal to upstream: exit $($v.code)"; $v.out | ForEach-Object { L "  | $_" }
+    $kl = @($v.out | Where-Object { $_ -match ('^install\.ps1:   KEPT\s+' + [regex]::Escape($set) + '  -- kept, now equal to upstream') })
+    Check "(kv1) -Verify reports $set 'kept, now equal to upstream', counts 0 differences and exits 0" (($v.code -eq 0) -and ($kl.Count -eq 1) -and ((Count $v.out ('^install\.ps1: verify: \d+ file\(s\) listed, 0 difference\(s\); ')) -eq 1) -and ((Count $v.out '^install\.ps1:   CHANGED ') -eq 0))
+    Check "(kv1) -Verify is a read: the lock's bytes, its row for $set included, unchanged" ((FileSha (Join-Path $t 'framework.lock')) -ceq $lockBefore)
+    # PLANTED: one byte of the kept file changed -- neither its lock bytes nor upstream
+    $b = [System.IO.File]::ReadAllBytes((Join-Path $t ($set -replace '/', '\'))); $b[1] = [byte](($b[1] -bxor 0x20)); WriteBytes (Join-Path $t ($set -replace '/', '\')) $b
+    $v2 = Run $installer @('-Target', $t, '-Verify')
+    L "(kv1) -Verify with one byte of it changed: exit $($v2.code)"; $v2.out | Where-Object { $_ -match 'CHANGED|KEPT|verify: \d' } | ForEach-Object { L "  | $_" }
+    Check "(kv1) PLANTED one byte changed: CHANGED $set -- 'kept, differs from upstream', 1 difference, exit 3" (($v2.code -eq 3) -and ((Count $v2.out ('^install\.ps1:   CHANGED\s+' + [regex]::Escape($set) + '  lock=\S+ now=\S+  -- kept, differs from upstream')) -eq 1) -and ((Count $v2.out ('^install\.ps1: verify: \d+ file\(s\) listed, 1 difference\(s\); ')) -eq 1))
+}
+'kv2' {
+    # UI-2 S1 A-9 (register row 518): INSTALL.md's Upgrading section (section 6) and the 1.3.0 release notes name the step
+    # after the NOTICE block is added: run -Verify, and expect 'kept, now equal to upstream' for the file.
+    foreach ($doc in @('INSTALL.md', 'docs/RELEASE-NOTES-v1.3.0.md')) {
+        $p = Join-Path $Repo ($doc -replace '/', '\')
+        $txt = if (Test-Path -LiteralPath $p -PathType Leaf) { [System.IO.File]::ReadAllText($p) } else { '' }
+        if ($doc -ceq 'INSTALL.md') {
+            $m = [regex]::Match($txt, '(?ms)^## 6\. .*?(?=^## 7\. )'); $txt = if ($m.Success) { $m.Value } else { '' }
+        }
+        $hasStep = $txt.Contains('-Verify') -and $txt.Contains('kept, now equal to upstream') -and $txt.Contains('NOTICE')
+        L "(kv2) $doc$(if ($doc -ceq 'INSTALL.md') { ' section 6' }): $(if ($txt) { "$($txt.Length) chars" } else { 'absent' }); names -Verify, the NOTICE block and 'kept, now equal to upstream': $hasStep"
+        Check "(kv2) $doc names the step after the NOTICE block is added: run -Verify, expect 'kept, now equal to upstream'" $hasStep
+    }
 }
 }
 } catch {

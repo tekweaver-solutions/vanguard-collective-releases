@@ -1,4 +1,4 @@
-# Installing Vanguard Collective 1.2.0
+# Installing Vanguard Collective 1.3.0
 
 From the release ZIP -- or a clone of the public repository at the release tag (section 5) -- to a
 project folder that holds the framework and an empty mission whose goal reads MET. Every command runs
@@ -24,7 +24,7 @@ https://github.com/tekweaver-solutions/vanguard-collective-releases/releases. Ea
 archive under its versioned name, `vanguard-collective-v<VERSION>.zip` (`<VERSION>` is the release's version, the text
 of its `VERSION` file); the same archive under the fixed name `vanguard-collective.zip`, so
 https://github.com/tekweaver-solutions/vanguard-collective-releases/releases/latest/download/vanguard-collective.zip
-always fetches the latest release's; `SHA256SUMS`; and `MEMBERS.sha256`. Put `vanguard-collective-v1.2.0.zip`,
+always fetches the latest release's; `SHA256SUMS`; and `MEMBERS.sha256`. Put `vanguard-collective-v1.3.0.zip`,
 `SHA256SUMS` and `MEMBERS.sha256` in `C:\dl` -- from the Releases page, or with the GitHub CLI, which fetches every
 asset of the release its tag names:
 
@@ -35,7 +35,7 @@ gh release download v<VERSION> --repo tekweaver-solutions/vanguard-collective-re
 ## 2. Check the hash
 
 ```powershell
-(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.2.0.zip).Hash.ToLower()
+(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.3.0.zip).Hash.ToLower()
 ```
 
 ```powershell
@@ -57,17 +57,17 @@ check the folder against it file for file -- the first command prints nothing wh
 matches, and the second prints the same number twice, so no file is missing and none was added:
 
 ```powershell
-Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.2.0 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
+Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.3.0 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
 ```
 
 ```powershell
-(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.2.0 -Recurse -File -Force).Count
+(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.3.0 -Recurse -File -Force).Count
 ```
 
 ## 3. Unblock the ZIP -- your step
 
 ```powershell
-Unblock-File C:\dl\vanguard-collective-v1.2.0.zip
+Unblock-File C:\dl\vanguard-collective-v1.3.0.zip
 ```
 
 A file downloaded by a browser carries the Mark of the Web (a `Zone.Identifier` stream); one
@@ -80,24 +80,39 @@ that stream (Internet zone):
   and a host policy of `RemoteSigned` -- the policy on the measuring host -- then refuses
   `install.ps1` before its first line runs: *"... is not digitally signed. You cannot run this
   script on the current system."* `mission.ps1` is refused the same way.
-- Expanded by **`Expand-Archive`**, **no** file carries it.
+- Expanded by **`Expand-Archive`**, **no** file carries it -- under Windows PowerShell 5.1
+  (Microsoft.PowerShell.Archive 1.0.1) and under PowerShell 7 (7.6.9, Archive 1.2.6) alike (measured
+  2026-11-08 on the 1.2.0 ZIP given the stream: 0 of 417 members marked under either shell).
 - With **`Unblock-File` on the ZIP first**, no file carries it, whichever way it is expanded.
 - **Installed files never carry it.** `install.ps1` writes every file fresh, so even an install from
   a marked tree (run with `-ExecutionPolicy Bypass`) leaves a project whose scripts run under
-  `RemoteSigned`.
+  `RemoteSigned`. A tree Explorer expanded is refused by `RemoteSigned` under PowerShell 7 exactly as
+  under 5.1.
 
 `install.ps1` cannot unblock itself -- a refused script never runs -- and stripping streams from your
 download is your act, so this step is yours. If you skip it, the installer still runs under
-`-ExecutionPolicy Bypass` (the form every command on this page uses) and prints a `NOTE:` naming
-the marked files.
+`-ExecutionPolicy Bypass` (the form every command on this page uses), under Windows PowerShell 5.1 or
+PowerShell 7, and prints two lines: before the plan, `MARK OF THE WEB: this tree carries a
+Zone.Identifier stream on N file(s) (...)` with the fix, counting `install.ps1`, `mission.ps1` and
+every installer-owned file it reads; after the write, `MARK OF THE WEB: N file(s) written; carrying a
+Zone.Identifier stream after the write: 0` -- every written file is read for the stream, and one
+found is removed from it.
+
+**PowerShell 7.** `install.ps1`, `mission.ps1` and `tools\lam\build-smoke-mission.ps1` run under
+`pwsh` (7.6.9 measured) to the same dispositions, counts and exit codes as under Windows PowerShell
+5.1 (installer falsifier case p7). The framework's hooks are run by Windows PowerShell 5.1 by name
+(`powershell`), whichever shell you type in, and the smoke builder and WP-7 start their children with
+5.1's own path; Windows ships it.
+The acceptance instruments `tests\lam\instrument-WP-1.ps1` .. `-WP-7.ps1`, and the acceptance wrapper that
+runs WP-1 .. WP-7, are measured under both shells and fail nothing under either.
 
 ## 4. Expand
 
 ```powershell
-Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.2.0.zip -DestinationPath C:\dl\vanguard-collective-v1.2.0
+Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.3.0.zip -DestinationPath C:\dl\vanguard-collective-v1.3.0
 ```
 
-The archive holds 417 files: the 397 files of the commit the release tag names that the release
+The archive holds 425 files: the 405 files of the commit the release tag names that the release
 carries -- every one but the dashboard's private source (`ui/`, but for its build output) and the
 service's tests (`tools/ui/tests/`) --, the 18 files of the dashboard's build output under `ui/dist/`,
 built from that source when the release was made, `THIRD-PARTY-NOTICES` (the licences of the
@@ -106,7 +121,7 @@ the release was built from, and the sha256 of the archive's `provenance/manifest
 file no commit can hold, since it names the commit. `MEMBERS.sha256` lists them all (section 2). The
 archive's `provenance/manifest.jsonl` is the commit's, less the lines of the files the release leaves
 out and with a line for each file of `ui/dist/` and for `THIRD-PARTY-NOTICES`, so it names every file
-the installer takes from the archive. The 378 files the framework installs are among them, `ui/dist/`
+the installer takes from the archive. The 385 files the framework installs are among them, `ui/dist/`
 and `THIRD-PARTY-NOTICES` included, with `install.ps1`, `mission.ps1`, `VERSION`, `LICENSE`,
 `README.md`, this file, `provenance/manifest.jsonl`, the release notes
 `docs/RELEASE-NOTES-v<version>.md`, and every file the framework repository keeps for itself and does
@@ -117,21 +132,21 @@ not install.
 Optionally, first see what it would do (`-WhatIf` decides everything and writes nothing):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.2.0\install.ps1 -Target C:\work\my-project -WhatIf
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.0\install.ps1 -Target C:\work\my-project -WhatIf
 ```
 
 Then install, naming the ZIP so the lock records its sha256:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.2.0\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.2.0.zip
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.0\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.3.0.zip
 ```
 
 Into an empty folder, expect one `install` line per file between the first lines and the last:
 
 ```text
-install.ps1: source C:\dl\vanguard-collective-v1.2.0 (release at <commit>, version 1.2.0)
+install.ps1: source C:\dl\vanguard-collective-v1.3.0 (release at <commit>, version 1.3.0)
 install.ps1: target C:\work\my-project
-install.ps1: manifest sha256 <64 hex>; installer-owned 378 (MOVE 367, TEMPLATE 8, HOST-CONFIG 3); framework.lock absent
+install.ps1: manifest sha256 <64 hex>; installer-owned 385 (MOVE 374, TEMPLATE 8, HOST-CONFIG 3); framework.lock absent
 install.ps1: fresh install: no framework.lock in the target
 install.ps1:   install            .claude/settings.json
 ...
@@ -139,20 +154,24 @@ install.ps1: host registration: host-id <id> in C:\Users\<you>\.vanguard; no reg
 install.ps1: python set: tools\.venv made by py -3.14: <its python.exe> (CPython 3.14.<n>, win-amd64)
 install.ps1:   pip | Successfully installed annotated-doc-0.0.5 ... uvicorn-0.54.0
 install.ps1: python set: 22 pinned package(s) in tools\.venv, installed with --require-hashes
-install.ps1: done: written=378 already-identical=0 kept=0 retired=0 refused=0
-install.ps1: framework.lock written: 379 line(s) for 378 file(s), sha256 <64 hex>
-install.ps1: installed 1.2.0 into C:\work\my-project.
+install.ps1: done: written=385 already-identical=0 kept=0 retired=0 refused=0
+install.ps1: framework.lock written: 386 line(s) for 385 file(s), sha256 <64 hex>
+install.ps1: installed 1.3.0 into C:\work\my-project.
 ```
 
 and exit code 0. Check the folder against its lock at any time:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.2.0\install.ps1 -Target C:\work\my-project -Verify
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.0\install.ps1 -Target C:\work\my-project -Verify
 ```
 
-which ends `verify: 378 file(s) listed, 0 difference(s); eol lf=365 crlf=1 mixed=0 binary=12.` (one
+which ends `verify: 385 file(s) listed, 0 difference(s); eol lf=372 crlf=1 mixed=0 binary=12.` (one
 framework file has CRLF line endings of its own, and twelve of the dashboard's font files hold a 0x00
-byte, so they are judged binary) and exits 0, or 3 when a file differs. It never writes.
+byte, so they are judged binary) and exits 0, or 3 when a file differs. It writes nothing under the installed set or
+the lock. From 1.3.0, where the project is registered (its `.mission-runtime\telemetry` feed and a host registry row:
+`mission init` or `mission register`), it appends one `verify_result` line to that feed listing each difference it
+printed, and says so (`verify: one verify_result line appended to the project's feed ...`); `vanguard ui` shows them on
+the verify card. Elsewhere it says no feed line was written and writes nothing at all.
 
 ### The Python set and the `vanguard` command
 
@@ -188,7 +207,8 @@ The first prints the command's usage and exits 0; the second starts the dashboar
 your `PATH`. The dashboard is local-only in this version: it binds 127.0.0.1, and a request that does not
 name a loopback host (`127.0.0.1`, `localhost` or `[::1]`) is answered 421 with no body, so binding
 another address with `--host` serves nothing -- the flag is kept for the v2 hub. The operator's guide
-has the Dashboard section.
+has the Dashboard section, with the service's one stated limit on reading a feed: the tail window
+(`--tail-window-bytes`, 4096 by default), shown on the Fleet stats screen.
 
 ### Install from a clone of the public repository
 
@@ -200,7 +220,7 @@ detached at it:
 ```powershell
 git clone https://github.com/tekweaver-solutions/vanguard-collective-releases.git C:\src\vanguard-collective
 cd C:\src\vanguard-collective
-git checkout v1.2.0
+git checkout v1.3.0
 ```
 
 The release tags are annotated: each names a tag object, which points to the release's commit. So
@@ -226,14 +246,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\src\vanguard-collective\i
 Its first line names the tag and the commit, and the rest is the output above:
 
 ```text
-install.ps1: source C:\src\vanguard-collective (clone at tag v1.2.0, commit <commit>, version 1.2.0)
+install.ps1: source C:\src\vanguard-collective (clone at tag v1.3.0, commit <commit>, version 1.3.0)
 ```
 
 A clone is accepted only as the release it stands for. A source folder holding `.git` is a clone, never an
 expanded release: before the installer reads its manifest or any file, git (reading `VERSION` from HEAD) must
 confirm it, or the installer REFUSES, exit 1, on one line beginning `install.ps1: REFUSED:`, a clone that is
-- **off the tag** -- HEAD is not the commit the tag `v<version>` names, or no tag has that exact name (`V1.2.0`
-  is not `v1.2.0`): `install.ps1: REFUSED: the source checkout is not at tag v1.2.0 (HEAD <commit>; tag v1.2.0
+- **off the tag** -- HEAD is not the commit the tag `v<version>` names, or no tag has that exact name (`V1.3.0`
+  is not `v1.3.0`): `install.ps1: REFUSED: the source checkout is not at tag v1.3.0 (HEAD <commit>; tag v1.3.0
   absent) -- install from a clone at the release tag, or from the release ZIP. Nothing was written.` (`at <commit>` in place of
   `absent` when the tag names another commit). A branch elsewhere, or the tag with commits on top of it, is not
   the release; a branch whose tip is the tagged commit is accepted (HEAD is then that commit).
@@ -247,7 +267,7 @@ confirm it, or the installer REFUSES, exit 1, on one line beginning `install.ps1
 In every case, clone again, or put the clone back at the tag with nothing changed, and run it again.
 
 The lock records where the framework came from: `source_kind` `clone`, `source_tag` the tag
-(`v1.2.0`) and `source_commit` the commit (40 hex), which is `framework_repo_tip` too unless HEAD tracks a
+(`v1.3.0`) and `source_commit` the commit (40 hex), which is `framework_repo_tip` too unless HEAD tracks a
 `RELEASE`, whose tip is recorded there; `zip_sha256` is null. An install from the ZIP records `source_kind` `release`, `source_tag` and `source_commit` null,
 and the ZIP's sha256 when `-ReleaseZip` names it (null without it). Every file line, and every other header field but the times, is what the ZIP's
 install of the same release writes. `-Verify` works the same for both: it reads the project and its
@@ -275,7 +295,7 @@ writes is always the framework's own bytes, and the release's files are held to
 `provenance/manifest.jsonl` byte for byte before anything is judged.
 
 **The lock.** `framework.lock` is JSON lines, LF, UTF-8 without a byte-order mark: a header, then one
-line per file in path order, 379 lines for the 378. Each file line records `sha256`, the file's sha256
+line per file in path order, 386 lines for the 385. Each file line records `sha256`, the file's sha256
 as it stands after folding (raw, for a binary file); `eol`, what the file showed when it was judged --
 `lf` (no CR LF pair, a file with no line end included), `crlf` (CR LF pairs and no lone LF), `mixed`
 (both) or `binary`; `disposition`; `kind` -- `move`, `template` or `host-config`; and, on the eight
@@ -367,7 +387,8 @@ every kept file whose bytes differ, on the lock's basis (`fold-crlf-text`), from
 `-WhatIf` and the run print one line, `install.ps1: NOTICE kept <path> -- kept: ...`, naming where the
 release's version stands (the release folder you expanded, or the clone); for `.claude/settings.json` the
 next lines name each hook registration the release's file carries that yours lacks -- at 1.2.0,
-`SubagentStop` -- and print that registration's block, read from the release's file, each line after
+`SubagentStop`; at 1.3.0, `SessionEnd`, which writes the session's one `session_stop` (and `SubagentStop`
+too for a project 1.1.0 installed) -- and print that registration's block, read from the release's file, each line after
 `install.ps1: NOTICE   | `. A kept file the release's version equals prints no notice.
 
 | kept file | disposition | after an upgrade that names it |
@@ -383,6 +404,18 @@ next lines name each hook registration the release's file carries that yours lac
 | `tools/tests/cli/test_close_milestone_lam_roster.py` | host-configuration | none required: the project's own; compare if you want the release's checks |
 | `tools/tests/cli/test_prune_worktrees.py` | host-configuration | none required: the project's own; compare if you want the release's checks |
 | `tools/lam/legacy-halt-census.txt` | host-configuration | none: the project's own census (below) |
+
+**After the NOTICE block is added.** Once `.claude/settings.json` carries every registration the notice named, as
+its block reads -- the file now byte-equal to this release's version -- run `install.ps1 -Target <project> -Verify`.
+From 1.3.0 it reads the file `kept, now equal to upstream` and counts no difference for it (exit 0):
+
+```text
+install.ps1:   KEPT     .claude/settings.json  -- kept, now equal to upstream: the project's copy is this release's file (the lock's row records the bytes the run kept; -Verify writes nothing under the installed set or the lock)
+```
+
+`-Verify` writes nothing under the installed set or the lock, the lock's row included. A kept file that differs from both the bytes the upgrade kept
+and this release's version reads `CHANGED <path> ... -- kept, differs from upstream`, and exit 3. Before 1.3.0
+`-Verify` reported a kept file made equal to its upstream as `CHANGED`, exit 3.
 
 **The root `.gitattributes`.** An upgrade keeps a project's own, and where the project has none it
 writes none (a framework install does not change a project's line-ending policy for the project's own
@@ -418,38 +451,56 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\lam\build-smoke-miss
 The acceptance wrapper, `tools\lam\instrument-acceptance.ps1`, then reads the new one. Remove the two `.old`
 folders once nothing needs them.
 
-**From 1.1.0.** Over a project the 1.1.0 release ZIP installed and nobody has edited since, the upgrade prints, between
+**From 1.2.0.** Over a project the 1.2.0 release ZIP installed and nobody has edited since, the upgrade prints, between
 the first lines and the last:
 
 ```text
-install.ps1: upgrade: framework.lock says 1.1.0, and this release is 1.2.0
+install.ps1: upgrade: framework.lock says 1.2.0, and this release is 1.3.0
 ...
-install.ps1: NOTICE kept .claude/settings.json -- kept: the project's own copy is not changed, and it differs from this release's version (fold-crlf-text basis), which is at C:\dl\vanguard-collective-v1.2.0\.claude\settings.json
+install.ps1: NOTICE kept .claude/settings.json -- kept: the project's own copy is not changed, and it differs from this release's version (fold-crlf-text basis), which is at C:\dl\vanguard-collective-v1.3.0\.claude\settings.json
+install.ps1: NOTICE kept .claude/settings.json -- this release registers SessionEnd (powershell -NoProfile -ExecutionPolicy Bypass -File "$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/evidence-session-end.ps1"); the project registers no SessionEnd: add this block to the project's "hooks" object:
 ...
-install.ps1: done: written=33 already-identical=334 kept=11 retired=4 refused=0
-install.ps1: framework.lock written: 379 line(s) for 378 file(s), sha256 <64 hex>
-install.ps1: upgraded 1.1.0 to 1.2.0 in C:\work\my-project.
+install.ps1: done: written=45 already-identical=329 kept=11 retired=5 refused=0
+install.ps1: framework.lock written: 386 line(s) for 385 file(s), sha256 <64 hex>
+install.ps1: upgraded 1.2.0 to 1.3.0 in C:\work\my-project.
 ```
 
--- 24 files upgraded and 9 installed, the 11 templates and host-configuration files kept, and 4 retired. Upgraded:
-`THIRD-PARTY-NOTICES` and `ui/dist/index.html`; 7 documents under `docs/framework/`; the instruments WP-1, WP-2, WP-6, WP-7; the
-next-generation library and the proposed settings under `tools/evidence-hooks-next/`; 4 tools under `tools/lam/`;
-and 5 of the service's modules under `tools/ui/`. Installed: the SubagentStop hook,
-`tools/evidence-hooks-next/hooks/evidence-subagent-stop.ps1`; the real-feed fixture, 3 files under
-`tests/lam/fixtures/real-feed/`, with its reader `tests/lam/wp7-real-feed.py`; and 4 of the dashboard's built files under
-`ui/dist/assets/`, under the new names of the 4 retired ones, which are left in place and dropped from the lock. Of the kept
-files only `.claude/settings.json` differs from this release's version, so the notice names it alone: the registration it lacks,
-SubagentStop, and that registration's block (the kept files and the notice, above).`release.ps1` derives its own line for the release notes from the
-two releases' installer-owned sets and refuses a build whose notes do not carry it; it reads 1.1.0's set from the tag's tree,
-whose manifest names none of the files a release generates, so its line counts `ui/dist/` and `THIRD-PARTY-NOTICES`
-installed and none retired, where the upgrade of a project the 1.1.0 ZIP installed reads them as above. `-Verify` then says
-`378 file(s) listed, 0 difference(s)`, and `-WhatIf` first prints the same counts as `planned:`, followed by what it would
-do outside the files: the Python set (`planned python set:`), the `vanguard` command, the host registration and the
-mission-event feed's ignore rule. A project whose 1.1.0 lock carries a `not-written` row for the root `.gitattributes` reads
-`kept=10 not-written=1` instead. After the files the upgrade installs the Python set (above). A project whose
-mission is not yet registered for the feed -- one made before the feed existed -- is named by the upgrade, with
-`mission.ps1 register -Target <project>`, which adds the project's row to the host registry, makes `.mission-runtime/telemetry/` and the ignore rule `/.mission-runtime/` in its `.gitignore`. The release notes,
-"Upgrading from 1.1.0", give the steps in order.
+-- 33 files upgraded and 12 installed, the 11 templates and host-configuration files kept, and 5 retired. Upgraded:
+`THIRD-PARTY-NOTICES` and `ui/dist/index.html`; 8 documents under `docs/framework/`; the instruments WP-1, WP-3, WP-6 and
+WP-7 and the real-feed reader `tests/lam/wp7-real-feed.py`; 3 files of the real-feed fixture under
+`tests/lam/fixtures/real-feed/`; the next-generation library, the proposed settings and the PostToolUse, Stop and
+SubagentStop hooks under `tools/evidence-hooks-next/`; 4 tools under `tools/lam/`; and 6 of the service's modules under
+`tools/ui/`. Installed: the SessionEnd hook, `tools/evidence-hooks-next/hooks/evidence-session-end.ps1`; the real-feed
+fixture's 1.2.0 slice, `tests/lam/fixtures/real-feed/rec-q-1.2.0.events.jsonl`; 3 fixtures under `tests/lam/fixtures/ui/`;
+`tests/lam/wp7-group-b.py` and `tests/lam/wp7-smoke-feed.ps1`, which WP-7's group-B members read; and 5 of the dashboard's
+built files under `ui/dist/assets/`, under the new names of the 5 retired ones, which are left in place and dropped from
+the lock. Of the kept files, `.claude/settings.json` differs from this release's version in a project left as 1.2.0
+installed it, so the notice names it: the registration it lacks, SessionEnd, and that registration's block (the kept
+files and the notice, above). **Add that block**: from 1.3.0 the Stop hook writes no `session_stop`, and SessionEnd writes
+the session's one, so a project upgraded from 1.2.0 that does not add it writes no `session_stop` at all and its sessions
+read running in `vanguard ui` -- then run `-Verify`, which reads the file `kept, now equal to upstream` (above). The kept
+set is `.claude/settings.json` and any other file the installer reports kept: a template or host-config file the project
+edited differs too, and gets its own NOTICE line. `release.ps1` derives its own line for the release notes from the two
+releases' installer-owned sets and refuses a build whose notes do not carry it -- `install.ps1: done: written=57
+already-identical=317 kept=11 retired=0 refused=0`: it reads 1.2.0's set from the tag's tree, whose manifest names none of
+the files a release generates, so its line counts `ui/dist/` and `THIRD-PARTY-NOTICES` installed and none retired, where
+the upgrade of a project the 1.2.0 ZIP installed reads them as above. `-Verify` then says `385 file(s) listed, 0
+difference(s)`, and `-WhatIf` first prints the same counts as `planned:`, followed by what it would do outside the files:
+the Python set (`planned python set:`), the `vanguard` command, the host registration and the mission-event feed's ignore
+rule. A project whose 1.2.0 lock carries a `not-written` row for the root `.gitattributes` reads `kept=10 not-written=1`
+instead. After the files the upgrade installs the Python set (above). A project whose mission is not yet registered for the feed -- one made before the feed existed -- is named by the upgrade, with `mission.ps1 register -Target <project>`, which adds the project's row to the host registry, makes `.mission-runtime/telemetry/` and the ignore rule `/.mission-runtime/` in its `.gitignore`. The release notes, "Upgrading from 1.2.0", give the
+steps in order.
+
+**The host registry row.** From 1.3.0 an upgrade (and any run that writes) brings the project's row in the host registry,
+`C:\Users\<you>\.vanguard\projects.yaml`, to the version it installs: the row's `framework_version` is rewritten to the
+release's, and nothing else in the file changes -- the row's other fields and every other checkout's row stay as they were.
+`-WhatIf` names it first, `planned host registration: ...; the target's row in <registry> would be rewritten:
+framework_version '<old>' -> '<new>' (its other fields kept)`, and the run says `framework_version '<old>' rewritten to
+'<new>', its other fields kept`. A project with no row is not registered by the upgrade: registration stays `mission init`'s
+and `mission.ps1 register`'s. Where the registry cannot be written (read-only, say), every file and the lock are still
+installed, the run says `REGISTRY NOT UPDATED`, naming the registry, and exits 5; make the file writable and run the same
+release again. Before 1.3.0 an upgrade left the row at the version first registered, so the dashboard showed the old
+version; the first 1.3.0 upgrade corrects such a row.
 
 **The write is staged**, for an install and an upgrade alike. Every file to write, and then the lock,
 is first written whole into a staging folder inside the project, `.framework-staging-<random>`, and
@@ -464,7 +515,7 @@ not be put back, which the installer then says, naming where it is.
 ## 7. `mission init`
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.2.0\mission.ps1 init -Target C:\work\my-project
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.0\mission.ps1 init -Target C:\work\my-project
 ```
 
 Expect:
@@ -522,7 +573,7 @@ anything, its reason on one line ending `Nothing was written.`
 ## 8. `mission smoke` -- the first thing to run
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.2.0\mission.ps1 smoke -Target C:\work\my-project
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.0\mission.ps1 smoke -Target C:\work\my-project
 ```
 
 It runs the **installed** evaluator, `C:\work\my-project\tools\lam\mission-goal-check.ps1`, over the
@@ -569,9 +620,9 @@ toolchain itself, and nothing above replaces any step of it. Read it whole befor
 it asks. In outline, by its own sections:
 
 - **§2, the hook registrations.** `install.ps1` placed the framework's `.claude/settings.json`,
-  whose five registrations are the ones §2's table shows -- the state §2's four path edits and its
-  one next-generation-only event (`SubagentStop`) produce. §2 reaches that state on a fresh mission
-  through `tools/framework/install-evidence-hooks.ps1`, the four edits and that one addition; here
+  whose six registrations are the ones §2's tables show -- the state §2's four path edits and its
+  two next-generation-only events (`SubagentStop`, `SessionEnd`) produce. §2 reaches that state on a fresh mission
+  through `tools/framework/install-evidence-hooks.ps1`, the four edits and those two additions; here
   the file is already in it, so none is needed. If your project
   already had a `.claude/settings.json`, it was kept (`keep`) and §2 is yours to
   perform. Either way, confirm it from evidence with §2's READY probe, and run every

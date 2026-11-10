@@ -165,7 +165,7 @@ def missions(model):
             "registry_errors": list(reg_.errors), "registry_error_count": len(reg_.errors),
             "unassigned_streams": [_stream_entry(s) for s in model.streams if s["mission_id"] is None],
         },
-        "settings": {"ahead_days": model.settings.ahead_days},
+        "settings": {"ahead_days": model.settings.ahead_days, "tail_window_bytes": model.settings.tail_window_bytes},
         "as_of": model.as_of(),
         "fleet": fleet,
         "fleet_stats": fleet_stats,
@@ -178,14 +178,22 @@ def mission(model, mid):
     st = derive.assertions(evs)
     snap = derive.latest_snapshot(evs)
     feats = dict((snap["line"]["payload"].get("features") or {}) if snap else {})
-    fids = sorted(set(feats) | {a["feature"] for a in st.values() if a["feature"] is not None})
+    # UI-2 S2 (B-1, B-2; register row 501): an assertion's feature is the contract's own feature_id where the snapshot carries
+    # it (derive.assertion_features), else derive.assertions' binding; each member gains its latest verdict and round, each
+    # feature its roll-up (metrics.feature_rollups). The 1.2.0 fields keep their shape.
+    bind = derive.assertion_features(evs)
+    roll = metrics.feature_rollups(evs)
+    verdict_of = {m["assertion_id"]: m for r in roll.values() for m in r["members"]}
+    fids = sorted(set(feats) | {f for f in bind.values() if f is not None})
     features = []
     for fid in fids + [None]:
-        members = [{"assertion_id": aid, "status": a["status"], "source": a["event"]["line"]["source_path"] + "@" + a["event"]["line"]["sha256"]}
-                   for aid, a in sorted(st.items()) if a["feature"] == fid]
+        members = [{"assertion_id": aid, "status": a["status"], "source": a["event"]["line"]["source_path"] + "@" + a["event"]["line"]["sha256"],
+                    "verdict": (verdict_of.get(aid) or {}).get("verdict"), "round": (verdict_of.get(aid) or {}).get("round")}
+                   for aid, a in sorted(st.items()) if bind.get(aid) == fid]
         if fid is None and not members:
             continue
-        features.append({"feature_id": fid, "status": feats.get(fid) if fid is not None else None, "assertions": members})
+        features.append({"feature_id": fid, "status": feats.get(fid) if fid is not None else None, "assertions": members,
+                         "rollup": derive.rollup([{"verdict": m["verdict"], "round": m["round"]} for m in members])})
     disp = derive.dispatches(evs)
     open_d = sorted(d for d, v in disp.items() if v["opened"] is not None and v["finalized"] is None)
     sess = derive.open_sessions(evs)
@@ -195,7 +203,9 @@ def mission(model, mid):
         p = v["line"]["payload"]
         last_verify = {"verdict": p["verdict"], "scope": {"arms_run": p["arms_run"], "against": p["against"]},
                        "divergences": p["divergences"], "ts": v["ts"], "seq": v["seq"], "stream": model_identity(streams, v),
-                       "source": v["line"]["source_path"] + "@" + v["line"]["sha256"]}
+                       "source": v["line"]["source_path"] + "@" + v["line"]["sha256"],
+                       # UI-2 S2 (B-10; register row 498): each divergence, where the line carries the additive divergence_list
+                       "divergence_list": (derive.verify_divergences(v) or {}).get("listed")}
     spec = [{"from_version": e["line"]["payload"]["from_version"], "to_version": e["line"]["payload"]["to_version"],
              "amendment_id": e["line"]["payload"]["amendment_id"], "ts": e["ts"], "seq": e["seq"],
              "stream": model_identity(streams, e), "source": e["line"]["source_path"] + "@" + e["line"]["sha256"]}
@@ -215,6 +225,13 @@ def mission(model, mid):
             "state": summary["state"],
             "milestone": summary["current_milestone"],
             "open_sessions": {"count": len(sess), "ids": sess},
+            # UI-2 S1 (A-4, register row 500): a session_stop that later lines of its session contradict -- "stopped early"
+            "stopped_early": (lambda se: {"count": len(se), "sessions": se})(derive.stopped_early(evs)),
+            # parent session id -> its subagent_stop lines (schema 1.2): subagents finished, the session running on. In the
+            # header, not on live.sessions[] rows, whose fields V-19 holds closed
+            "subagents_finished": {sid: len(v) for sid, v in sorted(derive.subagents_finished(evs).items())},
+            # UI-2 S2 (B-12): parent session id -> each subagent's own tool calls (agent_id on the tool_call line)
+            "subagent_calls": dict(sorted(derive.subagent_calls(evs).items())),
             "open_dispatches": {"count": len(open_d), "ids": open_d,
                                 "snapshot_count": (summary["counts"] or {}).get("open_dispatches")},
             "last_verify": last_verify,
@@ -251,6 +268,11 @@ def _project(model, mid, streams, evs, errs):
         "milestones_basis": ms["basis"],
         "live": metrics.live(evs, clock, w),
         "error_ages": metrics.error_ages(errs, clock, w),
+        # UI-2 S2 (group B): the validator rounds (B-4), the HALT card (B-6), elapsed per milestone (B-8), the verify card (B-10)
+        "validator_rounds": metrics.validator_rounds(evs, w),
+        "halt_card": metrics.halt_card(evs, clock, w),
+        "milestone_timing": metrics.milestone_timing(evs, clock, w),
+        "verify_card": metrics.verify_card(evs, w),
     }
 
 
@@ -281,4 +303,21 @@ def mission_stats(model, mid):
         body.update({"series": metrics.series([evs], metrics.mission_clock(evs), w), "kpis": metrics.mission_kpis(evs, stats, w)})
     except Exception as e:
         body["stats_fault"] = _fault(e)
+    try:  # UI-2 S2 (B-11): the per-mission Stats face, one card per figure; a card the feed cannot fill reads no data
+        clock = metrics.mission_clock(evs)
+        snap = derive.latest_snapshot(evs)
+        lockv = (snap["line"].get("payload") or {}).get("framework_lock_version") if snap else None
+        rows = [{"checkout_path": s["row"].checkout_path, "framework_version": s["row"].framework_version} for s in streams]
+        body["face"] = {
+            "sessions": metrics.sessions_card(evs, w), "dispatches": metrics.dispatches_card(evs, w),
+            "validator_rounds": metrics.validator_rounds(evs, w), "halt_card": metrics.halt_card(evs, clock, w),
+            "milestone_timing": metrics.milestone_timing(evs, clock, w), "verify_card": metrics.verify_card(evs, w),
+            "tail_window_bytes": model.settings.tail_window_bytes,
+            "framework": {"lock_version": lockv if isinstance(lockv, str) else None, "registry": rows,
+                          "unequal": [r["checkout_path"] for r in rows if isinstance(lockv, str) and r["framework_version"] != lockv],
+                          "formula": "the registry row's framework_version beside the version the project's framework.lock records (the "
+                                     "snapshot's framework_lock_version); unequal is marked (register row 526)"},
+        }
+    except Exception as e:
+        body["face_fault"] = _fault(e)
     return body

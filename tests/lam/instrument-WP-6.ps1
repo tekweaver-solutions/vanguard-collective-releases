@@ -1208,14 +1208,19 @@ brief: |
         # JavaScriptSerializer, not ConvertFrom-Json: PS 5.1's ConvertFrom-Json throws on any object
         # whose keys differ only by case, and a tool input inside the stream may carry one. A line
         # that threw would be skipped, and an init event skipped that way would read as absent.
-        Add-Type -AssemblyName System.Web.Extensions
-        $s1bSer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
-        $s1bSer.MaxJsonLength = [int]::MaxValue
+        # PowerShell 7 has no System.Web.Extensions (a .NET Framework assembly); there ConvertFrom-Json -AsHashtable reads
+        # keys that differ only by case as the serializer does (UI-2 S1c A-13, register row 522).
+        $s1bSer = $null
+        if ($PSVersionTable.PSEdition -ne 'Core') {
+            Add-Type -AssemblyName System.Web.Extensions
+            $s1bSer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+            $s1bSer.MaxJsonLength = [int]::MaxValue
+        }
         foreach ($s1bLine in [System.IO.File]::ReadAllLines($s1bStreamPath)) {
             $s1bT = $s1bLine.Trim()
             if (-not $s1bT.StartsWith('{')) { continue }
             $s1bObj = $null
-            try { $s1bObj = $s1bSer.DeserializeObject($s1bT) } catch { continue }
+            try { if ($null -ne $s1bSer) { $s1bObj = $s1bSer.DeserializeObject($s1bT) } else { $s1bObj = ConvertFrom-Json -InputObject $s1bT -AsHashtable } } catch { continue }
             if ($s1bObj -isnot [System.Collections.IDictionary]) { continue }
             $s1bJsonObjects++
             if (([string]$s1bObj['type'] -ceq 'system') -and ([string]$s1bObj['subtype'] -ceq 'init')) {
@@ -1498,7 +1503,11 @@ foreach ($lg in @(Get-ChildItem -LiteralPath $SmokeRoot -Recurse -File -Force -F
         $denialScanned++
         if ($null -eq $gateCreatedAt) { continue }
         [datetime]$rts = [datetime]::MinValue
-        if (-not [datetime]::TryParse([string]$rec.ts, [ref]$rts)) { continue }
+        # PowerShell 7's ConvertFrom-Json hands an ISO timestamp over as a [datetime] (its UTC kind kept); [string] of it
+        # drops the kind and the zone, and TryParse then reads the UTC time as local. Taken as it comes; 5.1 keeps the
+        # string (UI-2 S1c A-13, register row 522).
+        if ($rec.ts -is [datetime]) { $rts = $rec.ts }
+        elseif (-not [datetime]::TryParse([string]$rec.ts, [ref]$rts)) { continue }
         if ($rts.ToUniversalTime() -lt $gateCreatedAt) { $preGateDenials += $rec }
     }
 }
@@ -1693,7 +1702,9 @@ function Read-OriginRefs {
     }
     try {
         $null = New-Item -ItemType Directory -Force -Path $readDir -ErrorAction SilentlyContinue
-        foreach ($n in @($svGit.Keys)) { [Environment]::SetEnvironmentVariable($n, $null) }
+        # [NullString]::Value removes a variable under 5.1 and PowerShell 7 alike; a bare $null arrives as '' and under 7
+        # leaves it set and empty (UI-2 S1c A-13, register row 522).
+        foreach ($n in @($svGit.Keys)) { [Environment]::SetEnvironmentVariable($n, [NullString]::Value) }
         foreach ($n in $keepTransport) {
             if ($svGit.ContainsKey($n)) { [Environment]::SetEnvironmentVariable($n, $svGit[$n]) }
         }
@@ -1707,7 +1718,7 @@ function Read-OriginRefs {
     finally {
         $env:HOME = $svHome; $env:USERPROFILE = $svUp; $env:XDG_CONFIG_HOME = $svXdg
         foreach ($n in @('GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CEILING_DIRECTORIES')) {
-            [Environment]::SetEnvironmentVariable($n, $null)
+            [Environment]::SetEnvironmentVariable($n, [NullString]::Value)
         }
         foreach ($n in @($svGit.Keys)) { [Environment]::SetEnvironmentVariable($n, $svGit[$n]) }
         $ErrorActionPreference = $prev
@@ -2037,6 +2048,8 @@ $(($s4dSiting | ForEach-Object { "      {0,-20} {1}" -f $_.name, $_.sited }) -jo
     $env:TMP = $s4dTmpSave.TMP
     $env:TEMP = $s4dTmpSave.TEMP
 }
+# Under PowerShell 7 this member is graded as under 5.1 (UI-2 S1c validator round 1, F-2): the library reader's failure there
+# was a drive-letter origin url made "<root>\C:\..." by 7's GetFullPath, cured in the library; no skip.
 Check -Id 'S-4d' -Title 'both origin readers still report the truth while a planted repository is rewriting the origin url' `
       -Ok $s4dOk -Detail $s4dDetail
 

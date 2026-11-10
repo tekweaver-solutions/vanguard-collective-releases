@@ -73,7 +73,10 @@ if (-not $BuilderChild) {
     $null = [System.IO.Directory]::CreateDirectory($iso)
     $childArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-BuilderChild', '-IsolationDir', $iso)
     if ($SmokeRoot) { $childArgs += @('-SmokeRoot', $SmokeRoot) }
-    try { & (Join-Path $PSHOME 'powershell.exe') @childArgs; $childExit = $LASTEXITCODE }
+    # The child is Windows PowerShell 5.1 by its own path, never $PSHOME's: under PowerShell 7 $PSHOME holds pwsh.exe and
+    # no powershell.exe (UI-2 S1c A-12, register row 522); the hooks the build drives run under 5.1 as the harness runs them.
+    $winPs = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    try { & $winPs @childArgs; $childExit = $LASTEXITCODE }
     finally { try { [System.IO.Directory]::Delete($iso, $true) } catch { } }
     exit $childExit
 }
@@ -175,11 +178,13 @@ function Invoke-WithEnv {
     $saved = @{}
     foreach ($n in $names) { $saved[$n] = [Environment]::GetEnvironmentVariable($n) }
     try {
-        foreach ($n in @($Clear)) { [Environment]::SetEnvironmentVariable($n, $null) }
+        # [NullString]::Value removes a variable under 5.1 and PowerShell 7 alike; a bare $null arrives as '' and under 7
+        # leaves it set and empty (UI-2 S1c A-12, register row 522).
+        foreach ($n in @($Clear)) { [Environment]::SetEnvironmentVariable($n, [NullString]::Value) }
         foreach ($n in @($Set.Keys)) { [Environment]::SetEnvironmentVariable($n, [string]$Set[$n]) }
         return (& $Body)
     } finally {
-        foreach ($n in $names) { [Environment]::SetEnvironmentVariable($n, $saved[$n]) }
+        foreach ($n in $names) { if ($null -eq $saved[$n]) { [Environment]::SetEnvironmentVariable($n, [NullString]::Value) } else { [Environment]::SetEnvironmentVariable($n, $saved[$n]) } }
     }
 }
 
@@ -207,7 +212,7 @@ function ConvertTo-JsonLine { param($Object) return ($Object | ConvertTo-Json -C
 # Before git is first asked anything -- even where the primary checkout is -- every GIT_* variable is removed from this
 # process: one naming another repository, work tree or ceiling would move the default root or flip a refusal below.
 foreach ($gv in @(Get-ChildItem Env: | Where-Object { $_.Name -like 'GIT_*' } | ForEach-Object { $_.Name })) {
-    [Environment]::SetEnvironmentVariable($gv, $null)
+    [Environment]::SetEnvironmentVariable($gv, [NullString]::Value)
 }
 
 # =================================================================================================

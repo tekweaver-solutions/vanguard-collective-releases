@@ -55,7 +55,8 @@ function Step { param([string]$Name, [bool]$Ok, [string]$What)
 }
 function Run-Child { param([string]$File, [string[]]$A)
     $ErrorActionPreference = 'Continue'
-    $o = @(& (Join-Path $PSHOME 'powershell.exe') -NoProfile -ExecutionPolicy Bypass -File $File @A 2>&1 | ForEach-Object { "$_" })
+    # Windows PowerShell 5.1 by its own path: under PowerShell 7 $PSHOME holds no powershell.exe (row 522)
+    $o = @(& (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -ExecutionPolicy Bypass -File $File @A 2>&1 | ForEach-Object { "$_" })
     $c = $LASTEXITCODE
     foreach ($l in $o) { Say "  | $l" }
     return [pscustomobject]@{ code = $c; out = $o }
@@ -100,7 +101,7 @@ $failed = $false
 try {
     foreach ($d in @($scratch, $vh, $tmp)) { $null = [System.IO.Directory]::CreateDirectory($d) }
     [Environment]::SetEnvironmentVariable('VANGUARD_HOME', $vh); [Environment]::SetEnvironmentVariable('TEMP', $tmp); [Environment]::SetEnvironmentVariable('TMP', $tmp)
-    [Environment]::SetEnvironmentVariable('LAM_SMOKE_ROOT', $null)
+    [Environment]::SetEnvironmentVariable('LAM_SMOKE_ROOT', [NullString]::Value)   # removed under 5.1 and PowerShell 7 alike (row 522)
     Say "PROOF SCRATCH $scratch; VANGUARD_HOME $vh; TEMP $tmp; zip $zipFull"
 
     # 1 release
@@ -164,7 +165,7 @@ try {
     if ($_.Exception.Message -ceq 'PROOF-THROUGH') { $failed = $false; Say "PROOF THROUGH $Through -- stopped after it, as asked" }
     elseif (-not ($_.Exception.Message -like 'step * failed')) { $results.Add('FAIL exception'); Say "PROOF EXCEPTION -- $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
 } finally {
-    foreach ($n in $saved.Keys) { [Environment]::SetEnvironmentVariable($n, $saved[$n]) }
+    foreach ($n in $saved.Keys) { if ($null -eq $saved[$n]) { [Environment]::SetEnvironmentVariable($n, [NullString]::Value) } else { [Environment]::SetEnvironmentVariable($n, $saved[$n]) } }
 }
 $envOk = ((Snap-Env) -ceq $envBefore); $homeOk = ((Snap-Dir $callerHomeDir) -ceq $homeBefore)
 $results.Add($(if ($envOk -and $homeOk) { 'PASS env' } else { 'FAIL env' }))

@@ -218,6 +218,21 @@ function Get-MissionSnapshotState {
             $assertions[$id] = $r.verdict
         }
     }
+    # UI-2 S2 (B-1, B-4; register row 501): each assertion's verdict in each validator round -- the round is the result's
+    # attempt_number. A result's verdict reaches every assertion it lists, but a failing result that names ONE assertion
+    # (assertion_id) refutes that one and CONFIRMS the others it lists: in that round they were judged and passed (the
+    # result's evidence records them), where the status above lets them keep their earlier one. A later result for the same
+    # assertion and round wins. Read with the contract's own binding (feature_id, milestone_id) into assertion_detail.
+    $rounds = @{}
+    foreach ($r in @($results | Sort-Object attempt)) {
+        if (-not $r.verdict -or $r.attempt -lt 1) { continue }
+        foreach ($id in @($r.ids)) {
+            $v = $r.verdict
+            if ($v -eq 'red' -and $r.only -and ($r.only -ne $id)) { $v = 'green' }
+            if (-not $rounds.ContainsKey($id)) { $rounds[$id] = @{} }
+            $rounds[$id][[int]$r.attempt] = $v
+        }
+    }
 
     # features: ids from the spec current.txt names; the spec's status where it writes one, else derived
     $features = @{}
@@ -308,20 +323,72 @@ function Get-MissionSnapshotState {
         if ((Test-Path -LiteralPath (Join-Path $ddir "$b.handoff.yaml")) -or (Test-Path -LiteralPath (Join-Path $ddir "$b.superseded.yaml"))) { continue }
         $openD++
     }
+    # UI-2 S2 (B-4, B-8): each dispatch as its record states it -- feature_id, assertion_targets -- and its state: handed_off
+    # (<id>.handoff.yaml beside it), superseded (<id>.superseded.yaml), else open. The dashboard reads a dispatch's validator
+    # rounds over its assertion_targets, and a dispatch first seen in a snapshot as opened then.
+    $dispatchDetail = [ordered]@{}
+    foreach ($df in @(Get-ChildItem -LiteralPath $ddir -File -Filter '*.yaml' -ErrorAction SilentlyContinue | Sort-Object Name)) {
+        if ($df.Name -notmatch '^[^.]+\.yaml$') { continue }
+        $b = $df.BaseName
+        $dt = [System.IO.File]::ReadAllText($df.FullName)
+        $did = Get-MissionTelemetryYamlScalar -Text $dt -Key 'id'
+        if (-not $did) { $did = $b }
+        $tg = @()
+        $tm = [regex]::Match($dt, '(?m)^assertion_targets:\s*\[([^\]]*)\]')
+        if ($tm.Success) { $tg = @($tm.Groups[1].Value -split ',' | ForEach-Object { $_.Trim().Trim('"', "'") } | Where-Object { $_ }) }
+        $dstate = 'open'
+        if (Test-Path -LiteralPath (Join-Path $ddir "$b.superseded.yaml")) { $dstate = 'superseded' }
+        elseif (Test-Path -LiteralPath (Join-Path $ddir "$b.handoff.yaml")) { $dstate = 'handed_off' }
+        $dispatchDetail[$did] = [ordered]@{ feature_id = (Get-MissionTelemetryYamlScalar -Text $dt -Key 'feature_id'); assertion_targets = $tg; state = $dstate }
+    }
     # open HALTs: HALT-* under the two HALT homes, with no unrevoked halt-ruling gate naming the file
+    # UI-2 S2 (B-6): and each HALT's times, as the artifacts state them. raised_at: the HALT's own Raised stamp (a
+    # `**Raised:**` / `raised_at:` line naming a date and a time, ~ allowed), basis stamp; else the file's last write time,
+    # basis mtime (a HALT under .mission-runtime is never committed, so no first commit exists to read). answered_at: the
+    # HALT's own Answered / Resolved stamp, basis stamp; else the ruling-citation's cited_at beside it, basis citation; else
+    # null. state: answered when an unrevoked halt-ruling gate names it (the count's own predicate), else open.
     $openH = 0
+    $haltDetail = [ordered]@{}
+    $stampOf = {
+        param([string]$Text, [string]$KeyRx)
+        $m = [regex]::Match($Text, '(?im)^\s*[*_]*(?:' + $KeyRx + ')(?:_at)?[*_]*\s*:\s*[*_]*\s*~?\s*(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?')
+        if (-not $m.Success) { return $null }
+        $sec = if ($m.Groups[6].Success) { $m.Groups[6].Value } else { '00' }
+        $ms = if ($m.Groups[7].Success) { $m.Groups[7].Value.PadRight(3, '0') } else { '000' }
+        return ('{0}-{1}-{2}T{3}:{4}:{5}.{6}Z' -f $m.Groups[1].Value, $m.Groups[2].Value, $m.Groups[3].Value, $m.Groups[4].Value, $m.Groups[5].Value, $sec, $ms)
+    }
     foreach ($hd in @('.mission-runtime\halts', '.mission-runtime\lam')) {
         $hdir = Join-Path $Root $hd
-        foreach ($hf in @(Get-ChildItem -LiteralPath $hdir -Recurse -File -Filter 'HALT-*' -ErrorAction SilentlyContinue)) {
+        foreach ($hf in @(Get-ChildItem -LiteralPath $hdir -Recurse -File -Filter 'HALT-*' -ErrorAction SilentlyContinue | Sort-Object FullName)) {
             if ($hf.Name -match '\.ruling-citation\.yaml$') { continue }
-            $g = Join-Path $Root (".mission\gates\halt-ruling-" + [System.IO.Path]::GetFileNameWithoutExtension($hf.Name) + '.yaml')
-            if ((Test-Path -LiteralPath $g -PathType Leaf) -and -not (Get-MissionTelemetryYamlScalar -Text ([System.IO.File]::ReadAllText($g)) -Key 'revoked_at')) { continue }
-            $openH++
+            $hid = [System.IO.Path]::GetFileNameWithoutExtension($hf.Name)
+            $g = Join-Path $Root (".mission\gates\halt-ruling-" + $hid + '.yaml')
+            $ruled = (Test-Path -LiteralPath $g -PathType Leaf) -and -not (Get-MissionTelemetryYamlScalar -Text ([System.IO.File]::ReadAllText($g)) -Key 'revoked_at')
+            if (-not $ruled) { $openH++ }
+            $ht = [System.IO.File]::ReadAllText($hf.FullName)
+            $ra = & $stampOf $ht 'raised'; $rb = 'stamp'
+            if (-not $ra) { $ra = $hf.LastWriteTimeUtc.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [System.Globalization.CultureInfo]::InvariantCulture); $rb = 'mtime' }
+            $aa = & $stampOf $ht 'answered|resolved'; $ab = $(if ($aa) { 'stamp' } else { $null })
+            if (-not $aa) {
+                $cit = Join-Path $hf.DirectoryName ($hid + '.ruling-citation.yaml')
+                if (Test-Path -LiteralPath $cit -PathType Leaf) { $aa = & $stampOf ([System.IO.File]::ReadAllText($cit)) 'cited'; if ($aa) { $ab = 'citation' } }
+            }
+            $haltDetail[$hid] = [ordered]@{ state = $(if ($ruled) { 'answered' } else { 'open' }); raised_at = $ra; raised_basis = $rb; answered_at = $aa; answered_basis = $ab }
         }
     }
 
     $fo = [ordered]@{}; foreach ($k in @($features.Keys | Sort-Object)) { $fo[$k] = $features[$k] }
     $ao = [ordered]@{}; foreach ($k in @($assertions.Keys | Sort-Object)) { $ao[$k] = $assertions[$k] }
+    $adet = [ordered]@{}
+    foreach ($k in @($assertions.Keys | Sort-Object)) {
+        $rs = @()
+        if ($rounds.ContainsKey($k)) { foreach ($n in @($rounds[$k].Keys | Sort-Object)) { $rs += ,([ordered]@{ round = [int]$n; verdict = $rounds[$k][$n] }) } }
+        $adet[$k] = [ordered]@{ feature_id = $assertFeature[$k]; milestone_id = $assertMilestone[$k]; rounds = $rs }
+    }
+    # UI-2 S2 (B-11; register row 526): the version the project's framework.lock records, beside the registry row's
+    $lockV = $null
+    $lockF = Join-Path $Root 'framework.lock'
+    if (Test-Path -LiteralPath $lockF -PathType Leaf) { try { $lockV = [string](([System.IO.File]::ReadAllLines($lockF)[0]) | ConvertFrom-Json).version } catch { $lockV = $null }; if (-not $lockV) { $lockV = $null } }
     return [ordered]@{
         state             = $state
         mission_name      = $missionName
@@ -330,6 +397,11 @@ function Get-MissionSnapshotState {
         assertions        = $ao
         counts            = [ordered]@{ features = $fo.Count; assertions = $ao.Count; open_halts = $openH; open_dispatches = $openD }
         milestones        = $milestones
+        # UI-2 S2 (group B), additively: what the artifacts hold and the feed did not carry
+        assertion_detail  = $adet
+        dispatch_detail   = $dispatchDetail
+        halts             = $haltDetail
+        framework_lock_version = $lockV
     }
 }
 

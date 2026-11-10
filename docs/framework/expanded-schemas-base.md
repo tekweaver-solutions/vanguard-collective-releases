@@ -1,7 +1,7 @@
 # Expanded Artifact Schemas
- 
+
 This document provides field-level schemas for every artifact that flows through the framework. It complements §5 of the architecture design brief.
- 
+
 For each artifact:
 - **Purpose** — what it represents and why it exists
 - **Authors** — which roles can create/mutate it
@@ -10,29 +10,29 @@ For each artifact:
 - **Fields** — name, type, required, description, constraints
 - **Example** — a fully populated, realistic instance
 Schemas are illustrated in YAML with explicit type annotations. The implementing architect should formalize them in the schema language of their choice (JSON Schema, Protobuf, Pydantic, etc.). Field types use a simple notation: `string`, `int`, `float`, `bool`, `timestamp` (ISO 8601 UTC), `uuid`, `enum<...>`, `list<T>`, `map<K,V>`, `ref<Artifact>` (pointer by id).
- 
+
 All artifacts share three implicit fields enforced by the runtime:
 - `id: uuid` — unique
 - `created_at: timestamp` — set at write
 - `created_by: string` — agent or human identifier
 ---
- 
+
 ## 1. Mission
- 
+
 ### Purpose
 Top-level container. One mission represents one autonomous engagement, from goal capture to completion.
- 
+
 ### Authors
 Orchestrator (creates, transitions states). Human (cancels, approves completion).
- 
+
 ### Readers
 All roles.
- 
+
 ### Lifecycle
 Created on goal capture. Transitions through the lifecycle state machine. Sealed on `Complete` or `Aborted`. Never deleted.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | uuid | yes | Mission identifier. |
@@ -47,9 +47,9 @@ Created on goal capture. Transitions through the lifecycle state machine. Sealed
 | `notification_channel` | string | yes | Where escalations go (Slack channel, email, etc.). |
 | `created_at` | timestamp | yes | |
 | `completed_at` | timestamp | no | Set on `Complete` or `Aborted`. |
- 
+
 ### Budget sub-schema
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `cost_soft_cap_usd` | float | yes | Triggers warning. |
@@ -58,13 +58,13 @@ Created on goal capture. Transitions through the lifecycle state machine. Sealed
 | `wallclock_hard_cap_hours` | int | yes | |
 | `tokens_used` | int | yes | Updated continuously. |
 | `cost_used_usd` | float | yes | Updated continuously. |
- 
+
 ### Constraints
 - `state` transitions must follow the lifecycle state machine; arbitrary transitions are rejected by the runtime.
 - `current_spec_version` must reference a spec that exists.
 - Hard caps must be ≥ soft caps.
 ### Example
- 
+
 ```yaml
 id: mission-a3f7
 goal: "Build a Slack-clone with channels, DMs, threads, and presence"
@@ -86,25 +86,25 @@ notification_channel: "slack:#mission-a3f7"
 created_at: 2026-04-22T09:00:00Z
 completed_at: null
 ```
- 
+
 ---
- 
+
 ## 2. Living Spec
- 
+
 ### Purpose
 The shared source of truth. Encodes goals, features, milestones, and decisions. Versioned: every amendment creates a new immutable revision.
- 
+
 ### Authors
 Orchestrator only.
- 
+
 ### Readers
 All roles.
- 
+
 ### Lifecycle
 Created at planning. Each amendment produces version `n+1`. Old versions are retained immutably so prior handoffs replay against the spec they targeted.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `mission_id` | ref\<Mission\> | yes | |
@@ -119,9 +119,9 @@ Created at planning. Each amendment produces version `n+1`. Old versions are ret
 | `decisions` | list\<Decision\> | yes | See *Decision* sub-schema. |
 | `constraints` | list\<string\> | no | Non-functional requirements (perf, security, etc.). |
 | `tech_stack` | map\<string,string\> | no | E.g. `{language: python, db: postgres}`. |
- 
+
 ### Feature sub-schema
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | Stable across versions. E.g. `F-003`. |
@@ -130,9 +130,9 @@ Created at planning. Each amendment produces version `n+1`. Old versions are ret
 | `status` | enum | yes | `pending`, `in_progress`, `done`, `blocked`. |
 | `assigned_milestone` | string | yes | Milestone id. |
 | `dependencies` | list\<string\> | no | Other feature ids this depends on. |
- 
+
 ### Milestone sub-schema
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | E.g. `M-2`. |
@@ -140,9 +140,9 @@ Created at planning. Each amendment produces version `n+1`. Old versions are ret
 | `features` | list\<string\> | yes | Feature ids in this milestone. |
 | `contract_assertion_ids` | list\<string\> | yes | Assertions checked at this milestone boundary. |
 | `status` | enum | yes | `pending`, `active`, `validating`, `passed`, `failed`. |
- 
+
 ### Decision sub-schema
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | E.g. `D-009`. |
@@ -150,13 +150,13 @@ Created at planning. Each amendment produces version `n+1`. Old versions are ret
 | `rationale` | string | yes | |
 | `superseded_by` | string | no | Decision id, if revised. |
 | `made_at` | timestamp | yes | |
- 
+
 ### Constraints
 - Spec versions are immutable once written.
 - A feature id, once introduced, cannot be reassigned to a different feature; it can only be marked obsolete via amendment.
 - Every `assigned_milestone` must reference an existing milestone.
 ### Example
- 
+
 ```yaml
 mission_id: mission-a3f7
 version: 12
@@ -199,25 +199,25 @@ tech_stack:
   framework: nextjs
   db: postgres
 ```
- 
+
 ---
- 
+
 ## 3. Validation Contract Assertion
- 
+
 ### Purpose
 A single, independently checkable statement of correctness. The contract is the union of all assertions across all milestones.
- 
+
 ### Authors
 Orchestrator (creates), with human approval at planning. Amendments may modify via the amendment protocol.
- 
+
 ### Readers
 All roles, especially validators.
- 
+
 ### Lifecycle
 Created at planning, before any code. Immutable except via amendment. Each assertion is owned by exactly one milestone.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | E.g. `A-021`. |
@@ -230,13 +230,13 @@ Created at planning, before any code. Immutable except via amendment. Each asser
 | `acceptance_criteria` | string | yes | What "pass" means, concretely. |
 | `priority` | enum | yes | `must`, `should`. `must` blocks milestone completion. |
 | `superseded_by` | string | no | Assertion id if revised. |
- 
+
 ### Constraints
 - Every assertion must be checkable independently of other assertions.
 - An assertion may not depend on the outcome of another assertion.
 - If `validator_type: qa`, the assertion must describe behavior observable from outside the system.
 ### Example
- 
+
 ```yaml
 id: A-021
 feature_id: F-003
@@ -254,25 +254,25 @@ acceptance_criteria: "Test asserts status 409, response body contains
 priority: must
 superseded_by: null
 ```
- 
+
 ---
- 
+
 ## 4. Worker Dispatch
- 
+
 ### Purpose
 The instruction the orchestrator gives a worker when starting it. The worker's full input contract.
- 
+
 ### Authors
 Orchestrator only.
- 
+
 ### Readers
 The dispatched worker. Logged for trace.
- 
+
 ### Lifecycle
 Created on dispatch, immutable thereafter. One per worker invocation.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | uuid | yes | |
@@ -288,9 +288,9 @@ Created on dispatch, immutable thereafter. One per worker invocation.
 | `tool_scope` | list\<string\> | yes | Capability-tagged tools this worker may invoke. |
 | `budget` | object | yes | Per-worker cost/wallclock cap. |
 | `rework_evidence` | object | no | If `kind: rework`, includes failing assertion id and validator evidence. |
- 
+
 ### Example
- 
+
 ```yaml
 id: dispatch-7b21
 mission_id: mission-a3f7
@@ -313,25 +313,25 @@ budget:
   wallclock_cap_minutes: 90
 rework_evidence: null
 ```
- 
+
 ---
- 
+
 ## 5. Handoff Document
- 
+
 ### Purpose
 The structured artifact a worker emits on completion. It is the **only** information that propagates to the next worker. Workers do not inherit context windows.
- 
+
 ### Authors
 Worker that produced it.
- 
+
 ### Readers
 Orchestrator (always). Next worker (if dispatched as continuation). Validators (for context).
- 
+
 ### Lifecycle
 Created on worker completion (or graceful timeout). Immutable. Schema-validated at boundary; rejected handoffs cause worker respawn.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | uuid | yes | |
@@ -348,30 +348,30 @@ Created on worker completion (or graceful timeout). Immutable. Schema-validated 
 | `procedure_adherence` | enum | yes | `confirmed` or `deviated`. |
 | `deviation_notes` | string | conditional | Required if `deviated`. |
 | `terminated_reason` | enum | yes | `completed`, `budget_exhausted`, `tool_blocked`, `amendment_filed`, `crash_recovered`. |
- 
+
 ### UnfinishedItem sub-schema
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `assertion_id` | string | yes | |
 | `reason` | string | yes | Why not completed. |
 | `partial_progress` | string | no | What was done. |
 | `blocker` | enum | no | `spec_ambiguous`, `dependency_missing`, `tool_unavailable`, `time_exhausted`, `unknown`. |
- 
+
 ### CommandLog sub-schema
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `cmd` | string | yes | The command executed. |
 | `exit_code` | int | yes | |
 | `stderr_excerpt` | string | no | Last N lines if non-zero exit. |
- 
+
 ### Constraints
 - A handoff with non-empty `unfinished` and `terminated_reason: completed` is invalid.
 - Every `completed_assertions` entry must be in the dispatch's `assertion_targets`.
 - `procedure_adherence: deviated` without `deviation_notes` is invalid.
 ### Example
- 
+
 ```yaml
 id: handoff-7b21
 from_worker: w-2026-04-22-c3
@@ -401,25 +401,25 @@ procedure_adherence: confirmed
 deviation_notes: null
 terminated_reason: amendment_filed
 ```
- 
+
 ---
- 
+
 ## 6. Validator Result
- 
+
 ### Purpose
 A single validator's verdict on one or more assertions, with evidence.
- 
+
 ### Authors
 The validator that produced it.
- 
+
 ### Readers
 Orchestrator (drives milestone progression). Workers (when dispatched for rework, sees the failing result).
- 
+
 ### Lifecycle
 Created on validator completion. Immutable. Failures may be retried; each retry is a new result.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | uuid | yes | |
@@ -432,17 +432,17 @@ Created on validator completion. Immutable. Failures may be retried; each retry 
 | `failure_summary` | string | conditional | Required on `fail` or `inconclusive`. |
 | `attempt_number` | int | yes | 1 for first attempt; increments on rework cycles. |
 | `commit_sha` | string | yes | The exact commit validated. |
- 
+
 ### EvidenceItem sub-schema
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `type` | enum | yes | `test_output`, `http_trace`, `screenshot`, `log`, `metric`, `manual_observation`. |
 | `content` | string | yes | Inline payload or pointer to blob storage. |
 | `description` | string | yes | What this evidence shows. |
- 
+
 ### Example
- 
+
 ```yaml
 id: valresult-9c4f
 validator_id: val-narrow-A023
@@ -461,25 +461,25 @@ failure_summary: "Channel rename is not persisted to the database;
 attempt_number: 1
 commit_sha: "<head-commit-sha>"
 ```
- 
+
 ---
- 
+
 ## 7. Memory Ledger Entry
- 
+
 ### Purpose
 Append-only durable record of decisions, gotchas, and constraints discovered during the mission. Fights factual drift.
- 
+
 ### Authors
 Validators (primary, on observed gotchas). Orchestrator (on decisions made during amendments).
- 
+
 ### Readers
 All roles. Workers query the ledger before starting a feature.
- 
+
 ### Lifecycle
 Append-only. Entries are never modified or deleted. An entry can be marked `stale` by a later entry but the original remains.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | uuid | yes | |
@@ -492,12 +492,12 @@ Append-only. Entries are never modified or deleted. An entry can be marked `stal
 | `source_trace_id` | uuid | no | Trace that produced this finding. |
 | `supersedes` | uuid | no | Earlier entry this corrects. |
 | `tags` | list\<string\> | no | For retrieval. |
- 
+
 ### Constraints
 - Entries are immutable. To correct, write a new `correction` entry referencing the old.
 - `scope_ref` must reference a real entity if scope is not `global`.
 ### Example
- 
+
 ```yaml
 id: ledger-4d12
 ts: 2026-04-23T08:14:22Z
@@ -511,25 +511,25 @@ source_trace_id: trace-9871
 supersedes: null
 tags: [external-api, rate-limit, stripe]
 ```
- 
+
 ---
- 
+
 ## 8. Amendment Request
- 
+
 ### Purpose
 A formal request to modify the spec or contract. Workers, validators, and the orchestrator all create them; only the orchestrator can approve. Material amendments require human approval.
- 
+
 ### Authors
 Any role.
- 
+
 ### Readers
 Orchestrator (decides), Human (on material amendments).
- 
+
 ### Lifecycle
 Created when discovered. Reviewed by orchestrator. Approved → produces new spec version. Rejected → producer is notified, original spec stands. Withdrawn → no effect.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | uuid | yes | |
@@ -545,13 +545,13 @@ Created when discovered. Reviewed by orchestrator. Approved → produces new spe
 | `status` | enum | yes | `proposed`, `approved`, `rejected`, `withdrawn`. |
 | `decision_rationale` | string | conditional | Required when status is `approved` or `rejected`. |
 | `produced_spec_version` | int | conditional | Set on approval. |
- 
+
 ### Constraints
 - An amendment cannot target an entity that doesn't exist in the current spec version.
 - Workers must pause work on the affected scope while the amendment is pending.
 - `material_change: true` cannot be approved without a human approval event in the audit trail.
 ### Example
- 
+
 ```yaml
 id: amend-0033
 mission_id: mission-a3f7
@@ -578,25 +578,25 @@ decision_rationale: "Confirmed with security team; 500ms acceptable
                     given the constraint. Human approver: alice."
 produced_spec_version: 13
 ```
- 
+
 ---
- 
+
 ## 9. Trace Event
- 
+
 ### Purpose
 The fundamental unit of observability. Every LLM call, every tool call, every state transition emits a trace event. Together they form a parent-child tree that reconstructs any past run.
- 
+
 ### Authors
 The runtime, automatically. Not authored by agents directly.
- 
+
 ### Readers
 Orchestrator (for context), humans (for debugging), eval pipeline (for failure clustering).
- 
+
 ### Lifecycle
 Created as actions happen. Immutable. Retained per data-retention policy (typically the life of the mission plus an archive period).
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | uuid | yes | |
@@ -609,9 +609,9 @@ Created as actions happen. Immutable. Retained per data-retention policy (typica
 | `duration_ms` | int | yes | |
 | `status` | enum | yes | `success`, `error`, `timeout`. |
 | `error` | string | conditional | Required on non-success. |
- 
+
 ### LLM call additional fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | |
@@ -621,9 +621,9 @@ Created as actions happen. Immutable. Retained per data-retention policy (typica
 | `cost_usd` | float | yes | |
 | `input` | object | yes | Full prompt, not summarized. |
 | `output` | object | yes | Full response. |
- 
+
 ### Tool call additional fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `tool_name` | string | yes | |
@@ -631,21 +631,21 @@ Created as actions happen. Immutable. Retained per data-retention policy (typica
 | `input` | object | yes | Full arguments. |
 | `output` | object | yes | Full return value. |
 | `gateway_decision` | enum | yes | `allowed`, `denied`. |
- 
+
 ### State transition additional fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `from_state` | string | yes | |
 | `to_state` | string | yes | |
 | `trigger` | string | yes | What caused the transition. |
- 
+
 ### Constraints
 - Trace events are immutable.
 - The full input/output of LLM and tool calls is retained — *not* summarized. This is what makes replay possible.
 - Sensitive payloads (credentials, PII) must be redacted at write time, not retrieval time.
 ### Example (LLM call)
- 
+
 ```yaml
 id: trace-9871
 parent_id: trace-9870
@@ -669,25 +669,25 @@ output:
   content: "..."
   tool_calls: [...]
 ```
- 
+
 ---
- 
+
 ## 10. Worktree Record
- 
+
 ### Purpose
 Tracks a git worktree and its lifecycle. Coordinates the conflict scanner.
- 
+
 ### Authors
 Worktree manager (runtime component).
- 
+
 ### Readers
 Workers (to know where they write), conflict scanner, orchestrator.
- 
+
 ### Lifecycle
 Created on worker dispatch. Active during work. Sealed on merge or discard. Garbage collected after retention window.
- 
+
 ### Fields
- 
+
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | yes | E.g. `wt-mainline`, `wt-fanout-c3`. |
@@ -701,9 +701,9 @@ Created on worker dispatch. Active during work. Sealed on merge or discard. Garb
 | `port_assignments` | map\<string,int\> | no | E.g. `{web: 4101, db: 5433}`. |
 | `state` | enum | yes | `active`, `merging`, `merged`, `discarded`, `gc_pending`. |
 | `conflict_set` | list\<string\> | no | Worktree ids currently in conflict per the scanner. |
- 
+
 ### Example
- 
+
 ```yaml
 id: wt-fanout-c3
 mission_id: mission-a3f7
@@ -719,11 +719,11 @@ port_assignments:
 state: active
 conflict_set: []
 ```
- 
+
 ---
- 
+
 ## Cross-cutting Notes for the Implementing Architect
- 
+
 1. **All artifacts are content-addressed where reasonable.** A spec at version 12 has the same content for everyone who reads it, and is referenced by `(mission_id, version)`.
 2. **All schemas should be enforced at write time, not read time.** Invalid handoffs should fail to write, not surprise the next reader. The runtime is the gatekeeper.
 3. **All sensitive content is redacted at the trace-store write path.** Credentials, PII, and customer data should never sit in trace logs in cleartext, even briefly.

@@ -31,7 +31,7 @@ This document is the consolidation called for by v2.2 §13.3. It is assembled fr
 
 | Input | sha256 prefix | Role |
 |---|---|---|
-| `docs/framework/expanded-schemas-base.md` | `57ed463c` | Base document; §1–§10 and the cross-cutting notes |
+| `docs/framework/expanded-schemas-base.md` | `3fe8439a` | Base document; §1–§10 and the cross-cutting notes |
 | `tools/mission-cli/config/expanded-schemas-section-6-validator-result.md` | `474e04c1` | §6 reconciliation |
 | `tools/mission-cli/config/expanded-schemas-section-7-memory-ledger-entry.md` | `317afce7` | §7 reconciliation |
 | `tools/mission-cli/config/expanded-schemas-section-8-amendment-request.md` | `f240bc1f` | §8 reconciliation |

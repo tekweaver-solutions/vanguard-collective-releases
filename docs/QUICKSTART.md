@@ -1,4 +1,4 @@
-# Vanguard Collective 1.2.0 -- Quickstart
+# Vanguard Collective 1.3.0 -- Quickstart
 
 The shortest correct path from nothing to an installed project, an initialised mission, a built
 smoke mission and a first acceptance reading. Every step is a command you run in **your own
@@ -42,7 +42,7 @@ Releases page, https://github.com/tekweaver-solutions/vanguard-collective-releas
 assets: `vanguard-collective-v<VERSION>.zip` (the versioned name; `<VERSION>` is the text of the
 release's `VERSION` file), the same archive as `vanguard-collective.zip` (the fixed name, so
 `.../releases/latest/download/vanguard-collective.zip` is always the latest), `SHA256SUMS` and
-`MEMBERS.sha256`. Download `vanguard-collective-v1.2.0.zip`, `SHA256SUMS` and `MEMBERS.sha256` from the
+`MEMBERS.sha256`. Download `vanguard-collective-v1.3.0.zip`, `SHA256SUMS` and `MEMBERS.sha256` from the
 release into `C:\dl`, from the page or with the GitHub CLI:
 
 ```powershell
@@ -54,7 +54,7 @@ Check the ZIP against `SHA256SUMS`, whose first line names the ZIP and whose sec
 
 ```powershell
 $want = ((Get-Content C:\dl\SHA256SUMS)[0] -split '  ')[0]
-(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.2.0.zip).Hash.ToLower() -eq $want
+(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.3.0.zip).Hash.ToLower() -eq $want
 ```
 
 It must print `True`; if not, stop -- the archive is not the one that was released. Check
@@ -62,8 +62,8 @@ It must print `True`; if not, stop -- the archive is not the one that was releas
 expand:
 
 ```powershell
-Unblock-File C:\dl\vanguard-collective-v1.2.0.zip
-Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.2.0.zip -DestinationPath C:\dl\vanguard-collective-v1.2.0
+Unblock-File C:\dl\vanguard-collective-v1.3.0.zip
+Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.3.0.zip -DestinationPath C:\dl\vanguard-collective-v1.3.0
 ```
 
 Optionally check every expanded file against `MEMBERS.sha256` (one line per member,
@@ -71,8 +71,8 @@ Optionally check every expanded file against `MEMBERS.sha256` (one line per memb
 same number twice:
 
 ```powershell
-Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.2.0 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
-(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.2.0 -Recurse -File -Force).Count
+Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.3.0 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
+(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.3.0 -Recurse -File -Force).Count
 ```
 
 **B. A clone at the tag.** Clone outside the project folder and check out the release tag:
@@ -80,10 +80,10 @@ Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; 
 ```powershell
 git clone https://github.com/tekweaver-solutions/vanguard-collective-releases.git C:\src\vanguard-collective
 cd C:\src\vanguard-collective
-git checkout v1.2.0
+git checkout v1.3.0
 ```
 
-The installer accepts a clone only when HEAD is exactly the commit tag `v1.2.0` names and
+The installer accepts a clone only when HEAD is exactly the commit tag `v1.3.0` names and
 `git status --porcelain` prints nothing. Anything else -- a branch whose tip is not the tagged commit, commits on top of the tag, a
 local change, an untracked file -- is refused before anything is written, with exit 1 and a last
 line beginning `install.ps1: REFUSED:`. A local change or an untracked file is listed first: up to
@@ -93,7 +93,7 @@ local changes (git status --porcelain is not empty) -- install from a clean clon
 tag. Nothing was written.` Every other refusal of the source is that one `REFUSED:` line alone.
 Clone again, or put the clone back at the tag with nothing changed.
 
-Below, `<release>` is `C:\dl\vanguard-collective-v1.2.0` (A) or `C:\src\vanguard-collective` (B).
+Below, `<release>` is `C:\dl\vanguard-collective-v1.3.0` (A) or `C:\src\vanguard-collective` (B).
 
 ## 3. Install
 
@@ -108,7 +108,7 @@ Then install. From the ZIP, name it so `framework.lock` records its sha256; from
 `-ReleaseZip` out (the installer refuses it with a clone):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.2.0\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.2.0.zip
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.0\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.3.0.zip
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\src\vanguard-collective\install.ps1 -Target C:\work\my-project
 ```
 

@@ -81,6 +81,28 @@
   make a member pass) through tests\lam\wp7-real-feed.py, the dashboard through ui\tests\uNN.spec.ts (skipped by name as
   the L-members are), and U-18, U-21 and U-25 the fixture above; the rest need none of it.
 
+  UI-2 S1 (1.2.0 -> 1.3.0, group A; the S1 contract of UI-2 S0, sections B and C): U-31 (B-1) the shape of the
+  real-feed fixture's 1.2.0 slice rec-q-1.2.0.events.jsonl, U-32 (B-2) its HARD scan by the release gate's patterns
+  (-HardPatternFile; a named skip without it), U-33 (A-1, register row 500) the defect's shape over it, U-34 (A-2) the
+  stop rule over composed feeds and the schema's subagent_stop, U-35 (A-4) the dashboard (the API through the reader,
+  the browser through ui\tests\u35.spec.ts) -- each with its planted copy in the run's own folder, fixture-free like
+  U-19..U-30. U-21 (F-P2a) is amended by A-2: SubagentStop appends subagent_stop, never session_stop, and the parent's
+  Stop with a running background task writes neither session_stop nor dispatch_finalized (the live harness's shape,
+  read at A-3). U-36 (A-6, register row 526) compares the project's host registry row's framework_version with its
+  framework.lock (a named skip in a checkout with no lock or no row), its comparator held to a fixture trio first.
+  U-37 (A-10, register row 512) reads the gate console's preview face (tools\lam\lam-console.ps1 in library mode):
+  one line stating created_at is composed at preview and the feed's gate_minted ts may trail it.
+
+  UI-2 S2 (1.2.0 -> 1.3.0, group B; the S2 contract B-1..B-11, register rows 501, 498): U-39 (B-1) the feature ->
+  assertion roll-up, U-40 (B-2) its API shape, U-42 (B-4) the validator rounds, U-44 (B-6) the HALT card, U-46 (B-8)
+  elapsed per milestone, U-48 (B-10) the verify card's divergences, U-49 (B-11) the per-mission Stats face -- read by
+  tests\lam\wp7-group-b.py, which derives every figure from the fixture itself; the browser halves U-41 (B-3), U-43
+  (B-5), U-45 (B-7), U-47 (B-9), U-48, U-49 are ui\tests\uNN.spec.ts, each with a planted face (a scratch build of
+  ui\src with one literal broken) that must fail it. The fixture of B-1, B-4, B-8 and B-11 is the smoke mission
+  (LAM_SMOKE_ROOT when it names one, else built here by tools\lam\build-smoke-mission.ps1) replayed into a feed by
+  tests\lam\wp7-smoke-feed.ps1 -- the snapshot writer over each commit; B-6's and B-10's are hand-composed
+  (tests\lam\fixtures\ui\h6.jsonl, v10.jsonl, v10-clean.jsonl).
+
   -Only runs the fixture and the named members (planted-breakage passes use it); a member -Only names that this
   instrument does not have reads FAIL on its own line, never "all 0 checks passed". -KeepFixture leaves the
   per-run root on disk.
@@ -97,7 +119,49 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $hooksDir = Join-Path $repoRoot 'tools\evidence-hooks-next\hooks'
 $schemaPath = Join-Path $repoRoot 'docs\framework\mission-event.schema.json'
-$psExe = Join-Path $PSHOME 'powershell.exe'
+# Windows PowerShell 5.1 by its own path, never $PSHOME's: under PowerShell 7 $PSHOME holds pwsh.exe and no powershell.exe,
+# and the framework's scripts and hooks run under 5.1 as the harness runs them (UI-2 S1c A-13, register row 522).
+$psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+# A process variable set, or removed when the value is $null: a bare $null reaches SetEnvironmentVariable as '' and under
+# PowerShell 7 leaves the variable set and empty; [NullString]::Value removes it under 5.1 and 7 alike (row 522).
+# Every JSON line this instrument reads, read as Windows PowerShell 5.1 reads it: PowerShell 7's ConvertFrom-Json turns an
+# ISO timestamp into a [datetime], and the schema then reads ts as "not string". This proxy asks 7 (7.5 and later) for
+# -DateKind String; under 5.1 it is the cmdlet itself (UI-2 S1c A-13, register row 522).
+$script:W7JsonDateKind = (Get-Command Microsoft.PowerShell.Utility\ConvertFrom-Json).Parameters.ContainsKey('DateKind')
+function ConvertFrom-Json {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true, ValueFromPipeline = $true, Position = 0)][AllowEmptyString()][string]$InputObject, [switch]$AsHashtable, [int]$Depth = 1024)
+    begin { $w7Buf = New-Object System.Collections.Generic.List[string] }
+    process { $w7Buf.Add($InputObject) }
+    end {
+        $w7P = @{}
+        if ($AsHashtable) { $w7P['AsHashtable'] = $true }
+        if ($PSBoundParameters.ContainsKey('Depth') -and $PSVersionTable.PSVersion.Major -ge 6) { $w7P['Depth'] = $Depth }
+        if ($script:W7JsonDateKind) { $w7P['DateKind'] = 'String' }
+        # the cmdlet's own rule for several piped strings: each its own document when the first one parses, else one joined
+        if ($w7Buf.Count -le 1) { foreach ($w7S in $w7Buf) { Microsoft.PowerShell.Utility\ConvertFrom-Json -InputObject $w7S @w7P } ; return }
+        $w7First = $null; $w7Ok = $true
+        try { $w7First = Microsoft.PowerShell.Utility\ConvertFrom-Json -InputObject $w7Buf[0] @w7P } catch { $w7Ok = $false }
+        if ($w7Ok) { $w7First; for ($w7I = 1; $w7I -lt $w7Buf.Count; $w7I++) { Microsoft.PowerShell.Utility\ConvertFrom-Json -InputObject $w7Buf[$w7I] @w7P } }
+        else { Microsoft.PowerShell.Utility\ConvertFrom-Json -InputObject ($w7Buf -join [Environment]::NewLine) @w7P }
+    }
+}
+# A Windows PowerShell child that Start-Process makes from PowerShell 7 inherits 7's PSModulePath (7's module folders first),
+# which `&` corrects and Start-Process does not; measured 2026-11-08. Under 7 this proxy hands such a child the module path
+# 5.1 itself reports; under 5.1 it is the cmdlet itself (UI-2 S1c A-13, register row 522).
+$script:W7WinPsModulePath = $null
+if ($PSVersionTable.PSEdition -eq 'Core') { $script:W7WinPsModulePath = ((& $psExe -NoProfile -NonInteractive -Command '$env:PSModulePath') | Out-String).Trim() }
+function Start-Process {
+    [CmdletBinding()]
+    param([Parameter(Position = 0)][string]$FilePath, [Parameter(Position = 1)]$ArgumentList, [switch]$PassThru, [switch]$NoNewWindow, [switch]$Wait,
+          [string]$WindowStyle, [string]$RedirectStandardOutput, [string]$RedirectStandardError, [string]$RedirectStandardInput, [string]$WorkingDirectory)
+    $w7Mp = $null
+    if ($script:W7WinPsModulePath -and ($FilePath -eq $psExe)) { $w7Mp = $env:PSModulePath; $env:PSModulePath = $script:W7WinPsModulePath }
+    try { Microsoft.PowerShell.Management\Start-Process @PSBoundParameters } finally { if ($null -ne $w7Mp) { $env:PSModulePath = $w7Mp } }
+}
+function Set-W7Env { param([string]$Name, $Value)
+    if ($null -eq $Value) { [Environment]::SetEnvironmentVariable($Name, [NullString]::Value) } else { [Environment]::SetEnvironmentVariable($Name, [string]$Value) }
+}
 
 $failures  = 0
 $checksRun = 0
@@ -146,7 +210,7 @@ function Write-W7TopThrew { param([string]$Region, $E)
 function Write-W7Close {
     foreach ($id in @($Only)) {
         if (-not $script:checkedIds.ContainsKey($id)) {
-            Check -Id $id -Title 'named by -Only, but this instrument has no such member' -Ok $false -Detail "    members: F-0, U-1..U-30, V-1..V-20, L-1..L-16"
+            Check -Id $id -Title 'named by -Only, but this instrument has no such member' -Ok $false -Detail "    members: F-0, U-1..U-52, V-1..V-20, L-1..L-16"
         }
     }
     Write-Host ""
@@ -161,7 +225,7 @@ function Write-W7Close {
 }
 
 Write-Host "=============================================================================="
-Write-Host " LAM WP-7 INSTRUMENT -- ui (the mission-event telemetry feed, U-1..U-17; the service, V-1..V-20; the dashboard, L-1..L-16; the 1.1.0 dashboard patch, U-18..U-30)"
+Write-Host " LAM WP-7 INSTRUMENT -- ui (the mission-event telemetry feed, U-1..U-17; the service, V-1..V-20; the dashboard, L-1..L-16; the 1.1.0 dashboard patch, U-18..U-30; UI-2 S1, U-31..U-37; UI-2 S1c, U-38 (where it is read: UI-2 S2 B-13); UI-2 S2, U-39..U-52)"
 Write-Host "=============================================================================="
 Write-Host "repo root : $repoRoot"
 Write-Host "HEAD      : $((& git -C $repoRoot rev-parse HEAD 2>$null))"
@@ -198,7 +262,7 @@ function Invoke-W7 {
     param([string]$File, [string[]]$Argv = @(), [hashtable]$Env = @{}, [string]$Stdin = $null, [string]$Cwd = $null, [string]$Exe = $null)
     if (-not $Exe) { $Exe = $psExe }
     $saved = @{}
-    foreach ($k in $Env.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $Env[$k]) }
+    foreach ($k in $Env.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); Set-W7Env $k $Env[$k] }
     $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     if ($Cwd) { Push-Location -LiteralPath $Cwd }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -210,7 +274,7 @@ function Invoke-W7 {
         $sw.Stop()
         if ($Cwd) { Pop-Location }
         $ErrorActionPreference = $prevEap
-        foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) }
+        foreach ($k in $saved.Keys) { Set-W7Env $k $saved[$k] }
     }
     return [pscustomobject]@{ out = @($o | ForEach-Object { "$_" }); code = $code; ms = [int]$sw.ElapsedMilliseconds }
 }
@@ -218,14 +282,14 @@ function Invoke-W7 {
 function Invoke-W7Native {
     param([string]$Exe, [string[]]$Argv = @(), [hashtable]$Env = @{}, [string]$Cwd = $null)
     $saved = @{}
-    foreach ($k in $Env.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $Env[$k]) }
+    foreach ($k in $Env.Keys) { $saved[$k] = [Environment]::GetEnvironmentVariable($k); Set-W7Env $k $Env[$k] }
     $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     if ($Cwd) { Push-Location -LiteralPath $Cwd }
     try { $o = @(& $Exe @Argv 2>&1); $code = $LASTEXITCODE }
     finally {
         if ($Cwd) { Pop-Location }
         $ErrorActionPreference = $prevEap
-        foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k]) }
+        foreach ($k in $saved.Keys) { Set-W7Env $k $saved[$k] }
     }
     return [pscustomobject]@{ out = @($o | ForEach-Object { "$_" }); code = $code }
 }
@@ -863,7 +927,8 @@ if (Want 'L-16') { try { $why = Get-W7LSkip 'L-16' -Browser; if ($why) { Write-W
 if ($lWant.Count -and -not $KeepFixture) { Remove-Item -LiteralPath $lRoot -Recurse -Force -ErrorAction SilentlyContinue }
 } catch { Write-W7TopThrew 'region 1 of 4, the V and L members' $_ }
 
-$pFree = @('U-19', 'U-20', 'U-22', 'U-23', 'U-24', 'U-26', 'U-27', 'U-28', 'U-29', 'U-30')
+$pFree = @('U-19', 'U-20', 'U-22', 'U-23', 'U-24', 'U-26', 'U-27', 'U-28', 'U-29', 'U-30', 'U-31', 'U-32', 'U-33', 'U-34', 'U-35', 'U-36', 'U-37', 'U-38',
+           'U-39', 'U-40', 'U-41', 'U-42', 'U-43', 'U-44', 'U-45', 'U-46', 'U-47', 'U-48', 'U-49')
 try {   # TOP-LEVEL REGION 2 of 4: the P members (Write-W7TopThrew)
 # =================================================================================================
 # THE 1.1.0 DASHBOARD PATCH (RELEASE-4 S1, group P; s1-falsifiers.md and its amendment 1) -- the members that need no U
@@ -874,7 +939,8 @@ try {   # TOP-LEVEL REGION 2 of 4: the P members (Write-W7TopThrew)
 # after it reads it.)
 # =================================================================================================
 # U-25 reads the real-feed home and the browser here and the fixture's writer below; its folder is made here all the same
-$pAny = @($pFree + @('U-25') | Where-Object { Want $_ }).Count -gt 0
+# (UI-2 S2: so do U-50..U-52, whose hook and installer halves run in the U fixture and whose API and browser halves use this folder)
+$pAny = @($pFree + @('U-25', 'U-50', 'U-51', 'U-52') | Where-Object { Want $_ }).Count -gt 0
 $pRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('p7' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $pPy = Join-Path $repoRoot 'tools\.venv\Scripts\python.exe'
 $pReader = Join-Path $repoRoot 'tests\lam\wp7-real-feed.py'
@@ -910,14 +976,15 @@ elseif (Want 'U-19') { try {
     }
     $enumOk = ($null -ne $enum) -and ((@($enum | Sort-Object) -join ',') -ceq (@($pClosed | Sort-Object) -join ','))
     $d += "    schema: a mission_snapshot block closing milestones.*.status: $(if ($enum) { '[' + ($enum -join ', ') + ']' } else { '(none)' }) (expect exactly $($pClosed -join ', ')) -> $enumOk`n"
-    $idOk = ([string]$sch.'$id') -cmatch '/mission-event/1\.1$'
+    # 1.1 OR A LATER MINOR (UI-2 S1 A-2 added kind subagent_stop at 1.2, additively): the amendment stands in every later one
+    $idOk = ([string]$sch.'$id') -cmatch '/mission-event/1\.([1-9]|[1-9][0-9]+)$'
     $libText = [System.IO.File]::ReadAllText((Join-Path $repoRoot 'tools\evidence-hooks-next\hooks\lib\evidence-common.ps1'))
-    $emitOk = $libText.Contains("`$script:MissionEventSchemaVersion = '1.1'")
+    $emitOk = $libText -cmatch "\`$script:MissionEventSchemaVersion = '1\.([1-9]|[1-9][0-9]+)'"
     $es = [System.IO.File]::ReadAllLines((Join-Path $repoRoot 'docs\framework\expanded-schemas.md'))
     $svRow = @($es | Where-Object { $_.StartsWith('| `schema_version` |') -and $_.Contains('"1.1"') })
     $msRow = @($es | Where-Object { $_.StartsWith('| `mission_snapshot` |') })
     $docOk = ($svRow.Count -eq 1) -and ($msRow.Count -eq 1) -and (@($pClosed | Where-Object { -not $msRow[0].Contains('`' + $_ + '`') }).Count -eq 0) -and $msRow[0].Contains('`done`')
-    $d += "    the schema's `$id ends /mission-event/1.1: $idOk; the emitter stamps schema_version 1.1: $emitOk; SS14 names 1.1 and the four values (and done -> passed): $docOk`n"
+    $d += "    the schema's `$id ends /mission-event/1.1 or a later minor: $idOk; the emitter stamps schema_version 1.1 or a later minor: $emitOk; SS14 names 1.1 and the four values (and done -> passed): $docOk`n"
     # planted lines (in this run's own folder): the fixture's root snapshot as 1.1 with M-1 'done' / 'withdrawn', and as cut
     $base = (Get-W7RealFeed 'root.events.jsonl') | Where-Object { $_.obj.kind -ceq 'mission_snapshot' } | Select-Object -First 1
     # (a 1.1 line as the cured writer writes it: every other milestone's done read as passed; then M-1 carries the word tried)
@@ -958,7 +1025,28 @@ elseif (Want 'U-19') { try {
 # THE P BROWSER MEMBERS (U-20, U-24, U-25, U-26): ONE Playwright run of ui\tests\uNN.spec.ts for the wanted ones, against a
 # ui\dist built from this checkout's source (the L block's build when it ran, else built here); each reads its own spec
 # file's tests from the JSON report. Without Node, the dashboard's source or the pinned browser: SKIPPED BY NAME, as L.
-$pBrowserIds = @(20, 24, 25, 26)
+# UI-2 S2 (group B): THE SMOKE FIXTURE of U-39..U-49 -- LAM_SMOKE_ROOT when it names a built smoke mission, else one built
+# here (tools\lam\build-smoke-mission.ps1 into the run's own folder), then replayed into a feed by tests\lam\wp7-smoke-feed.ps1
+# (this tree's snapshot writer over each commit). The browser halves read the replay through W7_SMOKE_FEED.
+$gIds = @('U-39', 'U-40', 'U-41', 'U-42', 'U-43', 'U-44', 'U-45', 'U-46', 'U-47', 'U-48', 'U-49')
+$gSmokeRoot = $null; $gSmokeFeed = $null; $gWhy = $null
+if (@($gIds | Where-Object { Want $_ }).Count -and -not $pNoPy) {
+    try {
+        if ($env:LAM_SMOKE_ROOT -and (Test-Path -LiteralPath (Join-Path $env:LAM_SMOKE_ROOT '.mission\mission.yaml') -PathType Leaf)) { $gSmokeRoot = $env:LAM_SMOKE_ROOT }
+        else {
+            $gSmokeRoot = Join-Path $pRoot 'smoke\lam-smoke'
+            $gB = Invoke-W7Native -Exe (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -Argv @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $repoRoot 'tools\lam\build-smoke-mission.ps1'), '-SmokeRoot', $gSmokeRoot)
+            if ($gB.code -ne 0) { $gWhy = 'the smoke mission could not be built: ' + ((@($gB.out) | Select-Object -Last 2) -join ' | ') }
+        }
+        if (-not $gWhy) {
+            $gSmokeFeed = Join-Path $pRoot 'smoke.events.jsonl'
+            $gR = Invoke-W7Native -Exe (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') -Argv @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $repoRoot 'tests\lam\wp7-smoke-feed.ps1'), '-SmokeRoot', $gSmokeRoot, '-Out', $gSmokeFeed)
+            if ($gR.code -ne 0 -or -not (Test-Path -LiteralPath $gSmokeFeed -PathType Leaf)) { $gWhy = 'the smoke replay failed: ' + ((@($gR.out) | Select-Object -Last 2) -join ' | '); $gSmokeFeed = $null }
+            else { Write-Host "g-smoke   : $gSmokeRoot -> $gSmokeFeed ($((@($gR.out) -join '').Trim()))" }
+        }
+    } catch { $gWhy = 'the smoke fixture threw: ' + $_.Exception.Message }
+}
+$pBrowserIds = @(20, 24, 25, 26, 35, 38, 41, 43, 45, 47, 48, 49, 50)
 $pSpecs = @($pBrowserIds | Where-Object { Want "U-$_" })
 $pCases = @{}; $pWhy = $null; $pPwOut = ''
 if ($pSpecs.Count) {
@@ -977,7 +1065,7 @@ if ($pSpecs.Count) {
         else {
             $pwJson = Join-Path $pRoot 'pw.json'
             $pwArgv = @((Join-Path $pUi 'node_modules\@playwright\test\cli.js'), 'test') + @($pSpecs | ForEach-Object { 'tests/u{0:00}.spec.ts' -f $_ })
-            $pw = Invoke-W7Native -Exe $pNode.Source -Argv $pwArgv -Cwd $pUi -Env @{ PLAYWRIGHT_JSON_OUTPUT_NAME = $pwJson; FORCE_COLOR = '0'; CI = '1' }
+            $pw = Invoke-W7Native -Exe $pNode.Source -Argv $pwArgv -Cwd $pUi -Env @{ PLAYWRIGHT_JSON_OUTPUT_NAME = $pwJson; FORCE_COLOR = '0'; CI = '1'; W7_SMOKE_FEED = $gSmokeFeed }
             $pPwOut = "playwright exit $($pw.code); $(@($pw.out | Where-Object { $_ -match '\d+ (passed|failed|flaky|skipped)' }) -join '; ')"
             Write-Host "p-browser : $pPwOut"
             if (Test-Path -LiteralPath $pwJson -PathType Leaf) {
@@ -1259,7 +1347,7 @@ elseif (Want 'U-30') { try {
     $hf = Join-Path $pRoot 'u30-help.txt'
     $vc = Join-Path $repoRoot 'tools\ui\vanguard.cmd'
     $savedC = $env:COLUMNS; $env:COLUMNS = '200'
-    try { $pr = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d', '/c', "`"$vc`"", 'ui', '--help') -RedirectStandardOutput $hf -NoNewWindow -Wait -PassThru }
+    try { $pr = Start-Process -FilePath 'cmd.exe' -ArgumentList (@('/d', '/c', "`"$vc`"", 'ui', '--help') -join ' ') -RedirectStandardOutput $hf -NoNewWindow -Wait -PassThru }
     finally { $env:COLUMNS = $savedC }
     $raw = if (Test-Path -LiteralPath $hf) { [System.IO.File]::ReadAllText($hf) } else { '' }
     $boxRule = '[' + [char]0x2500 + '-' + [char]0x257F + ']'   # rich's box-drawing characters (U+2500..U+257F), built from codes: this file is read as ANSI
@@ -1275,6 +1363,398 @@ elseif (Want 'U-30') { try {
     Check -Id 'U-30' -Title 'F-P7c (row 505 g): vanguard ui --help says --host is loopback only, 421 otherwise, reserved for the v2 hub -- the 1.1.0 release notes'' words, held here as a constant' `
           -Ok (($pr.ExitCode -eq 0) -and $hostText -and $missing.Count -eq 0 -and -not $old) -Detail $d
 } catch { Write-W7Threw 'U-30' $_ } }
+
+# =================================================================================================
+# UI-2 S1 (the 1.2.0 -> 1.3.0 correctness group; s1-falsifiers.md of UI-2 S0, sections B and C): the real-feed fixture's
+# 1.2.0 slice and register row 500. The slice tests\lam\fixtures\real-feed\rec-q-1.2.0.events.jsonl is a primary checkout's
+# own 1.2.0 feed, seq 302-500, HARD-scrubbed by shape-preserving rules (its README); it is never edited to make a member pass:
+# every plant below goes into this run's own copy under the p-root.
+# =================================================================================================
+$pSliceName = 'rec-q-1.2.0.events.jsonl'
+$pSlice = Join-Path $pFix $pSliceName
+$pSliceWhy = if (Test-Path -LiteralPath $pSlice -PathType Leaf) { $null } else { "the 1.2.0 slice tests\lam\fixtures\real-feed\$pSliceName is not in this checkout" }
+# a copy of the slice with one line changed by $Edit (a scriptblock over the line's object), into the p-root
+function New-W7SliceCopy { param([string]$Name, [scriptblock]$Edit)
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($ln in ([System.IO.File]::ReadAllText($pSlice) -split "`n")) { if ($ln -eq '') { continue }; $r = & $Edit $ln; if ($null -ne $r) { [void]$out.Add($r) } }
+    $p = Join-Path $pRoot $Name
+    Write-W7File $p ((($out -join "`n")) + "`n")
+    return $p
+}
+
+# U-31 -- B-1 (the fixture): the slice reads 199 lines, seq 302-500 contiguous, kinds tool_call 191 / session_stop 7 /
+# dispatch_finalized 1, the seven session_stop lines (seq 413, 428, 433, 438, 451, 455, 499) stamping ONE session id, the one
+# dispatch_finalized (seq 414) naming session-<that id>, the six Agent calls at seq 302-307, no session_start. The figures
+# are the S1 contract's (REC-S's derivation); the planted copy -- one session_stop's session id changed -- must fail them.
+$t31 = 'B-1 (UI-2 S1, the fixture): the 1.2.0 slice reads 199 lines, kinds 191/7/1, seven session_stop lines sharing one session id, one dispatch_finalized naming session-<that id>, no session_start; a copy with one stop''s session id changed fails it'
+if ((Want 'U-31') -and ($pNoPy -or $pSliceWhy)) { Check -Id 'U-31' -Title $t31 -Ok $false -Skipped:([bool]$pNoPy -and -not $pSliceWhy) -Detail "    $(if ($pSliceWhy) { 'RED: ' + $pSliceWhy } else { 'SKIPPED BY NAME: ' + $pNoPy })" }
+elseif (Want 'U-31') { try {
+    $d = ''
+    $judge31 = { param($o)
+        if ($null -eq $o) { return $false }
+        $k = $o.kinds
+        $sid = @($o.stop_sessions)
+        $kOk = ($o.lines -eq 199) -and ($o.seq_first -eq 302) -and ($o.seq_last -eq 500) -and ($o.contiguous -eq $true) -and
+               ([int]$k.tool_call -eq 191) -and ([int]$k.session_stop -eq 7) -and ([int]$k.dispatch_finalized -eq 1) -and (@($k.PSObject.Properties).Count -eq 3)
+        $sOk = ((@($o.stop_seqs) -join ',') -ceq '413,428,433,438,451,455,499') -and ($sid.Count -eq 1) -and [bool]$sid[0]
+        $fOk = (@($o.finalized).Count -eq 1) -and ([int]$o.finalized[0][0] -eq 414) -and ($sid.Count -eq 1) -and ([string]$o.finalized[0][1] -ceq ('session-' + $sid[0]))
+        return ($kOk -and $sOk -and $fOk -and ($o.session_starts -eq 0) -and ((@($o.agent_call_seqs) -join ',') -ceq '302,303,304,305,306,307'))
+    }
+    $r = Invoke-W7Reader @('shape', $pSlice)
+    $okReal = & $judge31 $r.obj
+    $o = $r.obj
+    if ($o) { $d += "    the slice: $($o.lines) lines, seq $($o.seq_first)-$($o.seq_last) contiguous $($o.contiguous); kinds $((@($o.kinds.PSObject.Properties | ForEach-Object { $_.Name + ' ' + $_.Value })) -join ', '); session_stop at seq $(@($o.stop_seqs) -join ', '), distinct session ids $(@($o.stop_sessions).Count); dispatch_finalized $(@($o.finalized | ForEach-Object { 'seq ' + $_[0] + ' names session-<the stops'' id>: ' + ([string]$_[1] -ceq ('session-' + @($o.stop_sessions)[0])) }) -join '; '); session_start $($o.session_starts); Agent calls at seq $(@($o.agent_call_seqs) -join ', ') -> $okReal`n" }
+    else { $d += "    the reader gave no answer: $($r.tail)`n" }
+    # the planted copy: the session_stop at seq 428 stamps another session id (a GUID of the same shape)
+    $pl = New-W7SliceCopy 'u31-plant.events.jsonl' { param($ln) $x = $ln | ConvertFrom-Json; if ($x.seq -eq 428) { $ln -replace '"session_id":"[0-9a-f-]{36}"', '"session_id":"00000000-0000-4000-8000-000000000031"' } else { $ln } }
+    $rp = Invoke-W7Reader @('shape', $pl)
+    $okPlant = -not (& $judge31 $rp.obj)
+    $d += "    a copy with the seq-428 session_stop's session id changed: distinct session ids $(if ($rp.obj) { @($rp.obj.stop_sessions).Count } else { '(no answer)' }) -> the assertion fails on it: $okPlant`n"
+    Check -Id 'U-31' -Title $t31 -Ok ($okReal -and $okPlant -and ($null -ne $rp.obj)) -Detail $d
+} catch { Write-W7Threw 'U-31' $_ } }
+
+# U-32 -- B-2 (the fixture): the release gate's HARD scan (tools\lam\gate-host-data.ps1, the operator's pattern file
+# -HardPatternFile, the same patterns the release gate reads) over tests\lam\fixtures\real-feed reads HARD 0; a copy of the
+# slice with one host literal of that pattern file put back into one path reads HARD 1. Without -HardPatternFile: SKIPPED BY
+# NAME (the pattern file is the operator's and is never tracked). No literal of the pattern file is printed.
+$t32 = 'B-2 (UI-2 S1, the fixture): the release HARD scan over tests\lam\fixtures\real-feed reads HARD 0; a copy of the slice with one host literal put back reads HARD 1'
+$u32Why = if (-not $HardPatternFile) { 'no -HardPatternFile: the operator''s HARD pattern file is never tracked, and this member reads the release gate''s own patterns' } elseif (-not (Test-Path -LiteralPath $HardPatternFile -PathType Leaf)) { "-HardPatternFile $HardPatternFile is not a file" } else { $null }
+if ((Want 'U-32') -and ($u32Why -or $pSliceWhy)) { Check -Id 'U-32' -Title $t32 -Ok $false -Skipped:([bool]$u32Why -and -not $pSliceWhy) -Detail "    $(if ($pSliceWhy) { 'RED: ' + $pSliceWhy } else { 'SKIPPED BY NAME: ' + $u32Why })" }
+elseif (Want 'U-32') { try {
+    $d = ''
+    $gate = Join-Path $repoRoot 'tools\lam\gate-host-data.ps1'
+    $scan = { param([string]$Dir, [string]$Tag)
+        $g = Invoke-W7 -File $gate -Argv @('-Root', $Dir, '-PatternFile', $HardPatternFile, '-FrameworkRepo', $repoRoot, '-Report', (Join-Path $pRoot "u32-$Tag.report.txt"))
+        $line = @($g.out | Where-Object { $_ -match '^gate-host-data: HARD \d+ ' }) | Select-Object -First 1
+        $n = if ($line -and ($line -match '^gate-host-data: HARD (\d+) ')) { [int]$Matches[1] } else { -1 }
+        return [pscustomobject]@{ code = $g.code; hard = $n; line = [string]$line }
+    }
+    $s0 = & $scan $pFix 'fixture'
+    $d += "    the scan over tests\lam\fixtures\real-feed: exit $($s0.code); $($s0.line) -> HARD 0: $($s0.code -eq 0 -and $s0.hard -eq 0)`n"
+    $lit = @([System.IO.File]::ReadAllLines($HardPatternFile) | Where-Object { $_.Trim() -and -not $_.TrimStart().StartsWith('#') }) | Select-Object -First 1
+    $pd = Join-Path $pRoot 'u32plant'
+    $done = $false
+    $null = New-Item -ItemType Directory -Path $pd -Force
+    $out32 = New-Object System.Collections.Generic.List[string]
+    foreach ($ln in ([System.IO.File]::ReadAllText($pSlice) -split "`n")) {
+        if ($ln -eq '') { continue }
+        if (-not $done -and $ln -match '"paths":\["C:\\\\') { $ln = $ln -replace '"paths":\["C:\\\\', ('"paths":["C:\\' + $lit.Trim() + '\\'); $done = $true }
+        [void]$out32.Add($ln)
+    }
+    Write-W7File (Join-Path $pd $pSliceName) (($out32 -join "`n") + "`n")
+    $s1 = & $scan $pd 'plant'
+    $d += "    a copy of the slice with the pattern file's first literal put back into one path (planted: $done): exit $($s1.code); $($s1.line) -> HARD 1: $($s1.hard -eq 1)`n"
+    Check -Id 'U-32' -Title $t32 -Ok ($s0.code -eq 0 -and $s0.hard -eq 0 -and $done -and $s1.hard -eq 1 -and $s1.code -eq 1) -Detail $d
+} catch { Write-W7Threw 'U-32' $_ } }
+
+# U-33 -- A-1 (register row 500): the 1.2.0 slice is the defect's record. Over it the stop rule (wp7-real-feed.py rule; A-2)
+# reads RED, BY DESIGN, in the defect's own shape: the session_stop at seq 413 precedes later lines of its session (and so do
+# the six stops after it), and the dispatch_finalized at seq 414 precedes later lines of its session. This member PASSES when
+# the record shows that shape; it is kept as the regression member once the GREEN rule holds on new feeds (U-34). The copy of
+# the slice cut before seq 413 carries no such shape and must fail it.
+$t33 = 'A-1 (row 500): the 1.2.0 slice carries the defect''s shape -- the stop rule reads RED over it, by design: the session_stop at seq 413 and the dispatch_finalized at seq 414 precede later lines of their session'
+if ((Want 'U-33') -and ($pNoPy -or $pSliceWhy)) { Check -Id 'U-33' -Title $t33 -Ok $false -Skipped:([bool]$pNoPy -and -not $pSliceWhy) -Detail "    $(if ($pSliceWhy) { 'RED: ' + $pSliceWhy } else { 'SKIPPED BY NAME: ' + $pNoPy })" }
+elseif (Want 'U-33') { try {
+    $d = ''
+    $judge33 = { param($o)
+        if ($null -eq $o) { return $false }
+        $v = @($o.violations)
+        $r1 = @($v | Where-Object { ([string]$_[0]).StartsWith('R1') } | ForEach-Object { [int]$_[1] } | Sort-Object -Unique)
+        $r2 = @($v | Where-Object { ([string]$_[0]).StartsWith('R2 dispatch_finalized before a later line') } | ForEach-Object { [int]$_[1] } | Sort-Object -Unique)
+        return [pscustomobject]@{ ok = ([string]$o.verdict -ceq 'RED') -and ($r1 -contains 413) -and ($r2 -contains 414); r1 = $r1; r2 = $r2; n = $v.Count; verdict = [string]$o.verdict }
+    }
+    $r = Invoke-W7Reader @('rule', $pSlice)
+    $j = & $judge33 $r.obj
+    $d += "    the stop rule over the slice: verdict $(if ($r.obj) { $j.verdict } else { '(no answer: ' + $r.tail + ')' }), $(if ($r.obj) { $j.n }) violation(s); R1 (a session_stop before a later line of its session) at stop seq $(@($j.r1) -join ', '); R2 (a dispatch_finalized before a later line of its session) at seq $(@($j.r2) -join ', ') -> the defect's shape, RED by design: $($j.ok)`n"
+    $cut = New-W7SliceCopy 'u33-cut.events.jsonl' { param($ln) if (($ln | ConvertFrom-Json).seq -lt 413) { $ln } else { $null } }
+    $rc = Invoke-W7Reader @('rule', $cut)
+    $jc = & $judge33 $rc.obj
+    $d += "    a copy cut before seq 413: verdict $(if ($rc.obj) { $jc.verdict } else { '(no answer)' }) -> the shape is absent, so the member fails on it: $(-not $jc.ok)`n"
+    Check -Id 'U-33' -Title $t33 -Ok ($j.ok -and -not $jc.ok -and ($null -ne $rc.obj)) -Detail $d
+} catch { Write-W7Threw 'U-33' $_ } }
+
+# U-34 -- A-2 (register row 500): the GREEN rule, over a feed: no session_stop for a session precedes a later line of that
+# session, and no dispatch_finalized precedes the session's session_stop or a later line of it. Read by the reader's own
+# rule (never the service's code). A feed in the cured shape the live harness gives (A-3: the parent's Agent call, the
+# subagent's calls stamped with the parent's id, its SubagentHandback, ONE subagent_stop, the parent's own session_stop,
+# then dispatch_finalized) reads GREEN; the same feed with the subagent's stop written as session_stop -- the shipped hook's
+# shape -- reads RED, as does the same feed with dispatch_finalized before the session_stop, and the 1.2.0 slice. The live
+# feeds of A-3 are read by the same rule at the seat's reading of record.
+$t34 = 'A-2 (row 500): the stop rule reads GREEN over a feed of the cured shape (one subagent_stop, the parent''s own session_stop, then dispatch_finalized) and RED over the shipped shape, a dispatch_finalized before its stop, and the 1.2.0 slice'
+if ((Want 'U-34') -and ($pNoPy -or $pSliceWhy)) { Check -Id 'U-34' -Title $t34 -Ok $false -Skipped:([bool]$pNoPy -and -not $pSliceWhy) -Detail "    $(if ($pSliceWhy) { 'RED: ' + $pSliceWhy } else { 'SKIPPED BY NAME: ' + $pNoPy })" }
+elseif (Want 'U-34') { try {
+    $d = ''
+    $tmpl = ([System.IO.File]::ReadAllText($pSlice) -split "`n")[0] | ConvertFrom-Json
+    $S34 = '00000000-0000-4000-8000-000000000034'; $A34 = 'a0000000000000034'; $D34 = "session-$S34"
+    $mk34 = { param([int]$Seq, [string]$Kind, $Payload) $o = [ordered]@{ schema_version = '1.2'; mission_id = $tmpl.mission_id; host_id = $tmpl.host_id; seq = $Seq
+              ts = ('2026-11-08T00:00:{0:00}.000Z' -f $Seq); kind = $Kind; payload = $Payload; source_path = $tmpl.source_path; sha256 = $tmpl.sha256; commit = $tmpl.commit }; ($o | ConvertTo-Json -Compress -Depth 8) }
+    $tc = { param([string]$Tool) [ordered]@{ tool = $Tool; exit_code = $null; paths = @(); session_id = $S34; dispatch_id = $D34 } }
+    $stopP = [ordered]@{ session_id = $S34; dispatch_id = $D34; manifest_state = 'FINALIZED'; entry_count = 3; evidence_state = 'FINALIZED' }
+    $finP = [ordered]@{ dispatch_id = $D34; manifest_state = 'FINALIZED'; partial = $false; capture_gaps_count = 0 }
+    $subP = [ordered]@{ agent_id = $A34; agent_type = 'general-purpose'; parent_session_id = $S34; dispatch_id = $D34 }
+    $cured = @((& $mk34 1 'session_start' ([ordered]@{ session_id = $S34; dispatch_id = $D34 })), (& $mk34 2 'tool_call' (& $tc 'Agent')), (& $mk34 3 'tool_call' (& $tc 'Read')),
+               (& $mk34 4 'tool_call' (& $tc 'SubagentHandback')), (& $mk34 5 'subagent_stop' $subP), (& $mk34 6 'tool_call' (& $tc 'Read')), (& $mk34 7 'session_stop' $stopP), (& $mk34 8 'dispatch_finalized' $finP))
+    $shipped = @($cured[0..3]) + @((& $mk34 5 'session_stop' $stopP)) + @($cured[5..7])
+    $early = @($cured[0..5]) + @((& $mk34 7 'dispatch_finalized' $finP), (& $mk34 8 'session_stop' $stopP))
+    $feeds = [ordered]@{ 'the cured shape' = @($cured, 'GREEN'); 'the shipped shape (the subagent''s stop as session_stop)' = @($shipped, 'RED')
+                         'dispatch_finalized before the session_stop' = @($early, 'RED') }
+    $ok34 = $true; $k = 0
+    foreach ($name in $feeds.Keys) {
+        $k++; $fp = Join-Path $pRoot "u34-$k.events.jsonl"; Write-W7File $fp ((@($feeds[$name][0]) -join "`n") + "`n")
+        $r = Invoke-W7Reader @('rule', $fp)
+        $got = if ($r.obj) { [string]$r.obj.verdict } else { '(no answer: ' + $r.tail + ')' }
+        $first = if ($r.obj -and @($r.obj.violations).Count) { ' -- first: ' + ($r.obj.violations[0] -join ' / ') } else { '' }
+        $d += "    $name : verdict $got (expect $($feeds[$name][1]))$first`n"
+        $ok34 = $ok34 -and ($got -ceq $feeds[$name][1])
+    }
+    $rs = Invoke-W7Reader @('rule', $pSlice)
+    $d += "    the 1.2.0 slice: verdict $(if ($rs.obj) { $rs.obj.verdict } else { '(no answer)' }) (expect RED)`n"
+    $ok34 = $ok34 -and $rs.obj -and ([string]$rs.obj.verdict -ceq 'RED')
+    # the composed lines are real lines: every one validates against the schema (subagent_stop included)
+    $bad34 = @(); foreach ($ln in $cured) { $why = Test-W7Line ([pscustomobject]@{ raw = $ln; obj = ($ln | ConvertFrom-Json) }); if ($why) { $bad34 += $why } }
+    $d += "    the cured-shape feed's lines against the schema: $($cured.Count), failing $($bad34.Count)$(if ($bad34.Count) { ' -- ' + ($bad34 | Select-Object -First 2) -join '; ' })`n"
+    # the schema KNOWS the kind (SS14's amendment): a subagent_stop with no parent_session_id, or with neither agent_id nor
+    # subagent_ordinal, is rejected -- an unknown kind would be accepted by any payload
+    $noPar = & $mk34 5 'subagent_stop' ([ordered]@{ agent_id = $A34; dispatch_id = $D34 })
+    $noId = & $mk34 5 'subagent_stop' ([ordered]@{ parent_session_id = $S34; dispatch_id = $D34 })
+    $rej = @(@($noPar, $noId) | Where-Object { Test-W7Line ([pscustomobject]@{ raw = $_; obj = ($_ | ConvertFrom-Json) }) }).Count
+    $d += "    planted subagent_stop lines with no parent_session_id / with neither agent_id nor subagent_ordinal: rejected by the schema $rej of 2 (expect 2: the schema defines the kind)`n"
+    Check -Id 'U-34' -Title $t34 -Ok ($ok34 -and $bad34.Count -eq 0 -and $rej -eq 2) -Detail $d
+} catch { Write-W7Threw 'U-34' $_ } }
+
+# U-35 -- A-4 (register row 500): the dashboard. Over the cured shape (the reader's --feed :cured:) the Project screen shows the
+# orchestrator RUNNING until its own stop, with one subagent finished; after its own stop it is not running and nothing is
+# marked. Over the 1.2.0 slice the view marks the defect -- "Stopped early", the session_stop at seq 413 contradicted by later
+# lines of the session -- rather than showing it stopped. The planted-RED: the cured shape with a hand-composed session_stop
+# before its last line, which the view must mark. Read through the API (the reader) and the browser (ui\tests\u35.spec.ts).
+$t35 = 'A-4 (row 500): the Project screen shows the orchestrator running until its own stop with one subagent finished; over the 1.2.0 slice it marks the session Stopped early at seq 413; a session_stop planted before the last line is marked'
+if ((Want 'U-35') -and ($pNoPy -or $pSliceWhy)) { Check -Id 'U-35' -Title $t35 -Ok $false -Skipped:([bool]$pNoPy -and -not $pSliceWhy) -Detail "    $(if ($pSliceWhy) { 'RED: ' + $pSliceWhy } else { 'SKIPPED BY NAME: ' + $pNoPy })" }
+elseif (Want 'U-35') { try {
+    $d = ''
+    $S35 = '00000000-0000-4000-8000-000000000035'
+    $view = { param([string]$Tag, [string[]]$Argv)
+        $r = Invoke-W7Reader (@('api', (Join-Path $pRoot $Tag)) + $Argv)
+        if (-not $r.obj -or -not $r.obj.mission) { return [pscustomobject]@{ ok = $false; text = '(no answer: ' + $r.tail + ')' } }
+        $m = $r.obj.mission
+        $row = @($m.live.sessions | Where-Object { [string]$_.session_id -ceq $S35 })
+        $se = $m.header.stopped_early
+        $sf = if ($m.header.subagents_finished -and (Get-W7Has $m.header.subagents_finished $S35)) { [int]$m.header.subagents_finished.$S35 } else { 0 }
+        return [pscustomobject]@{ ok = $true; running = ($row.Count -eq 1); subs = $(if ($row.Count) { $sf } else { $null })
+                                  early = $(if ($se) { [int]$se.count } else { $null }); earlySeqs = @($(if ($se) { @($se.sessions | ForEach-Object { [int]$_.stop_seq }) }))
+                                  text = "running $($row.Count -eq 1)$(if ($row.Count) { ', subagents finished ' + $sf }); stopped early $(if ($se) { $se.count } else { '(no field)' })$(if ($se -and $se.count) { ' at stop seq ' + (@($se.sessions | ForEach-Object { $_.stop_seq }) -join ', ') })" }
+    }
+    $v1 = & $view 'u35a' @('--feed', ':cured:', '--until-seq', '6')
+    $ok1 = $v1.ok -and $v1.running -and ($v1.subs -eq 1) -and ($v1.early -eq 0)
+    $d += "    the cured shape before the parent's own stop (seq 1-6): $($v1.text) (expect running, 1 subagent finished, 0 marked) -> $ok1`n"
+    $v2 = & $view 'u35b' @('--feed', ':cured:')
+    $ok2 = $v2.ok -and (-not $v2.running) -and ($v2.early -eq 0)
+    $d += "    the cured shape whole (its own session_stop at seq 7, then dispatch_finalized): $($v2.text) (expect not running, 0 marked) -> $ok2`n"
+    $v3 = & $view 'u35c' @('--feed', $pSlice)
+    $ok3 = $v3.ok -and ($v3.early -eq 1) -and (@($v3.earlySeqs) -contains 413)
+    $d += "    the 1.2.0 slice: $($v3.text) (expect 1 marked, at stop seq 413) -> $ok3`n"
+    $v4 = & $view 'u35d' @('--feed', ':cured:', '--plant-early-stop')
+    $ok4 = $v4.ok -and ($v4.early -eq 1)
+    $d += "    planted: the cured shape with a session_stop composed before its last line: $($v4.text) (expect 1 marked) -> $ok4`n"
+    $sp = Get-W7PSpec 35
+    if ($pWhy) { $d += "    the browser half SKIPPED BY NAME: $pWhy`n"; Check -Id 'U-35' -Title $t35 -Ok $false -Skipped -Detail $d }
+    else { $d += $sp.detail; Check -Id 'U-35' -Title $t35 -Ok ($ok1 -and $ok2 -and $ok3 -and $ok4 -and $sp.ok) -Detail $d }
+} catch { Write-W7Threw 'U-35' $_ } }
+
+# U-36 -- A-6 (UI-2 S1, register row 526): the host registry row's framework_version against the project's lock. For the
+# project under test (this checkout, its home $env:VANGUARD_HOME else ~/.vanguard, as the hooks read it): the row whose
+# checkout_path is this checkout names the lock's version -- PASS; another -- FAIL; no row -- SKIPPED BY NAME. A checkout with
+# no framework.lock is not an installed project (the framework repository): SKIPPED BY NAME. The comparator is held to a
+# fixture trio in the run's own folder first -- registry '1.1.0' / lock '1.2.0' (the planted-RED) must read FAIL, an equal
+# pair PASS, no row SKIP -- and a comparator that misreads any of them fails the member wherever it runs.
+function Get-W7RegistryLockVerdict { param([string]$Project, [string]$VHome)
+    $lp = Join-Path $Project 'framework.lock'
+    if (-not (Test-Path -LiteralPath $lp -PathType Leaf)) { return [pscustomobject]@{ verdict = 'NOLOCK'; lock = $null; row = $null } }
+    $lv = $null; try { $lv = [string](([System.IO.File]::ReadAllLines($lp)[0]) | ConvertFrom-Json).version } catch { $lv = $null }
+    $full = [System.IO.Path]::GetFullPath($Project).TrimEnd('\', '/')
+    $rows = @(Get-W7Rows -VHome $VHome | Where-Object { [string]::Equals((([string]$_.checkout_path) -replace "''", "'").TrimEnd('\', '/'), $full, [System.StringComparison]::OrdinalIgnoreCase) })
+    if ($rows.Count -eq 0) { return [pscustomobject]@{ verdict = 'SKIP'; lock = $lv; row = $null } }
+    $rv = if (Get-W7Has $rows[0] 'framework_version') { [string]$rows[0].framework_version } else { $null }
+    return [pscustomobject]@{ verdict = $(if ($lv -and ($rv -ceq $lv) -and $rows.Count -eq 1) { 'PASS' } else { 'FAIL' }); lock = $lv; row = $rv; rows = $rows.Count }
+}
+$t36 = 'A-6 (row 526): the host registry row''s framework_version equals the project''s framework.lock version (unequal FAIL, equal PASS, no row a named SKIP); the comparator reads a registry 1.1.0 / lock 1.2.0 pair FAIL'
+if (Want 'U-36') { try {
+    $d = ''
+    $mkPair = { param([string]$Name, [string]$LockV, [string]$RowV)
+        $pp = Join-Path $pRoot "u36-$Name"; $hh = Join-Path $pRoot "u36-$Name-home"
+        Write-W7File (Join-Path $pp 'framework.lock') ('{"lock":"vanguard-collective","lock_format":2,"version":"' + $LockV + '"}' + "`n")
+        $rowText = if ($RowV) { "- host_id: 00000000-0000-4000-8000-000000000036`n  checkout_path: '" + ([System.IO.Path]::GetFullPath($pp) -replace "'", "''") + "'`n  mission_id: 'm-u36'`n  registered_at: '2026-11-08T00:00:00.000Z'`n  framework_version: '$RowV'`n" } else { '' }
+        Write-W7File (Join-Path $hh 'projects.yaml') ("# a WP-7 U-36 fixture registry`n" + $rowText)
+        return (Get-W7RegistryLockVerdict -Project $pp -VHome $hh) }
+    $pr = & $mkPair 'pair' '1.2.0' '1.1.0'; $eq = & $mkPair 'equal' '1.2.0' '1.2.0'; $nr = & $mkPair 'norow' '1.2.0' $null
+    $selfOk = ($pr.verdict -ceq 'FAIL') -and ($eq.verdict -ceq 'PASS') -and ($nr.verdict -ceq 'SKIP')
+    $d += "    the comparator over its fixtures: registry '1.1.0' / lock '1.2.0' -> $($pr.verdict) (expect FAIL, the planted-RED); equal '1.2.0' -> $($eq.verdict) (expect PASS); no row -> $($nr.verdict) (expect SKIP) -> $selfOk`n"
+    $vh36 = if ($env:VANGUARD_HOME) { $env:VANGUARD_HOME } else { Join-Path $env:USERPROFILE '.vanguard' }
+    $me = Get-W7RegistryLockVerdict -Project $repoRoot -VHome $vh36
+    $d += "    the project under test ($repoRoot, home $vh36): lock version $(if ($me.lock) { "'" + $me.lock + "'" } else { '(no framework.lock)' }); its registry row's framework_version $(if ($me.row) { "'" + $me.row + "'" } elseif ($me.verdict -ceq 'SKIP') { '(no row)' } else { '-' }) -> $($me.verdict)`n"
+    if (-not $selfOk) { Check -Id 'U-36' -Title $t36 -Ok $false -Detail ($d + "    RED: the comparator misreads its own fixtures`n") }
+    elseif ($me.verdict -ceq 'NOLOCK') { Check -Id 'U-36' -Title $t36 -Ok $false -Skipped -Detail ($d + "    SKIPPED BY NAME: this checkout has no framework.lock -- it is not an installed project (the framework repository); the member reads an installed project`n") }
+    elseif ($me.verdict -ceq 'SKIP') { Check -Id 'U-36' -Title $t36 -Ok $false -Skipped -Detail ($d + "    SKIPPED BY NAME: the home has no registry row for this checkout (registration is mission init's or mission.ps1 register's act)`n") }
+    else { Check -Id 'U-36' -Title $t36 -Ok ($me.verdict -ceq 'PASS') -Detail $d }
+} catch { Write-W7Threw 'U-36' $_ } }
+
+# U-37 -- A-10 (UI-2 S1, register row 512; ruled at REC-P: one line on the console's face): the gate console prints, at
+# preview, one line stating that created_at is composed at preview and that the feed's gate_minted ts is the write time,
+# which may trail it. Read from the console's own rendering: tools\lam\lam-console.ps1 dot-sourced in a child (library
+# mode) and its Show-LamConsolePreview run over a one-write compose made here; the planted-RED is a copy of the console in
+# the run's own folder with that line taken out, which must fail the same reading.
+$t37 = 'A-10 (row 512): the gate console''s preview prints one line stating created_at is composed at preview and the feed''s gate_minted ts is the write time, which may trail it; a console copy without the line fails'
+if (Want 'U-37') { try {
+    $d = ''
+    $m37 = Join-Path $pRoot 'u37m'; New-Item -ItemType Directory -Path (Join-Path $m37 '.mission\gates') -Force | Out-Null
+    $probe = Join-Path $pRoot 'u37-probe.ps1'
+    Write-W7File $probe (@'
+param([string]$Lib, [string]$Root)
+$ErrorActionPreference = 'Stop'
+. $Lib
+$b = [System.Text.Encoding]::UTF8.GetBytes("kind: push`r`ncreated_at: 2026-11-08T00:00:00.000Z`r`n")
+$w = [pscustomobject]@{ name = 'push-u37.yaml'; length = $b.Length; bytes = $b }
+$c = [pscustomobject]@{ writes = @($w); bindsSha = ''; bindsPath = ''; actDigest = (Get-LamConsoleActDigest -Writes @($w)) }
+$r = Show-LamConsolePreview -Compose $c -MissionRoot $Root
+"PREVIEW-OK $($r.ok)"
+foreach ($l in $r.lines) { "LINE $l" }
+'@)
+    $read37 = { param([string]$Lib)
+        $r = Invoke-W7 -File $probe -Argv @('-Lib', $Lib, '-Root', $m37)
+        $ls = @($r.out | Where-Object { $_.StartsWith('LINE ') } | ForEach-Object { $_.Substring(5) })
+        $face = @($ls | Where-Object { $_.Contains('created_at') -and $_.Contains('composed at preview') -and $_.Contains('gate_minted') -and $_.Contains('may trail it') -and -not $_.StartsWith('  | ') })
+        return [pscustomobject]@{ ok = (@($r.out) -contains 'PREVIEW-OK True'); lines = $ls.Count; face = $face; code = $r.code }
+    }
+    $lib = Join-Path $repoRoot 'tools\lam\lam-console.ps1'
+    $g = & $read37 $lib
+    $d += "    the console's preview over a one-write compose (exit $($g.code), preview ok $($g.ok)): $($g.lines) line(s); lines on its face stating created_at is composed at preview and gate_minted's ts may trail it: $($g.face.Count) (expect 1)$(if ($g.face.Count) { ' -- ' + $g.face[0].Trim() })`n"
+    $plantLib = Join-Path $pRoot 'u37-plant\lam-console.ps1'
+    $src37 = [System.IO.File]::ReadAllText($lib)
+    $cut = [regex]::Replace($src37, "(?m)^.*'created_at \(the artifact''s, below\)'.*\r?\n", '')
+    Write-W7File $plantLib $cut
+    $p = & $read37 $plantLib
+    $d += "    planted: a copy of the console with that line taken out ($(if ($cut.Length -lt $src37.Length) { 'cut' } else { 'NOT cut' })): the face line $($p.face.Count) time(s) (expect 0, the member fails on it) -> $($p.face.Count -eq 0)`n"
+    Check -Id 'U-37' -Title $t37 -Ok ($g.ok -and $g.face.Count -eq 1 -and $p.ok -and $p.face.Count -eq 0 -and $cut.Length -lt $src37.Length) -Detail $d
+} catch { Write-W7Threw 'U-37' $_ } }
+
+# U-38 -- register row 525 (UI-2 S1c; 505 (i)): THE TAIL WINDOW, the service's one stated limit on reading a feed. Read
+# from the config (tools\ui\settings.py's DEFAULT_TAIL_WINDOW_BYTES, the default of Settings.tail_window_bytes, which the
+# ingest uses), stated in the user guide's section 12 with that value and its setting, and shown on the Fleet stats face
+# (the API's settings.tail_window_bytes and the [data-tail-window] line, through ui\tests\u38.spec.ts; skipped by name as
+# the other browser halves are). Planted, in this run's folder: the guide's statement cut -- the docs reading fails.
+$t38 = 'row 525 (505 (i)): the tail window is read from the config, stated in the user guide with its value and setting, and shown on the Fleet stats face'
+# B-13 (UI-2 S2; validator G-3; contract amendment S2-AM1): WHERE U-38 is read. The user guide is class AUTHORED -- it ships
+# in the ZIP and is never installed into a project -- so an installed project (framework.lock present) without the guide
+# is the one place the member skips by name. Where no framework.lock exists (the framework repository) the member always
+# reads: a guide deleted or renamed there FAILS, never skips. Before S2-AM1 the skip was keyed on the guide alone, so a
+# lockless checkout with the guide gone read SKIP and WP-7 exited 0 (G-3). The predicate is held to a fixture trio in the
+# run's own folder first -- lock without guide SKIP; no lock with guide READ; no lock without guide READ (the guide-keyed
+# test reads this one SKIP: the planted-RED) -- and a predicate that misreads any of them fails the member wherever it runs.
+function Get-W7U38Place { param([string]$Root)
+    $hasLock = Test-Path -LiteralPath (Join-Path $Root 'framework.lock') -PathType Leaf
+    $hasGuide = Test-Path -LiteralPath (Join-Path $Root 'docs\framework\vanguard-collective-user-guide.md') -PathType Leaf
+    if ($hasLock -and -not $hasGuide) { return 'SKIP' }
+    return 'READ'
+}
+$guide38 = Join-Path $repoRoot 'docs\framework\vanguard-collective-user-guide.md'
+$place38 = $null; $self38 = $null
+if (Want 'U-38') { try {
+    $mk38 = { param([string]$Name, [bool]$Lock, [bool]$Guide)
+        $pp = Join-Path $pRoot "u38-$Name"; New-Item -ItemType Directory -Path $pp -Force | Out-Null
+        if ($Lock) { Write-W7File (Join-Path $pp 'framework.lock') ('{"lock":"vanguard-collective","lock_format":2,"version":"1.2.0"}' + "`n") }
+        if ($Guide) { Write-W7File (Join-Path $pp 'docs\framework\vanguard-collective-user-guide.md') "# a WP-7 U-38 fixture guide`n" }
+        return (Get-W7U38Place -Root $pp) }
+    $fi = & $mk38 'installed' $true $false; $fr = & $mk38 'repo' $false $true; $fg = & $mk38 'repo-noguide' $false $false
+    # planted, in the member itself: the guide-keyed test of 8d97965 over the same third fixture must misread it (SKIP), so
+    # the trio tells the two forms apart
+    $plant38 = { param([string]$Root) if (-not (Test-Path -LiteralPath (Join-Path $Root 'docs\framework\vanguard-collective-user-guide.md') -PathType Leaf)) { 'SKIP' } else { 'READ' } }
+    $fgOld = & $plant38 (Join-Path $pRoot 'u38-repo-noguide')
+    $selfOk38 = ($fi -ceq 'SKIP') -and ($fr -ceq 'READ') -and ($fg -ceq 'READ') -and ($fgOld -ceq 'SKIP')
+    $self38 = "    where it is read (B-13, S2-AM1) -- the predicate over its fixtures: lock without guide -> $fi (expect SKIP); no lock with guide -> $fr (expect READ); no lock without guide -> $fg (expect READ); PLANTED, the guide-keyed test over that third fixture -> $fgOld (expect SKIP: the trio bites) -> $selfOk38`n"
+    $place38 = Get-W7U38Place -Root $repoRoot
+    $self38 += "    this checkout: framework.lock $(if (Test-Path -LiteralPath (Join-Path $repoRoot 'framework.lock') -PathType Leaf) { 'present' } else { 'absent' }), the user guide $(if (Test-Path -LiteralPath $guide38 -PathType Leaf) { 'present' } else { 'absent' }) -> $place38`n"
+    if (-not $selfOk38) { Check -Id 'U-38' -Title $t38 -Ok $false -Detail ($self38 + "    RED: the predicate misreads its own fixtures`n"); $place38 = 'DONE' }
+} catch { Write-W7Threw 'U-38' $_; $place38 = 'DONE' } }
+if ((Want 'U-38') -and $place38 -ceq 'SKIP') {
+    # an installed project: the guide is not installed (validator round 1, F-1), so the statement cannot be read here -- a
+    # skip, never a pass, as the V- and L-members skip where their subject is absent
+    Check -Id 'U-38' -Title $t38 -Ok $false -Skipped -Detail ($self38 + "    SKIPPED BY NAME: this checkout has framework.lock and no docs\framework\vanguard-collective-user-guide.md -- an installed project (the user guide ships in the ZIP and is not installed; it is read in the framework repository)")
+}
+elseif ((Want 'U-38') -and $place38 -ceq 'READ' -and -not (Test-Path -LiteralPath $guide38 -PathType Leaf)) {
+    # no framework.lock: the framework repository, where the guide is the member's subject -- its absence is a FAIL (G-3)
+    Check -Id 'U-38' -Title $t38 -Ok $false -Detail ($self38 + "    FAIL: docs\framework\vanguard-collective-user-guide.md is missing in a checkout with no framework.lock (the framework repository); the tail window's statement cannot be read`n")
+}
+elseif ((Want 'U-38') -and $place38 -ceq 'READ') { try {
+    $setT =[System.IO.File]::ReadAllText((Join-Path $repoRoot 'tools\ui\settings.py')); $ingT = [System.IO.File]::ReadAllText((Join-Path $repoRoot 'tools\ui\ingest.py'))
+    $m38 = [regex]::Match($setT, '(?m)^DEFAULT_TAIL_WINDOW_BYTES = (\d+)\s*$')
+    $n38 = if ($m38.Success) { [int]$m38.Groups[1].Value } else { $null }
+    $cfgOk = ($null -ne $n38) -and ($setT -match '(?m)^\s+tail_window_bytes: int = DEFAULT_TAIL_WINDOW_BYTES\s*$') -and $ingT.Contains('getattr(self.settings, "tail_window_bytes", TAIL_BYTES)') -and ($ingT -match '(?m)^TAIL_BYTES = cfg\.DEFAULT_TAIL_WINDOW_BYTES\s*$')
+    $docOf = { param([string]$T) $s = [regex]::Match($T, '(?ms)^## 12\. .*?(?=^## 13\. )'); $x = if ($s.Success) { $s.Value -replace '\s+', ' ' } else { '' }
+        return ($x.Contains('**The tail window -- a stated limit.**') -and ($null -ne $n38) -and $x.Contains("the last $n38 bytes") -and $x.Contains('--tail-window-bytes') -and $x.Contains('Fleet stats')) }
+    $guide = [System.IO.File]::ReadAllText((Join-Path $repoRoot 'docs\framework\vanguard-collective-user-guide.md'))
+    $docOk = & $docOf $guide
+    $plant = $guide -replace '\*\*The tail window -- a stated limit\.\*\*', '**(cut)**'
+    $plantOk = & $docOf $plant
+    $d = $self38 + "    config: tools\ui\settings.py DEFAULT_TAIL_WINDOW_BYTES = $n38; Settings.tail_window_bytes defaults to it and the ingest reads it: $cfgOk`n"
+    $d += "    the user guide section 12 states the tail window, the last $n38 bytes, --tail-window-bytes and the Fleet stats face: $docOk`n"
+    $d += "    PLANTED (a copy in memory, the statement's heading cut): the docs reading reads $plantOk (expect False)`n"
+    if ($pWhy) { $d += "    the face: SKIPPED BY NAME -- $pWhy`n"; $faceOk = $null }
+    else { $f38 = Get-W7PSpec 38; $d += $f38.detail; $faceOk = $f38.ok }
+    $ok38 = $cfgOk -and $docOk -and (-not $plantOk)
+    if ($null -eq $faceOk) { Check -Id 'U-38' -Title $t38 -Ok $false -Skipped:$ok38 -Detail $d }
+    else { Check -Id 'U-38' -Title $t38 -Ok ($ok38 -and $faceOk) -Detail $d }
+} catch { Write-W7Threw 'U-38' $_ } }
+
+# =================================================================================================
+# UI-2 S2, GROUP B (the S2 contract B-1..B-11; register rows 501, 498): U-39..U-49. The API halves are
+# tests\lam\wp7-group-b.py's (each figure derived there from the fixture, the service read through wp7-real-feed.py, each
+# planted-RED in the run's own folder); the browser halves ui\tests\uNN.spec.ts, each with a planted face (wp7-group-b.py
+# plant-face: a scratch copy of ui\src with one literal broken, built and served) that must fail its spec.
+# =================================================================================================
+function Invoke-W7Group { param([string]$Member, [string[]]$Extra = @())
+    $argv = @('-I', (Join-Path $repoRoot 'tests\lam\wp7-group-b.py')) + $Extra
+    if ($gSmokeRoot) { $argv += @('--smoke-root', $gSmokeRoot) }
+    if ($gSmokeFeed) { $argv += @('--smoke-feed', $gSmokeFeed) }
+    $r = Invoke-W7Native -Exe $pPy -Argv $argv -Env @{ PYTHONDONTWRITEBYTECODE = '1'; VANGUARD_HOME = $null; VANGUARD_UI_DIST = $null }
+    $o = $null; try { $o = (@($r.out) -join "`n") | ConvertFrom-Json } catch { $o = $null }
+    if (-not $o) { return [pscustomobject]@{ ok = $false; detail = "    (no answer, exit $($r.code): " + ((@($r.out) | Select-Object -Last 3) -join ' | ') + ")`n" } }
+    return [pscustomobject]@{ ok = [bool]$o.ok; detail = ((@($o.detail) | ForEach-Object { "    $_" }) -join "`n") + "`n" }
+}
+$gTitles = [ordered]@{
+    'U-39' = @('B-1 (row 501): each feature carries its contract assertions'' roll-up (total, confirmed, refuted, unjudged, latest round) as the smoke mission''s validator results give it; a feed with no contract reads 0 and no verdict; one feature_id moved moves it by one', $null)
+    'U-40' = @('B-2 (row 501): /api/missions/{id} features[] keeps its 1.2.0 fields and adds rollup, each assertion its verdict and round, as derived; a verdict mapping inverted in a scratch copy fails it', $null)
+    'U-41' = @('B-3 (row 501): the Project view shows each feature''s verdict chip and, expanded, its assertions'' latest verdicts and rounds; the refuted one is marked; a broken chip mapping fails it', 41)
+    'U-42' = @('B-4: the validator rounds per mission and per dispatch -- round 1 4 confirmed / 1 refuted (A-4), round 2 5 / 0 over the smoke mission; attempt 2''s A-4 flipped reads 4 / 1', $null)
+    'U-43' = @('B-5: Stats shows the per-mission validator rounds strip with the refuted ids on expand, the Project view the latest round; a broken strip fails it', 43)
+    'U-44' = @('B-6: the HALT card''s open, answered, mean / median time to resolve and oldest open over three composed HALTs; the smoke mission reads 0 / 0 / no data; an answered stamp moved an hour moves the mean by the derived amount', $null)
+    'U-45' = @('B-7: the HALT card on Stats reads the API''s figures, no data where nothing is measured; a broken card fails it', 45)
+    'U-46' = @('B-8: elapsed per milestone from the first-seen rule -- M-1 over the smoke mission''s history, as git dates it, with its dispatch count; a cut feed reads it running; a closing stamp edited moves it', $null)
+    'U-47' = @('B-9: the milestone list carries elapsed and the dispatch count, Stats the elapsed strip; a broken strip fails it', 47)
+    'U-48' = @('B-10 (row 498): the verify card lists each divergence (path, kind, sha8s) of a three-kind record and reads 0 over a clean one; one kind dropped from the mapping reads 2', 48)
+    'U-49' = @('B-11: the per-mission Stats face reads every card; a feed with no session, verify, dispatch or round line reads no data on them; a broken card selector fails it', 49)
+}
+$gApi = @{ 'U-39' = 'u39'; 'U-40' = 'u40'; 'U-42' = 'u42'; 'U-44' = 'u44'; 'U-46' = 'u46'; 'U-48' = 'u48'; 'U-49' = 'u49' }
+foreach ($gId in $gTitles.Keys) {
+    if (-not (Want $gId)) { continue }
+    $gT = $gTitles[$gId][0]; $gSpec = $gTitles[$gId][1]
+    if ($pNoPy) { Check -Id $gId -Title $gT -Ok $false -Skipped -Detail "    SKIPPED BY NAME: $pNoPy"; continue }
+    try {
+        $d = ''; $ok = $true
+        if ($gWhy) { $d += "    RED: $gWhy`n"; $ok = $false }
+        elseif ($gApi.ContainsKey($gId)) { $a = Invoke-W7Group -Member $gId -Extra @($gApi[$gId], (Join-Path $pRoot ('g-' + $gApi[$gId]))); $d += $a.detail; $ok = $a.ok }
+        $skip = $false
+        if ($gSpec) {
+            if ($pWhy) { $d += "    the browser half SKIPPED BY NAME: $pWhy`n"; $skip = $true }
+            else {
+                $sp = Get-W7PSpec $gSpec; $d += $sp.detail; $ok = $ok -and $sp.ok
+                $pf = Invoke-W7Group -Member $gId -Extra @('plant-face', ('u{0:00}' -f $gSpec), (Join-Path $pRoot ('pf-u{0:00}' -f $gSpec)))
+                $d += $pf.detail; $ok = $ok -and $pf.ok
+            }
+        }
+        if ($skip -and -not $gApi.ContainsKey($gId)) { Check -Id $gId -Title $gT -Ok $false -Skipped -Detail $d }
+        elseif ($skip) { Check -Id $gId -Title $gT -Ok $false -Skipped:$ok -Detail $d }
+        else { Check -Id $gId -Title $gT -Ok $ok -Detail $d }
+    } catch { Write-W7Threw $gId $_ }
+}
 
 } catch { Write-W7TopThrew 'region 2 of 4, the P members' $_ }
 finally { if ($pAny -and -not $KeepFixture) { $script:pRootToRemove = $pRoot } }
@@ -1570,7 +2050,7 @@ if (Want 'U-2') { try {
 } catch { Write-W7Threw 'U-2' $_ } }
 
 # =================================================================================================
-# U-3 -- session lifecycle: session_start, session_stop + dispatch_finalized, compact
+# U-3 -- session lifecycle: session_start, dispatch_finalized at Stop, session_stop at SessionEnd (UI-2 S2 B-14), compact
 # =================================================================================================
 if (Want 'U-3') { try {
     $sess = 'w7u3-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
@@ -1588,10 +2068,18 @@ if (Want 'U-3') { try {
     $man = Join-Path $S ".mission-runtime\evidence\$did\manifest.json"
     $manEc = -1
     if (Test-Path -LiteralPath $man) { try { $manEc = [int](([System.IO.File]::ReadAllText($man) | ConvertFrom-Json).entry_count) } catch { $manEc = -2 } }
-    $stopOk = ($n2.Count -eq 2) -and ($n2[0].obj.kind -eq 'session_stop') -and ($n2[1].obj.kind -eq 'dispatch_finalized') -and
-              ([int]$n2[0].obj.payload.entry_count -eq $manEc) -and ($n2[0].obj.payload.manifest_state -eq 'FINALIZED') -and ($n2[1].obj.payload.dispatch_id -eq $did)
-    $d += "    Stop (exit $($r2.code)): kinds $(@($n2 | ForEach-Object { $_.obj.kind }) -join ', ') (expect session_stop, dispatch_finalized)`n"
-    if ($n2.Count -ge 1) { $d += "      session_stop manifest_state=$($n2[0].obj.payload.manifest_state) entry_count=$($n2[0].obj.payload.entry_count); manifest on disk entry_count=$manEc -> $stopOk`n" }
+    # UI-2 S2 B-14 (register row 528): Stop is a TURN's end -- the seal and dispatch_finalized, never session_stop; the
+    # session's end is SessionEnd's, which says session_stop with the manifest as it is on disk
+    $r2e = Invoke-W7Hook -Hook 'evidence-session-end.ps1' -Payload @{ session_id = $sess; hook_event_name = 'SessionEnd'; reason = 'other' } -Root $S -Dispatch $did -VHome $H
+    $a2e = Get-W7Feed -Root $S
+    $n2e = @($a2e | Select-Object -Skip $a2.Count | Where-Object { $_.obj -and @('session_stop', 'dispatch_finalized') -contains $_.obj.kind })
+    $stopOk = ($n2.Count -eq 1) -and ($n2[0].obj.kind -eq 'dispatch_finalized') -and ($n2[0].obj.payload.dispatch_id -eq $did) -and
+              ($n2e.Count -eq 1) -and ($n2e[0].obj.kind -eq 'session_stop') -and ([string]$n2e[0].obj.payload.session_id -ceq $sess) -and
+              ([int]$n2e[0].obj.payload.entry_count -eq $manEc) -and ($n2e[0].obj.payload.manifest_state -eq 'FINALIZED')
+    $d += "    Stop (exit $($r2.code)): kinds $(@($n2 | ForEach-Object { $_.obj.kind }) -join ', ') (expect dispatch_finalized only: a turn's end, B-14)`n"
+    $d += "    SessionEnd (exit $($r2e.code)): kinds $(@($n2e | ForEach-Object { $_.obj.kind }) -join ', ') (expect session_stop)`n"
+    if ($n2e.Count -ge 1) { $d += "      session_stop manifest_state=$($n2e[0].obj.payload.manifest_state) entry_count=$($n2e[0].obj.payload.entry_count); manifest on disk entry_count=$manEc -> $stopOk`n" }
+    $n2 = @($n2) + @($n2e); $a2 = $a2e
     # PreCompact
     $tr = Join-Path $T 'tr.jsonl'
     Write-W7File $tr ('{"type":"user","message":"w7 transcript ' + $sess + '"}' + "`n")
@@ -1613,7 +2101,7 @@ if (Want 'U-3') { try {
     $procsC = @()
     try {
         foreach ($ci in 1..4) {
-            $procsC += Start-Process -FilePath $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $hooksDir 'evidence-post-tool-use.ps1') + '"')) `
+            $procsC += Start-Process -FilePath $psExe -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $hooksDir 'evidence-post-tool-use.ps1') + '"')) -join ' ') `
                                      -RedirectStandardInput $payC -RedirectStandardOutput (Join-Path $T "u3c-$ci.out") -PassThru -WindowStyle Hidden
         }
     } finally { $env:CLAUDE_PROJECT_DIR = $savedC.C; $env:MISSION_DISPATCH_ID = $savedC.M; $env:VANGUARD_HOME = $savedC.V }
@@ -1623,7 +2111,7 @@ if (Want 'U-3') { try {
     $tcC = @($aC | Where-Object { $_.obj -and $_.obj.kind -eq 'tool_call' -and $_.obj.payload.session_id -eq $sessC }).Count
     $concOk = ($ssC -eq 1) -and ($tcC -eq 4)
     $d += "    four concurrent first calls of one session: session_start $ssC (expect 1), tool_call $tcC (expect 4) -> $concOk`n"
-    Check -Id 'U-3' -Title 'session lifecycle: session_start before the first tool_call; Stop adds session_stop (manifest state and count as on disk) then dispatch_finalized; PreCompact adds compact with the transcript hash' `
+    Check -Id 'U-3' -Title 'session lifecycle: session_start before the first tool_call; Stop adds dispatch_finalized and no session_stop, SessionEnd adds session_stop (manifest state and count as on disk) (B-14); PreCompact adds compact with the transcript hash' `
           -Ok ($startOk -and $stopOk -and $cOk -and $concOk -and $vbad.Count -eq 0 -and $r1.code -eq 0 -and $r2.code -eq 0 -and $r3.code -eq 0) -Detail $d
 } catch { Write-W7Threw 'U-3' $_ } }
 
@@ -1726,7 +2214,7 @@ $null = Write-MissionGateEvent -Root $Root -Kind 'gate_expired' -GatePath $Gate 
     $procsE = @()
     try {
         foreach ($ei in 1..4) {
-            $procsE += Start-Process -FilePath $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$expApp`"", '-Root', "`"$S`"", '-Lib', "`"$sLib`"", '-Gate', "`"$gExc`"", '-Go', "`"$goE`"") -PassThru -WindowStyle Hidden
+            $procsE += Start-Process -FilePath $psExe -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$expApp`"", '-Root', "`"$S`"", '-Lib', "`"$sLib`"", '-Gate', "`"$gExc`"", '-Go', "`"$goE`"") -join ' ') -PassThru -WindowStyle Hidden
         }
     } finally { $env:VANGUARD_HOME = $savedE }
     Start-Sleep -Seconds 5
@@ -1986,7 +2474,7 @@ Invoke-MissionTelemetry -Root $Root -Snapshot -Verb 'w7-concurrent'
     $procsS = @()
     try {
         foreach ($si in 1..3) {
-            $procsS += Start-Process -FilePath $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$snapApp`"", '-Root', "`"$S`"", '-Tm', ('"' + (Join-Path $S 'tools\lam\mission-telemetry.ps1') + '"'), '-Go', "`"$goS`"") -PassThru -WindowStyle Hidden
+            $procsS += Start-Process -FilePath $psExe -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$snapApp`"", '-Root', "`"$S`"", '-Tm', ('"' + (Join-Path $S 'tools\lam\mission-telemetry.ps1') + '"'), '-Go', "`"$goS`"") -join ' ') -PassThru -WindowStyle Hidden
         }
     } finally { $env:VANGUARD_HOME = $savedS }
     Start-Sleep -Seconds 4
@@ -2238,8 +2726,8 @@ Write-Output "APPENDED $okN"
     $saved = @{ V = $env:VANGUARD_HOME; C = $env:CLAUDE_PROJECT_DIR }
     $env:VANGUARD_HOME = $H; $env:CLAUDE_PROJECT_DIR = $S
     $libP = Join-Path $hooksDir 'lib\evidence-common.ps1'
-    $pa = Start-Process -FilePath $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$app`"", '-Root', "`"$S`"", '-Lib', "`"$libP`"", '-N', $N, '-Tag', 'A', '-Go', "`"$go`"") -PassThru -WindowStyle Hidden
-    $pb = Start-Process -FilePath $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$app`"", '-Root', "`"$S`"", '-Lib', "`"$libP`"", '-N', $N, '-Tag', 'B', '-Go', "`"$go`"") -PassThru -WindowStyle Hidden
+    $pa = Start-Process -FilePath $psExe -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$app`"", '-Root', "`"$S`"", '-Lib', "`"$libP`"", '-N', $N, '-Tag', 'A', '-Go', "`"$go`"") -join ' ') -PassThru -WindowStyle Hidden
+    $pb = Start-Process -FilePath $psExe -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$app`"", '-Root', "`"$S`"", '-Lib', "`"$libP`"", '-N', $N, '-Tag', 'B', '-Go', "`"$go`"") -join ' ') -PassThru -WindowStyle Hidden
     $env:VANGUARD_HOME = $saved.V; $env:CLAUDE_PROJECT_DIR = $saved.C
     Start-Sleep -Seconds 4
     Write-W7File $go 'go'
@@ -2309,7 +2797,7 @@ if (Want 'U-11') { try {
 # =================================================================================================
 if (Want 'U-12') { try {
     $sess = 'w7u12-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
-    $noGitPath = (Join-Path $env:SystemRoot 'System32') + ';' + $PSHOME
+    $noGitPath = (Join-Path $env:SystemRoot 'System32') + ';' + (Split-Path -Parent $psExe)   # 5.1's folder, under 7 too (row 522)
     $b0 = Get-W7Feed -Root $S
     $r = Invoke-W7Hook -Hook 'evidence-post-tool-use.ps1' -Payload (New-W7ToolPayload -Session $sess -Tool 'Edit' -ToolInput @{ file_path = (Join-Path $S 'README.md') }) -Root $S -Dispatch 'w7-u12' -VHome $H -ExtraEnv @{ PATH = $noGitPath }
     $a0 = Get-W7Feed -Root $S
@@ -2495,7 +2983,7 @@ Invoke-MissionTelemetry -Root $Root -Snapshot -Verb 'w7-u17-concurrent'
     $procs17 = @()
     try {
         foreach ($i in 1..3) {
-            $procs17 += Start-Process -FilePath $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$snap17`"", '-Root', "`"$S`"", '-Tm', ('"' + (Join-Path $S 'tools\lam\mission-telemetry.ps1') + '"'), '-Go', "`"$go17`"") -PassThru -WindowStyle Hidden
+            $procs17 += Start-Process -FilePath $psExe -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$snap17`"", '-Root', "`"$S`"", '-Tm', ('"' + (Join-Path $S 'tools\lam\mission-telemetry.ps1') + '"'), '-Go', "`"$go17`"") -join ' ') -PassThru -WindowStyle Hidden
         }
     } finally { $env:VANGUARD_HOME = $saved17 }
     Start-Sleep -Seconds 4
@@ -2543,14 +3031,15 @@ Invoke-MissionTelemetry -Root $Root -Snapshot -Verb 'w7-u17-concurrent'
     $shapeOk = ($nSnap -gt 0) -and ($shapeBad.Count -eq 0)
     $d += "    every mission_snapshot of every stream: $nSnap, without the map or with an entry not {$($msKeys -join ', ')}: $($shapeBad.Count)$(if ($shapeBad.Count) { ' -- ' + (($shapeBad | Select-Object -First 3) -join '; ') }) -> $shapeOk`n"
     # SS14 NAMES THE FIELD; THE SCHEMA FILE IS THE PINNED ONE (the S0 contract's file, sha256 pinned by s2-amendment-1.md's
-    # batch, then amended once, additively, by RELEASE-4 S1 F-P1b -- the milestone status enum, schema 1.1)
+    # batch, then amended, additively, by RELEASE-4 S1 F-P1b -- the milestone status enum, schema 1.1 -- and by UI-2 S1 A-2,
+    # register row 500 -- the kind subagent_stop, schema 1.2; the pin moves with each amendment, 5df0c32e... at 1.1)
     $row14 = @([System.IO.File]::ReadAllLines((Join-Path $repoRoot 'docs\framework\expanded-schemas.md')) | Where-Object { $_.StartsWith('| `mission_snapshot` |') })
     $docOk = ($row14.Count -eq 1) -and ($row14[0].Contains('`milestones`')) -and (@($msKeys | Where-Object { -not $row14[0].Contains('`' + $_ + '`') }).Count -eq 0)
     # read on the lock's fold-crlf-text basis (RELEASE-4 S1 F-P3, standing 147): an LF and a CRLF checkout of the same tree
     # read alike, a changed byte does not
     $schemaSha = Get-W7FoldSha $schemaPath
-    $schemaOk = ($schemaSha -ceq '5df0c32e14a83d9f89e8fb238a3688a70f7e39887596dd845e02547a32e5fc47')
-    $d += "    expanded-schemas.md SS14 mission_snapshot row names milestones and its six fields: $docOk; mission-event.schema.json sha256 on the fold-crlf-text basis $schemaSha (expect 5df0c32e..., the S0 file as RELEASE-4 S1 F-P1b amended it) -> $schemaOk`n"
+    $schemaOk = ($schemaSha -ceq '9c58a976290c925e5df4897eb7ce1022385a392a636376b4085a562aedc38805')
+    $d += "    expanded-schemas.md SS14 mission_snapshot row names milestones and its six fields: $docOk; mission-event.schema.json sha256 on the fold-crlf-text basis $schemaSha (expect 9c58a976..., the S0 file as RELEASE-4 S1 F-P1b and UI-2 S1 A-2 amended it, its LM2-ADR-045 citation qualified at UI-2 S1c row 523) -> $schemaOk`n"
     Check -Id 'U-17' -Title 'every mission_snapshot carries milestones (title, status, assertion totals, observed times) from the one writer; a milestone change moves snapshot_sha256, an unchanged state emits none; SS14 names it, the schema file unchanged' `
           -Ok ($chgOk -and ($nSame -eq 0) -and $concOk -and $derOk -and $xOk -and $shapeOk -and $docOk -and $schemaOk) -Detail $d
 } catch { Write-W7Threw 'U-17' $_ } }
@@ -2621,7 +3110,7 @@ if (Want 'U-18') { try {
 # provenance/ is not installed (RELEASE-4 S3 F-P1-fix: S2's P-1 kept this member from running in a project; once it ran there
 # it threw on the absent manifest): where provenance\manifest.jsonl does not stand, the member SKIPS BY NAME.
 $u21Why = if (Test-Path -LiteralPath (Join-Path $repoRoot 'provenance\manifest.jsonl') -PathType Leaf) { $null } else { "provenance\manifest.jsonl is not in this checkout (an installed framework: provenance/ is not installed), and the member holds the settings template to its manifest row (F-H15)" }
-if ((Want 'U-21') -and $u21Why) { Check -Id 'U-21' -Title 'F-P2a (row 500; F-H15): SubagentStop is registered in the settings template a customer receives (manifest row 2, the row the file''s; the proposal byte-equal) and the installed hook set, emits one session_stop for the subagent''s session_start id, and never blocks the stop' -Ok $false -Skipped -Detail "    SKIPPED BY NAME: $u21Why" }
+if ((Want 'U-21') -and $u21Why) { Check -Id 'U-21' -Title 'F-P2a as cured by UI-2 S1 A-2 (row 500; F-H15): SubagentStop is registered in the settings template a customer receives and the installed hook set; it appends ONE subagent_stop (agent_id and parent_session_id; else parent_session_id and subagent_ordinal), never a session_stop, and never blocks; the parent''s Stop with a running background task says nothing, its own Stop says session_stop then dispatch_finalized' -Ok $false -Skipped -Detail "    SKIPPED BY NAME: $u21Why" }
 elseif (Want 'U-21') { try {
     $d = ''
     # WHAT A CUSTOMER RECEIVES (RELEASE-4 S2 F-H15): the TEMPLATE the manifest row whose destination is .claude/settings.json
@@ -2643,11 +3132,20 @@ elseif (Want 'U-21') { try {
     $regOk = $rowOk -and $propEq -and (@($reg | Where-Object { $_.matcher -ceq '*' -and $_.type -ceq 'command' -and $_.cmd.Contains('$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/' + $ssHook) }).Count -eq 1)
     $setOk = Test-Path -LiteralPath (Join-Path $hooksDir $ssHook) -PathType Leaf
     $d += "    the template registers SubagentStop (matcher *, a command naming the next-gen $ssHook): $regOk$(if ($reg.Count) { ' -- ' + (($reg | ForEach-Object { $_.cmd }) -join '; ') }); the installed hook set holds it: $setOk`n"
-    # a subagent's session: its first PostToolUse starts it (session_start), then its SubagentStop
+    # UI-2 S1 (A-2, register row 500), AS THE LIVE HARNESS SENDS IT (A-3, Claude Code 2.1.312): a subagent's hooks carry the
+    # PARENT's session_id -- its tool calls are stamped with the parent -- and SubagentStop carries agent_id, agent_type and
+    # agent_transcript_path besides, while the Agent call itself runs in the background (the parent's turn may end first).
+    # So: the parent's first PostToolUse starts the parent's session; the subagent's SubagentStop must append ONE
+    # subagent_stop naming agent_id and parent_session_id (form (i)) -- never a session_stop, never a dispatch_finalized; a
+    # payload with no agent id gets form (ii), parent_session_id and subagent_ordinal. RELEASE-4's F-P2a read a subagent's
+    # stop as a stop of "the subagent's own session", a session the harness never gives it.
     $sub = 'w7u21-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
-    $p0 = Invoke-W7Hook -Hook 'evidence-post-tool-use.ps1' -Payload (New-W7ToolPayload -Session $sub -Tool 'Read' -ToolInput @{ file_path = (Join-Path $S 'README.md') }) -Root $S -Dispatch $null -VHome $H
+    $aid = 'a' + [guid]::NewGuid().ToString('N').Substring(0, 16)
+    $p0 = Invoke-W7Hook -Hook 'evidence-post-tool-use.ps1' -Payload (New-W7ToolPayload -Session $sub -Tool 'Agent' -ToolInput @{ description = 'w7'; prompt = 'w7'; subagent_type = 'general-purpose' }) -Root $S -Dispatch $null -VHome $H
     $starts = @(Get-W7Kind (Get-W7Feed -Root $S) 'session_start' | Where-Object { $_.obj.payload.session_id -ceq $sub })
-    $stopPay = @{ session_id = $sub; hook_event_name = 'SubagentStop'; stop_hook_active = $false; transcript_path = '' }
+    $bgRun = @(@{ id = $aid; type = 'subagent'; status = 'running'; description = 'w7'; agent_type = 'general-purpose' })
+    $stopPay = @{ session_id = $sub; hook_event_name = 'SubagentStop'; stop_hook_active = $false; transcript_path = ''; agent_id = $aid; agent_type = 'general-purpose'
+                  agent_transcript_path = (Join-Path $S ".claude\subagents\agent-$aid.jsonl"); background_tasks = $bgRun }
     # never blocks: the feed held exclusively by another process's handle (U-8's case) -- exit 0, no line, a hook-errors entry
     $EP21 = Get-W7FeedPath -Root $S
     $eSha0 = Get-W7Sha $EP21
@@ -2663,16 +3161,256 @@ elseif (Want 'U-21') { try {
     $err1 = Get-W7ErrCount -Root $S -Dispatch $did21
     $nbOk = $setOk -and ($sl.code -eq 0) -and ($eSha0 -ceq $eSha1) -and (($err1 - $err0) -ge 1) -and ($sl.ms -lt 15000)
     $d += "    SubagentStop with the feed locked: exit $(if ($sl) { $sl.code } else { '(not run)' }) (expect 0) in $(if ($sl) { $sl.ms } else { '-' }) ms; E unchanged $($eSha0 -ceq $eSha1); hook-errors entries naming the append +$($err1 - $err0) (expect >= 1) -> $nbOk`n"
-    # then, unlocked: exactly one session_stop, for the subagent's own session_start id, valid
+    # then, unlocked: form (i) -- exactly one new line, a valid subagent_stop naming agent_id and parent_session_id
     $before = Get-W7Feed -Root $S
     $s2 = if ($setOk) { Invoke-W7Hook -Hook $ssHook -Payload $stopPay -Root $S -Dispatch $null -VHome $H } else { $null }
-    $newStops = @(Get-W7Kind ((Get-W7Feed -Root $S) | Select-Object -Skip $before.Count) 'session_stop')
-    $mine = @($newStops | Where-Object { $_.obj.payload.session_id -ceq $sub })
-    $emitOk = ($p0.code -eq 0) -and ($starts.Count -eq 1) -and $s2 -and ($s2.code -eq 0) -and ($newStops.Count -eq 1) -and ($mine.Count -eq 1) -and -not (Test-W7Line $mine[0])
-    $d += "    a subagent session: session_start lines for it $($starts.Count) (expect 1); SubagentStop exit $(if ($s2) { $s2.code } else { '(not run)' }); new session_stop lines $($newStops.Count) (expect 1), naming its session_start's id $($mine.Count) (expect 1), valid $(if ($mine.Count) { -not (Test-W7Line $mine[0]) } else { '-' }) -> $emitOk`n"
-    Check -Id 'U-21' -Title 'F-P2a (row 500; F-H15): SubagentStop is registered in the settings template a customer receives (manifest row 2, the row the file''s; the proposal byte-equal) and the installed hook set, emits one session_stop for the subagent''s session_start id, and never blocks the stop' `
-          -Ok ($regOk -and $setOk -and $nbOk -and $emitOk) -Detail $d
+    $new2 = @((Get-W7Feed -Root $S) | Select-Object -Skip $before.Count)
+    $sa = @(Get-W7Kind $new2 'subagent_stop')
+    $i1 = ($sa.Count -eq 1) -and ([string]$sa[0].obj.payload.agent_id -ceq $aid) -and ([string]$sa[0].obj.payload.parent_session_id -ceq $sub) -and ([string]$sa[0].obj.payload.dispatch_id -ceq "session-$sub") -and -not (Test-W7Line $sa[0])
+    $emitOk = ($p0.code -eq 0) -and ($starts.Count -eq 1) -and $s2 -and ($s2.code -eq 0) -and ($new2.Count -eq 1) -and $i1
+    $d += "    the parent's first PostToolUse (the Agent call): session_start lines for it $($starts.Count) (expect 1); the subagent's SubagentStop (agent_id in the payload) exit $(if ($s2) { $s2.code } else { '(not run)' }): new lines $($new2.Count) (expect 1), kinds $(@($new2 | ForEach-Object { $_.obj.kind }) -join ', ') (expect subagent_stop), agent_id and parent_session_id the payload's: $i1 -> $emitOk`n"
+    # form (ii): the same stop with no agent id and no agent transcript -- subagent_stop with the parent's id and an ordinal
+    $pay2 = @{ session_id = $sub; hook_event_name = 'SubagentStop'; stop_hook_active = $false; transcript_path = '' }
+    $before = Get-W7Feed -Root $S
+    $s3 = if ($setOk) { Invoke-W7Hook -Hook $ssHook -Payload $pay2 -Root $S -Dispatch $null -VHome $H } else { $null }
+    $new3 = @((Get-W7Feed -Root $S) | Select-Object -Skip $before.Count)
+    $i2 = ($new3.Count -eq 1) -and ($new3[0].obj.kind -ceq 'subagent_stop') -and ([string]$new3[0].obj.payload.parent_session_id -ceq $sub) -and ([int]$new3[0].obj.payload.subagent_ordinal -eq 2) -and -not (Get-W7Has $new3[0].obj.payload 'agent_id') -and -not (Test-W7Line $new3[0])
+    $d += "    form (ii), a SubagentStop with no agent id: new lines $($new3.Count) (expect 1), kinds $(@($new3 | ForEach-Object { $_.obj.kind }) -join ', ') (expect subagent_stop), subagent_ordinal $(if ($new3.Count) { $new3[0].obj.payload.subagent_ordinal }) (expect 2: the session's second subagent stop) -> $i2`n"
+    # the dispatch_finalized rule (A-2): the parent's Stop while a background task still runs is the end of a TURN -- no
+    # session_stop, no dispatch_finalized; the parent's next Stop (no running background task) then says dispatch_finalized
+    # for the seal. UI-2 S2 B-14 (register row 528): no Stop says session_stop -- SessionEnd does, once, at the session's end
+    $before = Get-W7Feed -Root $S
+    $st1 = Invoke-W7Hook -Hook 'evidence-stop-finalize.ps1' -Payload @{ session_id = $sub; hook_event_name = 'Stop'; stop_hook_active = $false; background_tasks = $bgRun } -Root $S -Dispatch "session-$sub" -VHome $H
+    $new4 = @((Get-W7Feed -Root $S) | Select-Object -Skip $before.Count | Where-Object { $_.obj -and @('session_stop', 'dispatch_finalized') -contains $_.obj.kind })
+    $before = Get-W7Feed -Root $S
+    $st2 = Invoke-W7Hook -Hook 'evidence-stop-finalize.ps1' -Payload @{ session_id = $sub; hook_event_name = 'Stop'; stop_hook_active = $false; background_tasks = @() } -Root $S -Dispatch "session-$sub" -VHome $H
+    $new5 = @((Get-W7Feed -Root $S) | Select-Object -Skip $before.Count | Where-Object { $_.obj -and @('session_stop', 'dispatch_finalized') -contains $_.obj.kind })
+    $before = Get-W7Feed -Root $S
+    $se21 = Invoke-W7Hook -Hook 'evidence-session-end.ps1' -Payload @{ session_id = $sub; hook_event_name = 'SessionEnd'; reason = 'other' } -Root $S -Dispatch "session-$sub" -VHome $H
+    $new6 = @((Get-W7Feed -Root $S) | Select-Object -Skip $before.Count | Where-Object { $_.obj -and @('session_stop', 'dispatch_finalized') -contains $_.obj.kind })
+    $stopOk = ($st1.code -eq 0) -and ($new4.Count -eq 0) -and ($st2.code -eq 0) -and ($new5.Count -eq 1) -and ($new5[0].obj.kind -ceq 'dispatch_finalized') -and ([string]$new5[0].obj.payload.dispatch_id -ceq "session-$sub") -and -not (Test-W7Line $new5[0]) -and
+              ($se21.code -eq 0) -and ($new6.Count -eq 1) -and ($new6[0].obj.kind -ceq 'session_stop') -and ([string]$new6[0].obj.payload.session_id -ceq $sub) -and -not (Test-W7Line $new6[0])
+    $d += "    the parent's Stop with a background subagent running: exit $($st1.code), session_stop/dispatch_finalized lines $($new4.Count) (expect 0); its next Stop (no running task): exit $($st2.code), kinds $(@($new5 | ForEach-Object { $_.obj.kind }) -join ', ') (expect dispatch_finalized: a turn's end says no session_stop, B-14); SessionEnd: exit $($se21.code), kinds $(@($new6 | ForEach-Object { $_.obj.kind }) -join ', ') (expect session_stop) -> $stopOk`n"
+    Check -Id 'U-21' -Title 'F-P2a as cured by UI-2 S1 A-2 and S2 B-14 (rows 500, 528; F-H15): SubagentStop is registered in the settings template a customer receives and the installed hook set; it appends ONE subagent_stop (agent_id and parent_session_id; else parent_session_id and subagent_ordinal), never a session_stop, and never blocks; the parent''s Stop with a running background task says nothing, its next Stop says dispatch_finalized, SessionEnd says session_stop' `
+          -Ok ($regOk -and $setOk -and $nbOk -and $emitOk -and $i2 -and $stopOk) -Detail $d
 } catch { Write-W7Threw 'U-21' $_ } }
+
+# U-50 -- B-12 (UI-2 S2, decision 11): A SUBAGENT'S OWN CALLS, ATTRIBUTED. The harness stamps a subagent's hooks with the
+# PARENT's session_id and gives its PostToolUse payload agent_id and agent_type (A-3, Claude Code 2.1.312). The hook half:
+# the installed PostToolUse hook, driven in the smoke fixture with a subagent's payload, appends a tool_call carrying both
+# (valid at schema 1.2), and with the parent's own payload carries neither; planted, a copy of the hook set with the agent_id
+# line taken out appends the subagent's call without it. The API half (tests\lam\wp7-group-b.py u50): header.subagent_calls
+# over :cured-agent: as derived from its lines, none over :cured:, none from a planted tools/ui. The browser half:
+# ui\tests\u50.spec.ts, the subagent under its parent's row; its planted face must fail it.
+$t50 = 'B-12 (decision 11): a subagent''s own tool_call lines carry agent_id and agent_type where the harness gives them, a parent''s carry neither; /api/missions/{id} header.subagent_calls and the Project screen attribute them to the subagent under its parent; the hook with its agent_id line removed fails it'
+if (Want 'U-50') { try {
+    $d = ''
+    $par50 = 'w7u50-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $aid50 = 'a' + [guid]::NewGuid().ToString('N').Substring(0, 16)
+    $readIn = @{ file_path = (Join-Path $S 'README.md') }
+    $subPay = { param([string]$Tool) $p = New-W7ToolPayload -Session $par50 -Tool $Tool -ToolInput $readIn; $p['agent_id'] = $aid50; $p['agent_type'] = 'general-purpose'; $p }
+    $read50 = { param([string]$HookDir, [hashtable]$Pay)
+        $before = Get-W7Feed -Root $S
+        $json = ($Pay | ConvertTo-Json -Compress -Depth 8)
+        $r = Invoke-W7 -File (Join-Path $HookDir 'evidence-post-tool-use.ps1') -Env @{ CLAUDE_PROJECT_DIR = $S; MISSION_DISPATCH_ID = $null; VANGUARD_HOME = $H; LAM_DISPATCH = $null } -Stdin $json
+        $tc = @(Get-W7Kind @((Get-W7Feed -Root $S) | Select-Object -Skip $before.Count) 'tool_call')
+        return [pscustomobject]@{ code = $r.code; tc = $tc } }
+    $pp0 = & $read50 $hooksDir (New-W7ToolPayload -Session $par50 -Tool 'Agent' -ToolInput @{ description = 'w7'; prompt = 'w7'; subagent_type = 'general-purpose' })
+    $ps1 = & $read50 $hooksDir (& $subPay 'Read')
+    $parOk = ($pp0.code -eq 0) -and ($pp0.tc.Count -eq 1) -and -not (Get-W7Has $pp0.tc[0].obj.payload 'agent_id') -and -not (Get-W7Has $pp0.tc[0].obj.payload 'agent_type') -and -not (Test-W7Line $pp0.tc[0])
+    $subOk = ($ps1.code -eq 0) -and ($ps1.tc.Count -eq 1) -and ([string]$ps1.tc[0].obj.payload.agent_id -ceq $aid50) -and ([string]$ps1.tc[0].obj.payload.agent_type -ceq 'general-purpose') -and
+             ([string]$ps1.tc[0].obj.payload.session_id -ceq $par50) -and -not (Test-W7Line $ps1.tc[0])
+    $d += "    the installed hook, the parent's own Agent call: exit $($pp0.code), tool_call lines $($pp0.tc.Count) (expect 1), agent_id present $(if ($pp0.tc.Count) { Get-W7Has $pp0.tc[0].obj.payload 'agent_id' }) (expect False) -> $parOk`n"
+    $d += "    the subagent's Read (payload agent_id, agent_type; the parent's session_id): exit $($ps1.code), tool_call lines $($ps1.tc.Count) (expect 1), agent_id the payload's $(if ($ps1.tc.Count) { [string]$ps1.tc[0].obj.payload.agent_id -ceq $aid50 }), agent_type '$(if ($ps1.tc.Count) { $ps1.tc[0].obj.payload.agent_type })', session_id the parent's, valid at schema 1.2 -> $subOk`n"
+    # planted: the hook set copied to the run's own folder at its own relative place (its library dot-sources A1's
+    # library beside it, tools\framework\hooks\lib), the agent_id line taken out of its PostToolUse hook
+    $plantRoot50 = Join-Path $T 'u50-plant'
+    if (Test-Path -LiteralPath $plantRoot50) { Remove-Item -LiteralPath $plantRoot50 -Recurse -Force }
+    $plant50 = Join-Path $plantRoot50 'tools\evidence-hooks-next\hooks'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $plant50), (Join-Path $plantRoot50 'tools\framework') -Force | Out-Null
+    Copy-Item -LiteralPath $hooksDir -Destination $plant50 -Recurse
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\framework\hooks') -Destination (Join-Path $plantRoot50 'tools\framework\hooks') -Recurse
+    $hp50 = Join-Path $plant50 'evidence-post-tool-use.ps1'
+    $src50 = [System.IO.File]::ReadAllText($hp50)
+    $cut50 = [regex]::Replace($src50, "(?m)^\s*\`$evPayload\['agent_id'\] = \`$evAgentId\s*\r?\n", '')
+    [System.IO.File]::WriteAllText($hp50, $cut50, (New-Object System.Text.UTF8Encoding($false)))
+    $pl1 = & $read50 $plant50 (& $subPay 'Read')
+    $plOk = ($cut50.Length -lt $src50.Length) -and ($pl1.code -eq 0) -and ($pl1.tc.Count -eq 1) -and -not (Get-W7Has $pl1.tc[0].obj.payload 'agent_id')
+    $d += "    planted: a copy of the hook set with the agent_id line taken out ($(if ($cut50.Length -lt $src50.Length) { 'cut' } else { 'NOT cut' })): the subagent's Read appends a tool_call with agent_id $(if ($pl1.tc.Count) { Get-W7Has $pl1.tc[0].obj.payload 'agent_id' } else { '(no line)' }) (expect False: the member fails on it) -> $plOk`n"
+    $ok50 = $parOk -and $subOk -and $plOk
+    if ($pNoPy) { $d += "    the API and browser halves SKIPPED BY NAME: $pNoPy`n"; Check -Id 'U-50' -Title $t50 -Ok $false -Skipped:$ok50 -Detail $d }
+    else {
+        $a50 = Invoke-W7Group -Member 'U-50' -Extra @('u50', (Join-Path $pRoot 'g-u50')); $d += $a50.detail; $ok50 = $ok50 -and $a50.ok
+        if ($pWhy) { $d += "    the browser half SKIPPED BY NAME: $pWhy`n"; Check -Id 'U-50' -Title $t50 -Ok $false -Skipped:$ok50 -Detail $d }
+        else {
+            $sp50 = Get-W7PSpec 50; $d += $sp50.detail; $ok50 = $ok50 -and $sp50.ok
+            $pf50 = Invoke-W7Group -Member 'U-50' -Extra @('plant-face', 'u50', (Join-Path $pRoot 'pf-u50')); $d += $pf50.detail; $ok50 = $ok50 -and $pf50.ok
+            Check -Id 'U-50' -Title $t50 -Ok $ok50 -Detail $d
+        }
+    }
+} catch { Write-W7Threw 'U-50' $_ } }
+
+# U-51 -- B-14 (UI-2 S2, register row 528; operator ruling 2026-11-08): THE SESSION'S END IS SessionEnd's. Claude Code fires
+# Stop at every turn's end and SessionEnd once, at the session's end (2.1.312). The hook half, in the smoke fixture: the
+# settings template a customer receives registers SessionEnd (matcher *, the next-gen evidence-session-end.ps1) and the
+# installed hook set holds it; one session of two turns -- a call and a Stop, a call and a Stop -- says session_start once
+# and NO session_stop at either Stop; SessionEnd then says ONE session_stop (valid at schema 1.2) and releases the session's
+# start marker, so a call of the same session after it (a resumed session) says session_start again. Planted: a copy of
+# the hook set whose Stop says session_stop again (UI-2 S1's Stop) says it at the first turn's end. The API half
+# (tests\lam\wp7-group-b.py u51): the session reads running between its turns and stopped after SessionEnd's line.
+$t51 = 'B-14 (row 528): Stop says no session_stop at a turn''s end; SessionEnd, registered in the settings template, says the one session_stop and a resumed session says session_start again; the API reads a two-turn session running between its turns; a Stop copy that says session_stop fails it'
+if ((Want 'U-51') -and $u21Why) { Check -Id 'U-51' -Title $t51 -Ok $false -Skipped -Detail "    SKIPPED BY NAME: $u21Why" }
+elseif (Want 'U-51') { try {
+    $d = ''
+    # the template a customer receives (the manifest row whose destination is .claude/settings.json, held to that row) and
+    # the proposal byte-equal to it, as U-21 reads them
+    $mf51 = @([System.IO.File]::ReadAllLines((Join-Path $repoRoot 'provenance\manifest.jsonl')) | Select-Object -Skip 1 | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { [string]$_.destination -ceq '.claude/settings.json' })
+    $tpl51 = if ($mf51.Count -eq 1) { Join-Path $repoRoot (([string]$mf51[0].path) -replace '/', '\') } else { '' }
+    $tplOk51 = $tpl51 -and ((Get-W7Sha $tpl51) -ceq [string]$mf51[0].sha256) -and ((Get-W7Sha (Join-Path $repoRoot 'tools\evidence-hooks-next\claude-settings.proposed.json')) -ceq (Get-W7Sha $tpl51))
+    $tj51 = if ($tplOk51) { [System.IO.File]::ReadAllText($tpl51) | ConvertFrom-Json } else { $null }
+    $seHook = 'evidence-session-end.ps1'
+    $reg51 = @(); if ($tj51 -and (Get-W7Has $tj51.hooks 'SessionEnd')) { foreach ($g in @($tj51.hooks.SessionEnd)) { foreach ($hk in @($g.hooks)) { if (([string]$g.matcher -ceq '*') -and ([string]$hk.type -ceq 'command') -and ([string]$hk.command).Contains('$CLAUDE_PROJECT_DIR/tools/evidence-hooks-next/hooks/' + $seHook)) { $reg51 += $hk } } } }
+    $setOk51 = Test-Path -LiteralPath (Join-Path $hooksDir $seHook) -PathType Leaf
+    $regOk51 = $tplOk51 -and ($reg51.Count -eq 1) -and $setOk51
+    $d += "    the template (held to its manifest row, the proposal byte-equal): $tplOk51; SessionEnd registrations naming the next-gen ${seHook}: $($reg51.Count) (expect 1); the installed hook set holds it: $setOk51 -> $regOk51`n"
+    # two turns, then the session's end, then a resumed call -- driven with a given hook set
+    $drive51 = { param([string]$HookDir, [string]$Sess)
+        $did = "session-$Sess"
+        $hk = { param([string]$Name, [hashtable]$Pay) Invoke-W7 -File (Join-Path $HookDir $Name) -Env @{ CLAUDE_PROJECT_DIR = $S; MISSION_DISPATCH_ID = $null; VANGUARD_HOME = $H; LAM_DISPATCH = $null } -Stdin ($Pay | ConvertTo-Json -Compress -Depth 8) }
+        $mine = { param($Lines) @($Lines | Where-Object { $_.obj -and ((([string]$_.obj.payload.session_id) -ceq $Sess) -or (([string]$_.obj.payload.dispatch_id) -ceq $did)) }) }
+        $steps = @()
+        foreach ($st in @(@('turn 1 call', 'evidence-post-tool-use.ps1', (New-W7ToolPayload -Session $Sess -Tool 'Read' -ToolInput @{ file_path = (Join-Path $S 'README.md') })),
+                          @('turn 1 Stop', 'evidence-stop-finalize.ps1', @{ session_id = $Sess; hook_event_name = 'Stop'; stop_hook_active = $false; background_tasks = @() }),
+                          @('turn 2 call', 'evidence-post-tool-use.ps1', (New-W7ToolPayload -Session $Sess -Tool 'Read' -ToolInput @{ file_path = (Join-Path $S 'README.md') })),
+                          @('turn 2 Stop', 'evidence-stop-finalize.ps1', @{ session_id = $Sess; hook_event_name = 'Stop'; stop_hook_active = $false; background_tasks = @() }),
+                          @('SessionEnd', $seHook, @{ session_id = $Sess; hook_event_name = 'SessionEnd'; reason = 'other' }),
+                          @('a resumed call', 'evidence-post-tool-use.ps1', (New-W7ToolPayload -Session $Sess -Tool 'Read' -ToolInput @{ file_path = (Join-Path $S 'README.md') })))) {
+            $before = Get-W7Feed -Root $S
+            $r = & $hk $st[1] $st[2]
+            $new = & $mine @((Get-W7Feed -Root $S) | Select-Object -Skip $before.Count)
+            $steps += [pscustomobject]@{ step = $st[0]; code = $r.code; kinds = @($new | ForEach-Object { [string]$_.obj.kind }); lines = $new }
+        }
+        return $steps }
+    $kOf = { param($Steps, [string]$Step) @(($Steps | Where-Object { $_.step -ceq $Step }).kinds) }
+    $s51 = 'w7u51-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $g51 = & $drive51 $hooksDir $s51
+    foreach ($x in $g51) { $d += "    $($x.step): exit $($x.code), lines $(if ($x.kinds.Count) { $x.kinds -join ', ' } else { '(none)' })`n" }
+    $stops51 = @((& $kOf $g51 'turn 1 Stop') + (& $kOf $g51 'turn 2 Stop') | Where-Object { $_ -ceq 'session_stop' }).Count
+    $starts51 = @((& $kOf $g51 'turn 1 call') | Where-Object { $_ -ceq 'session_start' }).Count + @((& $kOf $g51 'turn 2 call') | Where-Object { $_ -ceq 'session_start' }).Count
+    $endL = @(($g51 | Where-Object { $_.step -ceq 'SessionEnd' }).lines)
+    $endOk = ($endL.Count -eq 1) -and ([string]$endL[0].obj.kind -ceq 'session_stop') -and ([string]$endL[0].obj.payload.session_id -ceq $s51) -and -not (Test-W7Line $endL[0])
+    $resOk = (& $kOf $g51 'a resumed call')[0] -ceq 'session_start'
+    $codesOk = @($g51 | Where-Object { $_.code -ne 0 }).Count -eq 0
+    $hookOk51 = $codesOk -and ($stops51 -eq 0) -and ($starts51 -eq 1) -and $endOk -and $resOk
+    $d += "    session_stop at the two turns' Stops: $stops51 (expect 0); session_start over the two turns: $starts51 (expect 1); SessionEnd: one valid session_stop of the session $endOk; the resumed call says session_start first $resOk -> $hookOk51`n"
+    # planted: the hook set copied (with A1's beside it, which the Stop gate runs), its Stop saying session_stop again
+    $plantRoot51 = Join-Path $T 'u51-plant'
+    if (Test-Path -LiteralPath $plantRoot51) { Remove-Item -LiteralPath $plantRoot51 -Recurse -Force }
+    $plant51 = Join-Path $plantRoot51 'tools\evidence-hooks-next\hooks'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $plant51), (Join-Path $plantRoot51 'tools\framework') -Force | Out-Null
+    Copy-Item -LiteralPath $hooksDir -Destination $plant51 -Recurse
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\framework\hooks') -Destination (Join-Path $plantRoot51 'tools\framework\hooks') -Recurse
+    $sp51 = Join-Path $plant51 'evidence-stop-finalize.ps1'
+    $ss51 = [System.IO.File]::ReadAllText($sp51)
+    $anchor51 = '            $held = Test-MissionTelemetryMarker -Root $root -Name $pending'
+    $put51 = '            $null = Write-MissionEvent -Root $root -Kind ''session_stop'' -SourcePath $sf.source -Hook ''Stop'' -SessionId $sessionId -DispatchId $did -Payload ([ordered]@{ session_id = $sessionId; dispatch_id = $did; manifest_state = $sf.manifest_state; entry_count = $sf.entry_count; evidence_state = $sf.evidence_state })' + "`n" + $anchor51
+    $cut51 = $ss51.Replace($anchor51, $put51)
+    [System.IO.File]::WriteAllText($sp51, $cut51, (New-Object System.Text.UTF8Encoding($false)))
+    $p51 = & $drive51 $plant51 ('w7u51p-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $pStops = @((& $kOf $p51 'turn 1 Stop') | Where-Object { $_ -ceq 'session_stop' }).Count
+    $plOk51 = ($cut51 -ne $ss51) -and ($pStops -ge 1)
+    $d += "    planted: a copy of the hook set whose Stop says session_stop again ($(if ($cut51 -ne $ss51) { 'put back' } else { 'NOT put back' })): session_stop at the first turn's Stop $pStops (expect >= 1: the member fails on it) -> $plOk51`n"
+    $ok51 = $regOk51 -and $hookOk51 -and $plOk51
+    if ($pNoPy) { $d += "    the API half SKIPPED BY NAME: $pNoPy`n"; Check -Id 'U-51' -Title $t51 -Ok $false -Skipped:$ok51 -Detail $d }
+    else { $a51 = Invoke-W7Group -Member 'U-51' -Extra @('u51', (Join-Path $pRoot 'g-u51')); $d += $a51.detail; Check -Id 'U-51' -Title $t51 -Ok ($ok51 -and $a51.ok) -Detail $d }
+} catch { Write-W7Threw 'U-51' $_ } }
+
+# U-52 -- B-10's emitter (UI-2 S2, open decision 2, ruled; contract amendment S1-AM1 to A-8): install.ps1 -Verify appends
+# ONE verify_result line, divergence_list as it prints each difference, to a REGISTERED project's feed, and writes nothing
+# under the installed set or the lock. The subject is a real install: a fresh project made by mission init under its own
+# home (a registered telemetry stream), and a synthetic expanded release (falsify.ps1's form: this checkout's install.ps1,
+# VERSION, a RELEASE, a manifest of three installer-owned rows, and this release's feed writer beside it) installed into it
+# with -SkipPythonSet. -Verify clean: exit 0, one PASS line, 0 listed. One file changed and one removed: exit 3, two printed,
+# one FAIL line listing exactly those two (CHANGED, MISSING) with their digests; the lock and the unchanged file byte-equal
+# before and after; the API's verify card over that feed reads 2. The same install unregistered: -Verify writes no feed at
+# all. Planted: a copy of install.ps1 that lists no MISSING difference reads 1, not 2.
+$t52 = 'B-10''s emitter (S1-AM1): install.ps1 -Verify appends one verify_result with divergence_list to a registered project''s feed and nothing under the installed set or the lock; one file changed and one removed list CHANGED and MISSING and read 2 on the line and on the verify card; an unregistered project gets no line'
+$u52Why = if (-not (Test-Path -LiteralPath (Join-Path $repoRoot 'mission.ps1') -PathType Leaf)) { 'mission.ps1 is not in this checkout (an installed framework), and the member makes its registered project with mission init' } else { $null }
+if ((Want 'U-52') -and $u52Why) { Check -Id 'U-52' -Title $t52 -Ok $false -Skipped -Detail "    SKIPPED BY NAME: $u52Why" }
+elseif (Want 'U-52') { try {
+    $d = ''
+    $nb52 = New-Object System.Text.UTF8Encoding($false)
+    $ver52 = ([System.IO.File]::ReadAllText((Join-Path $repoRoot 'VERSION'))).Trim()
+    $mkRel52 = { param([string]$Dir, [string]$Installer)
+        New-Item -ItemType Directory -Path (Join-Path $Dir 'provenance') -Force | Out-Null
+        Copy-Item -LiteralPath $Installer -Destination (Join-Path $Dir 'install.ps1')
+        [System.IO.File]::WriteAllText((Join-Path $Dir 'VERSION'), "$ver52`n", $nb52)
+        # this release's feed writer beside install.ps1, at its own relative place (its library dot-sources A1's)
+        foreach ($sub in @('tools\evidence-hooks-next\hooks\lib', 'tools\framework\hooks\lib')) { New-Item -ItemType Directory -Path (Join-Path $Dir (Split-Path -Parent $sub)) -Force | Out-Null; Copy-Item -LiteralPath (Join-Path $repoRoot $sub) -Destination (Join-Path $Dir $sub) -Recurse }
+        $man = @('{"manifest":"provenance","note":"a synthetic release source built by WP-7 U-52"}')
+        foreach ($n in @('a', 'b', 'c')) {
+            $rel = "w7u52/file-$n.txt"; $b = [System.Text.Encoding]::UTF8.GetBytes("WP-7 U-52 synthetic installer-owned file $n`n")
+            $fp = Join-Path $Dir ($rel -replace '/', '\'); New-Item -ItemType Directory -Path (Split-Path -Parent $fp) -Force | Out-Null; [System.IO.File]::WriteAllBytes($fp, $b)
+            $man += ('{"source":"host","path":"' + $rel + '","class":"MOVE","sha256":"' + (Get-W7Sha $fp) + '","bytes":' + $b.Length + ',"destination":"' + $rel + '"}')
+        }
+        $mp = Join-Path $Dir 'provenance\manifest.jsonl'
+        [System.IO.File]::WriteAllText($mp, (($man -join "`n") + "`n"), $nb52)
+        [System.IO.File]::WriteAllText((Join-Path $Dir 'RELEASE'), "name: vanguard-collective`nversion: $ver52`nframework_repo_tip: $('0' * 40)`nmanifest_sha256: $(Get-W7Sha $mp)`n", $nb52) }
+    $rel52 = Join-Path $T 'u52-release'; & $mkRel52 $rel52 (Join-Path $repoRoot 'install.ps1')
+    # the registered project: mission init under its own home
+    $p52 = Join-Path $T 'u52-project'; $h52 = Join-Path $T 'u52-home'
+    New-Item -ItemType Directory -Path $p52 -Force | Out-Null
+    $mi52 = Invoke-W7 -File (Join-Path $repoRoot 'mission.ps1') -Argv @('init', '-Target', $p52) -Env @{ VANGUARD_HOME = $h52 }
+    $in52 = Invoke-W7 -File (Join-Path $rel52 'install.ps1') -Argv @('-Target', $p52, '-SkipPythonSet') -Env @{ VANGUARD_HOME = $h52 }
+    $ep52 = Get-W7FeedPath -Root $p52
+    $setOk52 = ($mi52.code -eq 0) -and ($in52.code -eq 0) -and (Test-Path -LiteralPath (Join-Path $p52 'framework.lock') -PathType Leaf) -and (Test-Path -LiteralPath $ep52 -PathType Leaf)
+    $d += "    the registered project: mission init exit $($mi52.code); the synthetic release (3 installer-owned files) installed with -SkipPythonSet exit $($in52.code)$(if ($in52.code -ne 0) { ' -- ' + ((@($in52.out) | Select-Object -Last 3) -join ' | ') }); framework.lock and the feed present -> $setOk52`n"
+    $ver52r = { param([string]$Installer, [string]$Proj, [string]$VH)
+        $before = Get-W7Feed -Root $Proj
+        $r = Invoke-W7 -File $Installer -Argv @('-Target', $Proj, '-Verify') -Env @{ VANGUARD_HOME = $VH }
+        $new = @(Get-W7Kind @((Get-W7Feed -Root $Proj) | Select-Object -Skip $before.Count) 'verify_result')
+        $printed = @(@($r.out) | Where-Object { $_ -match '^install\.ps1:   (CHANGED|MISSING|REFUSED) ' }).Count
+        return [pscustomobject]@{ code = $r.code; new = $new; printed = $printed; out = @($r.out) } }
+    $v0 = & $ver52r (Join-Path $rel52 'install.ps1') $p52 $h52
+    $cleanOk = ($v0.code -eq 0) -and ($v0.new.Count -eq 1) -and ([string]$v0.new[0].obj.payload.verdict -ceq 'PASS') -and ([int]$v0.new[0].obj.payload.divergences -eq 0) -and (@($v0.new[0].obj.payload.divergence_list).Count -eq 0) -and -not (Test-W7Line $v0.new[0])
+    $d += "    -Verify over the clean install: exit $($v0.code) (expect 0); verify_result lines appended $($v0.new.Count) (expect 1), verdict $(if ($v0.new.Count) { $v0.new[0].obj.payload.verdict }), divergences $(if ($v0.new.Count) { $v0.new[0].obj.payload.divergences }), listed $(if ($v0.new.Count) { @($v0.new[0].obj.payload.divergence_list).Count }) (expect PASS, 0, 0) -> $cleanOk`n"
+    # one file changed, one removed; the lock and the third file read before and after
+    $fA = Join-Path $p52 'w7u52\file-a.txt'; $fB = Join-Path $p52 'w7u52\file-b.txt'; $fC = Join-Path $p52 'w7u52\file-c.txt'
+    $lockA = Get-W7Sha (Join-Path $p52 'framework.lock'); $cA = Get-W7Sha $fC; $aBefore = Get-W7Sha $fA; $bBefore = Get-W7Sha $fB
+    [System.IO.File]::AppendAllText($fA, "a local edit`n"); Remove-Item -LiteralPath $fB -Force
+    $aNow = Get-W7Sha $fA
+    $v1 = & $ver52r (Join-Path $rel52 'install.ps1') $p52 $h52
+    $lst = if ($v1.new.Count) { @($v1.new[0].obj.payload.divergence_list) } else { @() }
+    $byPath = @{}; foreach ($x in $lst) { $byPath[[string]$x.path] = $x }
+    $listOk = ($lst.Count -eq 2) -and $byPath.ContainsKey('w7u52/file-a.txt') -and $byPath.ContainsKey('w7u52/file-b.txt') -and
+              ([string]$byPath['w7u52/file-a.txt'].kind -ceq 'CHANGED') -and ([string]$byPath['w7u52/file-a.txt'].lock_sha256 -ceq $aBefore) -and ([string]$byPath['w7u52/file-a.txt'].now_sha256 -ceq $aNow) -and
+              ([string]$byPath['w7u52/file-b.txt'].kind -ceq 'MISSING') -and ([string]$byPath['w7u52/file-b.txt'].lock_sha256 -ceq $bBefore) -and ($null -eq $byPath['w7u52/file-b.txt'].now_sha256)
+    $untouched = ((Get-W7Sha (Join-Path $p52 'framework.lock')) -ceq $lockA) -and ((Get-W7Sha $fC) -ceq $cA) -and -not (Test-Path -LiteralPath $fB)
+    $divOk = ($v1.code -eq 3) -and ($v1.printed -eq 2) -and ($v1.new.Count -eq 1) -and ([string]$v1.new[0].obj.payload.verdict -ceq 'FAIL') -and ([int]$v1.new[0].obj.payload.divergences -eq 2) -and $listOk -and -not (Test-W7Line $v1.new[0])
+    $d += "    one file changed, one removed: -Verify exit $($v1.code) (expect 3), differences printed $($v1.printed) (expect 2); the new verify_result: divergences $(if ($v1.new.Count) { $v1.new[0].obj.payload.divergences }), listed $(@($lst | ForEach-Object { "$($_.kind) $($_.path)" }) -join '; ') (expect CHANGED file-a with its lock and now digests, MISSING file-b with now null) -> $divOk`n"
+    $d += "    nothing written under the installed set or the lock: framework.lock and file-c byte-equal before and after, file-b still absent -> $untouched`n"
+    # the API's verify card over that feed
+    if ($pNoPy) { $a52 = [pscustomobject]@{ ok = $true; detail = "    the API half SKIPPED BY NAME: $pNoPy`n" } }
+    else { $a52 = Invoke-W7Group -Member 'U-52' -Extra @('u52', (Join-Path $pRoot 'g-u52'), $ep52) }
+    $d += $a52.detail
+    # unregistered: the same release installed into a plain folder, no home row and no telemetry folder
+    $q52 = Join-Path $T 'u52-plain'; $qh52 = Join-Path $T 'u52-plain-home'
+    New-Item -ItemType Directory -Path $q52 -Force | Out-Null
+    $iq = Invoke-W7 -File (Join-Path $rel52 'install.ps1') -Argv @('-Target', $q52, '-SkipPythonSet') -Env @{ VANGUARD_HOME = $qh52 }
+    $vq = Invoke-W7 -File (Join-Path $rel52 'install.ps1') -Argv @('-Target', $q52, '-Verify') -Env @{ VANGUARD_HOME = $qh52 }
+    $plainOk = ($iq.code -eq 0) -and ($vq.code -eq 0) -and -not (Test-Path -LiteralPath (Join-Path $q52 '.mission-runtime')) -and (@($vq.out | Where-Object { $_ -match 'not a registered telemetry stream; no feed line' }).Count -eq 1)
+    $d += "    unregistered: install exit $($iq.code), -Verify exit $($vq.code); .mission-runtime absent after it, and it says no feed line was written -> $plainOk`n"
+    # planted: a copy of install.ps1 that does not list a MISSING difference
+    $relP = Join-Path $T 'u52-release-plant'
+    $instSrc = [System.IO.File]::ReadAllText((Join-Path $repoRoot 'install.ps1'))
+    $instCut = $instSrc.Replace("Say `"  MISSING  `$p`"; & `$addDiv `$p 'MISSING' `$e.sha256 `$null `$null; continue", "Say `"  MISSING  `$p`"; continue")
+    $instP = Join-Path $T 'u52-install-plant.ps1'; [System.IO.File]::WriteAllText($instP, $instCut, $nb52)
+    & $mkRel52 $relP $instP
+    $vp = & $ver52r (Join-Path $relP 'install.ps1') $p52 $h52
+    $pl52 = ($instCut -ne $instSrc) -and ($vp.new.Count -eq 1) -and (@($vp.new[0].obj.payload.divergence_list).Count -eq 1)
+    $d += "    planted: a copy of install.ps1 that lists no MISSING difference ($(if ($instCut -ne $instSrc) { 'cut' } else { 'NOT cut' })): the line lists $(if ($vp.new.Count) { @($vp.new[0].obj.payload.divergence_list).Count } else { '(no line)' }) (expect 1, not 2: the member fails on it) -> $pl52`n"
+    Check -Id 'U-52' -Title $t52 -Ok ($setOk52 -and $cleanOk -and $divOk -and $untouched -and $a52.ok -and $plainOk -and $pl52) -Detail $d
+} catch { Write-W7Threw 'U-52' $_ } }
 
 # U-25 -- F-P5a (register row 502, W-6): the mission name, carried snapshot -> API -> card and breadcrumb. The snapshot
 # carries mission_name from the mission's own record (.mission/mission.yaml's name, which mission init writes); the API

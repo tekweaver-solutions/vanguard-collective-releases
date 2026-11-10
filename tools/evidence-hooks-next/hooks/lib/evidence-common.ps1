@@ -2263,7 +2263,7 @@ function Get-EvidenceRemoteRefs {
     # outside it satisfies both.
     $askUrl = $Url
     if ($Root -and $Url -notmatch '^[A-Za-z][A-Za-z0-9+.-]*://' -and $Url -notmatch '^[^/]+@') {
-        try { $askUrl = [IO.Path]::GetFullPath((Join-Path $Root $Url)) } catch { $askUrl = $Url }
+        if ($Url -match '^[A-Za-z]:') { $askUrl = $Url } else { try { $askUrl = [IO.Path]::GetFullPath((Join-Path $Root $Url)) } catch { $askUrl = $Url } }   # a drive-letter url stays as declared: 5.1's GetFullPath threw on "<root>\C:\..." and kept it, PowerShell 7's returns that broken path (UI-2 S1c, row 522)
     }
     # NAME THE CONFIG FILES; DO NOT GUESS WHERE GIT LOOKS FOR THEM (V-1 round 16, a WP-6 finding --
     # CRITICAL, driven). This used to point HOME / USERPROFILE / XDG_CONFIG_HOME at the TEMP ROOT and
@@ -2475,7 +2475,7 @@ function Get-EvidenceRemoteRefs {
             return $null
         }
         $script:EvidenceOriginReadFailure = $null
-        foreach ($n in @($svGit.Keys)) { [Environment]::SetEnvironmentVariable($n, $null) }
+        foreach ($n in @($svGit.Keys)) { [Environment]::SetEnvironmentVariable($n, [NullString]::Value) }   # not $null: under PowerShell 7 a $null arrives as '' and leaves the variable set and empty (UI-2 S1c, row 522)
         # Cleared first, restored by name -- so the DEFAULT is deny and the exception is explicit.
         # Doing it in the other order would make the list a blacklist again.
         foreach ($n in $keepTransport) {
@@ -2530,7 +2530,7 @@ function Get-EvidenceRemoteRefs {
     } catch { return $null } finally {
         $env:HOME = $svHome; $env:USERPROFILE = $svUp; $env:XDG_CONFIG_HOME = $svXdg
         foreach ($n in @('GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CEILING_DIRECTORIES')) {
-            [Environment]::SetEnvironmentVariable($n, $null)
+            [Environment]::SetEnvironmentVariable($n, [NullString]::Value)
         }
         foreach ($n in @($svGit.Keys)) { [Environment]::SetEnvironmentVariable($n, $svGit[$n]) }
         $ErrorActionPreference = $prev
@@ -7133,7 +7133,7 @@ function Get-EvidenceGuardDecision {
 # without one has no feed to have failed to append to. Without this rule every sandbox the A1 negative
 # suite drives would grow a hook-errors.log it asserts is absent.
 
-$script:MissionEventSchemaVersion = '1.1'   # RELEASE-4 S1 (F-P1b): the milestone status enum, an additive minor
+$script:MissionEventSchemaVersion = '1.2'   # UI-2 S1 (A-2): kind subagent_stop, an additive minor (1.1, RELEASE-4 S1 F-P1b: the milestone status enum)
 $script:MissionEventLockWaitMs    = 500
 $script:MissionEventUuidPattern   = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 
@@ -7505,6 +7505,58 @@ function Get-MissionEvidenceStopFacts {
     }
     $src = if (Test-Path -LiteralPath $man -PathType Leaf) { $man } elseif (Test-Path -LiteralPath $log -PathType Leaf) { $log } else { Join-Path $Root '.mission\mission.yaml' }
     return @{ manifest_state = $mapped; evidence_state = $native; entry_count = $ec; source = $src; manifest_sha = (Get-Sha256OfFile -Path $man) }
+}
+
+# --- UI-2 S1 (A-2, register row 500): a subagent's stop and the parent's turn end, as the live harness reports them ------
+# (read at A-3, Claude Code 2.1.312). A subagent's hooks carry the PARENT's session_id; SubagentStop adds agent_id,
+# agent_type and agent_transcript_path. The Agent call runs in the background, so the parent's turn can end -- and Stop
+# fire -- while the subagent still works: that Stop's payload lists it in background_tasks with status running.
+function Get-MissionSubagentIdentity {
+    # The subagent a SubagentStop payload names: agent_id, else the agent-<id> name of an agent_transcript_path that is not
+    # the parent's transcript_path; agent_type when given. Neither: agent_id '' (form (ii) of A-2).
+    param($Payload)
+    $id = ''; $type = ''
+    if ($null -ne $Payload) {
+        $id = [string](Get-HookField $Payload 'agent_id' '')
+        $type = [string](Get-HookField $Payload 'agent_type' '')
+        if (-not $id) {
+            $atp = [string](Get-HookField $Payload 'agent_transcript_path' '')
+            $tp = [string](Get-HookField $Payload 'transcript_path' '')
+            if ($atp -and -not [string]::Equals($atp, $tp, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $leaf = [System.IO.Path]::GetFileNameWithoutExtension($atp)
+                $id = if ($leaf -match '^agent-(.+)$') { $Matches[1] } else { $leaf }
+            }
+        }
+    }
+    return @{ agent_id = $id; agent_type = $type }
+}
+
+function Get-MissionSubagentStopCount {
+    # The subagent_stop lines the feed holds for one parent session (form (ii)'s ordinal is this count plus one). Read with
+    # FileShare.ReadWrite outside the emitter's lock: a concurrent stop can share an ordinal, never lose its line.
+    param([string]$Root, [string]$ParentSessionId)
+    try {
+        $p = Join-Path $Root '.mission-runtime\telemetry\events.jsonl'
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { return 0 }
+        $fs = [System.IO.File]::Open($p, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try { $sr = New-Object System.IO.StreamReader($fs, (New-Object System.Text.UTF8Encoding($false))); $t = $sr.ReadToEnd() } finally { $fs.Dispose() }
+        $tok = '"parent_session_id":"' + $ParentSessionId + '"'
+        return @($t -split "`n" | Where-Object { $_.Contains('"kind":"subagent_stop"') -and $_.Contains($tok) }).Count
+    } catch { return 0 }
+}
+
+function Get-MissionStopRunningTasks {
+    # The background tasks a Stop payload lists as still running (background_tasks[].status 'running'). A Stop with one is the
+    # end of the parent's TURN, not its own stop: the session goes on when the task reports back.
+    param($Payload)
+    $n = 0
+    if ($null -ne $Payload) {
+        foreach ($t in @(Get-HookField $Payload 'background_tasks' @())) {
+            if ($null -eq $t) { continue }
+            if ([string]::Equals([string](Get-HookField $t 'status' ''), 'running', [System.StringComparison]::OrdinalIgnoreCase)) { $n++ }
+        }
+    }
+    return $n
 }
 
 function Write-MissionPushTipEvent {
