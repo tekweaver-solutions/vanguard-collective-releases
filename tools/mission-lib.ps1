@@ -495,8 +495,27 @@ function Invoke-SuiteDefaultRun {
     # (the .exe shim) -- Windows Application Control blocks the pytest.exe shim (os error 4551). The module
     # form is the SAME invocation the manual clean-green proof used; gate LOGIC (failure count, runnable>=floor,
     # skip handling) is UNCHANGED. See ledger-decision-framework-fix-greengate-pytest-module-form-reopen19.
-    try { $raw = (& uv run python -m pytest -q -rfE -p no:cacheprovider 2>&1 | Out-String); $code = $LASTEXITCODE }
-    finally { Set-Location $prev }
+    # RELEASE-5 SHELL (row 562, RA-9; amendment 1, RA-15). The same uv line, in the same folder, read the same way below;
+    # two things change around it. (a) ErrorActionPreference is Continue for the call alone and each record is taken as
+    # its text: under Windows PowerShell 5.1, 2>&1 makes every stderr line of a native command (uv's own sync lines, the
+    # interpreter's) an error record, and this file's Stop ended the call on the first one, before it returned. (b) The
+    # child gets no PSModulePath, put back after: a Windows PowerShell child a host test starts below uv and Python
+    # inherits it, and a PowerShell 7 parent's names 7's module folders first, where 5.1's Get-FileHash does not resolve.
+    # With none given, each PowerShell edition builds its own module path. [NullString]::Value removes the variable: a
+    # bare $null leaves it set and empty under PowerShell 7 (measured), so an absent value is put back the same way.
+    # uv is resolved first, under this file's Stop, so a missing uv still ends the call as it did before.
+    $mp = [Environment]::GetEnvironmentVariable('PSModulePath', 'Process')
+    try {
+        $null = Get-Command uv -ErrorAction Stop
+        [Environment]::SetEnvironmentVariable('PSModulePath', [NullString]::Value, 'Process')
+        $lines = @(& { $ErrorActionPreference = 'Continue'; & uv run python -m pytest -q -rfE -p no:cacheprovider 2>&1 | ForEach-Object { "$_" } })
+        $code = $LASTEXITCODE
+    }
+    finally {
+        if ($null -eq $mp) { [Environment]::SetEnvironmentVariable('PSModulePath', [NullString]::Value, 'Process') } else { [Environment]::SetEnvironmentVariable('PSModulePath', $mp, 'Process') }
+        Set-Location $prev
+    }
+    $raw = ($lines | Out-String)
     $passed=0;$failed=0;$skipped=0;$errs=0;$desel=0
     if ($raw -match '(\d+)\s+passed')     { $passed=[int]$Matches[1] }
     if ($raw -match '(\d+)\s+failed')     { $failed=[int]$Matches[1] }

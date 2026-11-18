@@ -349,7 +349,7 @@ Check -Id 'C-1b' -Title 'a real instrument exit-0 yields MET, and exit 0 iff MET
 # every detector type the contract names must be implemented, or a goal could silently skip one
 $known = @('instrument_exit0','verify_pass_or_dib','validator_pass_count','gate_present','file_exists',
            'halt_absent','turn_cap','time_cap','sidecar_present','ungated_placement_absent',
-           'ungated_manifest_absent','handoff_brief_present')
+           'ungated_manifest_absent','handoff_brief_present','operator_wait_present')
 $src = Get-Content -LiteralPath $goalCheck -Raw
 $unimplemented = @($known | Where-Object { $src -notmatch [regex]::Escape($_) })
 $detail = "  detector types named by C-1 (as amended):`n"
@@ -7740,7 +7740,7 @@ function Read-C2pwStopSentence {
     # The enumeration inside one text, whitespace collapsed first (the page wraps its lines).
     param([string]$Text)
     $c2pwFlat = ($Text -replace '\s+', ' ')
-    $c2pwCountWords = @{ 'one' = 1; 'two' = 2; 'three' = 3; 'four' = 4; 'five' = 5; 'six' = 6 }
+    $c2pwCountWords = @{ 'one' = 1; 'two' = 2; 'three' = 3; 'four' = 4; 'five' = 5; 'six' = 6; 'seven' = 7 }
     $c2pwRead = [pscustomobject]@{ starts = ([regex]::Matches($c2pwFlat, 'A seat may stop on exactly')).Count; found = $false
                                    word = ''; declared = -1; admitted = @(); blocked = @(); agrees = $false; sentence = '' }
     $c2pwSm = [regex]::Match($c2pwFlat, 'A seat may stop on exactly \*\*(?<word>[a-z]+)\*\* verdicts,(?<adm>.*?)and the hook blocks on (?<blk>.*?) alone\.')
@@ -7784,6 +7784,16 @@ $c2pwP6 = Read-C2pwStopSentence -Text $c2pwLit6
 Add-C2pwRow -Label 'PARSER a six-verdict sentence reads the six admitted, NOT_MET blocked, and no type name or prose word as a verdict' `
     -Ok ($c2pwP6.found -and $c2pwP6.agrees -and ((Get-C2pwSetText $c2pwP6.admitted) -ceq (Get-C2pwSetText $c2pwSix)) -and ((Get-C2pwSetText $c2pwP6.blocked) -ceq 'NOT_MET')) `
     -Said ('admitted ' + (Get-C2pwSetText $c2pwP6.admitted))
+# ... and the SEVEN-verdict sentence ADR-046's unnumbered acceptance amendment ratified (adr-046-ratification.md,
+#     sha256 caa7aee8...): AWAITING_OPERATOR is read as the seventh, by the same rule as the six-verdict revision's
+#     row above. The PAGE this member reads is the pinned acceptance record and is NOT changed: the amendment is the
+#     first host's to number, so the page and the drives below stay at six and keep agreeing with each other.
+$c2pwSeven = @($c2pwSix) + @('AWAITING_OPERATOR')
+$c2pwLit7 = 'A seat may stop on exactly **seven** verdicts, `MET`, `HALT` (C-3), `AWAITING_AMENDMENT_GATE` (the goal declares `ungated_placement_absent`), `AWAITING_DISPATCH_GATE` and `HANDOFF_ADMITTED` (the goal declares `ungated_manifest_absent`, or `handoff_brief_present` and the first line is a HANDOFF head), `AWAITING_OPERATOR` (the goal declares `operator_wait_present` and the first line is an OPERATOR WAIT head naming a gate that does not yet stand) and `GOAL_ABSENT`, and the hook blocks on `NOT_MET` alone.'
+$c2pwP7 = Read-C2pwStopSentence -Text $c2pwLit7
+Add-C2pwRow -Label 'PARSER the ratified seven-verdict sentence (ADR-046) reads the seven admitted, NOT_MET blocked, and no type name or prose word as a verdict' `
+    -Ok ($c2pwP7.found -and $c2pwP7.agrees -and ((Get-C2pwSetText $c2pwP7.admitted) -ceq (Get-C2pwSetText $c2pwSeven)) -and ((Get-C2pwSetText $c2pwP7.blocked) -ceq 'NOT_MET')) `
+    -Said ('admitted ' + (Get-C2pwSetText $c2pwP7.admitted))
 
 # ---- THE PAGE, READ INSIDE ITS ### WP-3 SECTION ----------------------------------------------------
 $c2pwPage = $c2pwRecord.text
@@ -7890,7 +7900,7 @@ catch {
     $c2pwRows.Add('        line ' + $_.InvocationInfo.ScriptLineNumber + ' :: ' + $_.Exception.GetType().Name + ' :: ' + ($_.Exception.Message -replace '[\r\n]+', ' '))
 }
 if (($null -ne $c2pwM) -and (Test-Path -LiteralPath $c2pwM.base)) { try { Remove-Item -LiteralPath $c2pwM.base -Recurse -Force -ErrorAction Stop } catch { } }
-Check -Id 'C-2d' -Title 'THE ADMITTED STOPS, PAGE AND EVALUATOR AGREE (LAM-ACCEPT amendment 54, operator ruling (ii)): the page''s stop-admission enumeration, read inside its ### WP-3 section from "A seat may stop on exactly" -- its start counted there exactly once, its count word checked against its list -- and C-1''s verdict set, against the evaluator''s answers DRIVEN in hook mode over seven fixture goals (met, unmet, an open HALT, an untracked and ungated amendment; and, by LAM-ACCEPT amendment 60, an untracked and ungated round manifest, a HANDOFF head over a brief on disk, and a goal id with no file), a drive counting as an admitted stop only when the hook approves AND exits 0, must name the same verdicts, the same admitted stops and the same blocked verdict; both must admit the ruled third stop, AWAITING_AMENDMENT_GATE, and amendment 60''s three, AWAITING_DISPATCH_GATE, HANDOFF_ADMITTED and GOAL_ABSENT; the page''s WP-3 section must name each of the three types the evaluator knows; the enumeration must cite amendment 54, ruling (ii) and ledger 1404, and amendment 60, register rows 352 and 353, register row 341 and ledger 1474; and the parser is put to five literal sentences first' `
+Check -Id 'C-2d' -Title 'THE ADMITTED STOPS, PAGE AND EVALUATOR AGREE (LAM-ACCEPT amendment 54, operator ruling (ii)): the page''s stop-admission enumeration, read inside its ### WP-3 section from "A seat may stop on exactly" -- its start counted there exactly once, its count word checked against its list -- and C-1''s verdict set, against the evaluator''s answers DRIVEN in hook mode over seven fixture goals (met, unmet, an open HALT, an untracked and ungated amendment; and, by LAM-ACCEPT amendment 60, an untracked and ungated round manifest, a HANDOFF head over a brief on disk, and a goal id with no file), a drive counting as an admitted stop only when the hook approves AND exits 0, must name the same verdicts, the same admitted stops and the same blocked verdict; both must admit the ruled third stop, AWAITING_AMENDMENT_GATE, and amendment 60''s three, AWAITING_DISPATCH_GATE, HANDOFF_ADMITTED and GOAL_ABSENT; the page''s WP-3 section must name each of the three types the evaluator knows; the enumeration must cite amendment 54, ruling (ii) and ledger 1404, and amendment 60, register rows 352 and 353, register row 341 and ledger 1474; and the parser is put to six literal sentences first, the sixth the seven-verdict sentence of ADR-046''s ratified amendment' `
       -Ok $c2pwOk -Skipped:(-not $c2pwRecord.ok) -Detail ($(if ($c2pwRecord.ok) { '' } else { "      SKIPPED: the contract is not here -- $($c2pwRecord.from)`n" }) + "      THE $(@($c2pwRows | Where-Object { $_ -match ' (ok|MISMATCH)$' }).Count) ROWS:`n" + ($c2pwRows -join "`n") + "`n      the contract, read from: $($c2pwRecord.from)")
 
 # =============================================================================================
@@ -12867,6 +12877,8 @@ function New-WnMission {
     # (C-1ai's fixture, word for word but for its id), inputs/a.txt and other/b.txt -- one LF line each --
     # and every goal in -Goals (id -> detector lines, written by Write-PwGoal), so the goals are TRACKED and
     # the tree reads clean. A goal written after this commit is untracked until Invoke-WnCommit takes it.
+    # The commit's message names -Tag, so two fixtures of the same goals (C-1ap's twins) carry different
+    # commit ids BY CONSTRUCTION, and not only when their commits land in different clock seconds.
     # Returns New-EsMission's object (ok, why, base -- remove it --, root, commonDir) and: head (HEAD after
     # the commit), porcelain (as it then reads: '' until the stub is written), runsDir, goalsDir, rt
     # (<root>\.mission-runtime), scratch, inputsRel and otherRel (the two tracked files, as git names them),
@@ -12896,7 +12908,7 @@ function New-WnMission {
             $wnAddArgs += '.mission/goals'
         }
         $wnAdd = Invoke-PwGit -Root $wnM.root -GitArgs $wnAddArgs
-        $wnCom = Invoke-PwGit -Root $wnM.root -GitArgs ($script:esCommitArgs + @('the BATCH-5 fixture'))
+        $wnCom = Invoke-PwGit -Root $wnM.root -GitArgs ($script:esCommitArgs + @('the BATCH-5 fixture ' + $Tag))
         $wnM.head = Get-WnHead -Root $wnM.root
         $wnM.porcelain = Get-WnPorcelain -Root $wnM.root
         if (($wnAdd.exit -ne 0) -or ($wnCom.exit -ne 0) -or (-not $wnM.head) -or $wnM.porcelain) {
@@ -15410,7 +15422,7 @@ Add-C1asRow -Label '(d) FALSIFIER THE RULE IS A FUNCTION OF ITS OWN BESIDE THE R
 #     (the three admitted-stop arms apart, which read the fixture) -- no instrument, no verify, nothing of
 #     the live goal is run -- and the one question left is whether the goal PARSED. The copies are removed.
 $c1asProbe = @('  - type: file_exists', '    path: scratch/no-such-file.txt')
-$c1asArmTypes = @('ungated_placement_absent', 'ungated_manifest_absent', 'handoff_brief_present')
+$c1asArmTypes = @('ungated_placement_absent', 'ungated_manifest_absent', 'operator_wait_present', 'handoff_brief_present')
 $c1asTrackedAt = 0
 $c1asTrackedAsked = 0
 $c1asTrackedParsed = 0
@@ -18370,7 +18382,7 @@ if ($wnBaseDir) { Remove-PwTreeAsWritten -Base $wnBaseDir }
 # where the base can show it the RED is KEPT as a base row. Each member reads its own plane row (Get-WqPlaneRow).
 # seat.py IS RUN BY ONE INTERPRETER, found by the rule WP-4's T-30 reads for the transcription wrapper (the
 # interpreter pick in WP-4 that sets $t30PyExe, just above its Invoke-T30Transcribe): $env:MISSION_PYTHON, then this
-# tree's tools\.venv\Scripts\python.exe, then the PRIMARY checkout's tools\.venv\Scripts\python.exe, then python on the
+# tree's tools\ui\.venv\Scripts\python.exe, then the PRIMARY checkout's tools\ui\.venv\Scripts\python.exe, then python on the
 # PATH. The helper is this instrument's own: WP-3 calls no WP-4 helper.
 $wrBaseSha  = '700e19e5-s11'
 $wrBasePins = [ordered]@{
@@ -18401,8 +18413,8 @@ $wrSeat = $null
 try { $wrSeat = New-WrBaseSeat -Dir (Join-Path $wnBaseDir 'base-tools') }
 catch { $wrSeat = [pscustomobject]@{ ok = $false; path = ''; said = ('New-WrBaseSeat threw: ' + ($_.Exception.Message -replace '[\r\n]+', ' ')) } }
 function Get-WrPython {
-    # THE INTERPRETER seat.py IS RUN BY: $env:MISSION_PYTHON, then this tree's tools\.venv\Scripts\python.exe, then the
-    # PRIMARY checkout's tools\.venv\Scripts\python.exe, then python on the PATH (WP-4 T-30's order); '' where none
+    # THE INTERPRETER seat.py IS RUN BY: $env:MISSION_PYTHON, then this tree's tools\ui\.venv\Scripts\python.exe, then the
+    # PRIMARY checkout's tools\ui\.venv\Scripts\python.exe, then python on the PATH (WP-4 T-30's order); '' where none
     # stands. THE PRIMARY'S VENV IS A CANDIDATE because a linked worktree carries no venv of its own (it is not
     # tracked): without it a worktree fell through to the PATH interpreter while the primary checkout ran its venv,
     # and one commit read two interpreters for where it stood. The primary is found through git rev-parse
@@ -18416,9 +18428,9 @@ function Get-WrPython {
     finally { $ErrorActionPreference = $prevEap }
     if ($wrCd -and ($wrCdExit -eq 0)) {
         if (-not [System.IO.Path]::IsPathRooted($wrCd)) { $wrCd = Join-Path $repoRoot $wrCd }
-        $wrPrimaryVenv = Join-Path (Split-Path -Parent ([System.IO.Path]::GetFullPath($wrCd.Replace('/', '\')).TrimEnd('\'))) 'tools\.venv\Scripts\python.exe'
+        $wrPrimaryVenv = Join-Path (Split-Path -Parent ([System.IO.Path]::GetFullPath($wrCd.Replace('/', '\')).TrimEnd('\'))) 'tools\ui\.venv\Scripts\python.exe'
     }
-    foreach ($wrCand in @($env:MISSION_PYTHON, (Join-Path $repoRoot 'tools\.venv\Scripts\python.exe'), $wrPrimaryVenv)) {
+    foreach ($wrCand in @($env:MISSION_PYTHON, (Join-Path $repoRoot 'tools\ui\.venv\Scripts\python.exe'), $wrPrimaryVenv)) {
         if ($wrCand -and (Test-Path -LiteralPath $wrCand -PathType Leaf)) { return [string]$wrCand }
     }
     $wrOnPath = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -18432,7 +18444,7 @@ function Invoke-WrSeat {
     # no interpreter stands or the base's pin did not hold, so no row reads green over a run that did not happen.
     param([string]$Tools = 'tree', [string[]]$PyArgs)
     if (@('tree', 'base') -cnotcontains $Tools) { throw ('Invoke-WrSeat: -Tools is tree or base, not ' + $Tools) }
-    if (-not $script:wrPy) { throw 'NO INTERPRETER: neither MISSION_PYTHON, nor tools\.venv\Scripts\python.exe in this tree or the primary checkout, nor python on the PATH -- seat.py cannot be run' }
+    if (-not $script:wrPy) { throw 'NO INTERPRETER: neither MISSION_PYTHON, nor tools\ui\.venv\Scripts\python.exe in this tree or the primary checkout, nor python on the PATH -- seat.py cannot be run' }
     if ($Tools -ceq 'base') {
         if (($null -eq $script:wrSeat) -or (-not $script:wrSeat.ok)) { throw ('BASE PIN FAILED: seat.py at ' + $script:wrBaseSha + ' did not come out at its pinned LF/blob sha256 (' + [string]$script:wrSeat.said + ')') }
         $wrTool = $script:wrSeat.path

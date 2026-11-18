@@ -53,7 +53,7 @@
 
   THE SERVICE, V-1..V-15 (UI-1 S2, s2-falsifiers.md, ruled 2026-11-03): `vanguard ui` in tools\ui, read through
   its pytest suite tools\ui\tests\test_vNN.py -- one file per member, run ONCE for the wanted members by
-  tools\.venv's interpreter, each test starting the service on an ephemeral 127.0.0.1 port over its own per-test
+  tools\ui\.venv's interpreter, each test starting the service on an ephemeral 127.0.0.1 port over its own per-test
   home under %TEMP% and stopping it after. A V-member's verdict is WP-7's own: its file ran at least one test and
   every test passed, the fixture feeds tests\lam\fixtures\ui\*.jsonl validated line by line against the schema here
   (F3; the four V-4 plants in p.jsonl lines 9..12 must each be a rejection), and the member's own reading where it
@@ -467,7 +467,7 @@ if ($vWant.Count -and -not (Test-Path -LiteralPath (Join-Path $repoRoot 'tools\u
     $vWant = @()
 }
 if ($vWant.Count) {
-    $vPy = Join-Path $repoRoot 'tools\.venv\Scripts\python.exe'
+    $vPy = Join-Path $repoRoot 'tools\ui\.venv\Scripts\python.exe'
     $vUi = Join-Path $repoRoot 'tools\ui'
     $vRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('v7' + [guid]::NewGuid().ToString('N').Substring(0, 8))
     New-Item -ItemType Directory -Path $vRoot -Force | Out-Null
@@ -540,7 +540,7 @@ if (Want 'V-1') { try {
     $unhashed = @($reqs | Where-Object { $_ -notmatch '^[A-Za-z0-9._-]+==\S+\s+--hash=sha256:[0-9a-f]{64}' })
     $d = $r.detail + "    tools\ui\vanguard.cmd ui --help: exit $($sh.code), usage line 'Usage: vanguard ui': $shOk`n"
     $d += "    requirements.txt: $($reqs.Count) pinned requirement(s), $($unhashed.Count) without ==version and a sha256 --hash`n"
-    Check -Id 'V-1' -Title 'package: tools/ui importable from tools\.venv; requirements.txt hash-pinned; vanguard ui --help exits 0; imports only the pinned set and the stdlib' `
+    Check -Id 'V-1' -Title 'package: tools/ui importable from tools\ui\.venv; requirements.txt hash-pinned; vanguard ui --help exits 0; imports only the pinned set and the stdlib' `
           -Ok ($r.ok -and $shOk -and $reqs.Count -ge 3 -and $unhashed.Count -eq 0) -Detail $d
 } catch { Write-W7Threw 'V-1' $_ } }
 if (Want 'V-2') { try { $r = Get-W7VReading 'V-2'
@@ -608,14 +608,22 @@ if (Want 'V-15') { try {
     $hidF = Join-Path $env:USERPROFILE '.vanguard\host-id'
     if (Test-Path -LiteralPath $hidF -PathType Leaf) { $pats += ([System.IO.File]::ReadAllText($hidF)).Trim() }
     $pats = @($pats | Sort-Object -Unique)
-    $hits = @(); $nf = 0
-    foreach ($fi in @(Get-ChildItem -LiteralPath $vUi -Recurse -File | Where-Object { $_.FullName -notmatch '\\__pycache__\\' })) {
+    # V-15 READS WHAT A RELEASE SHIPS (RELEASE-5 group A amendment 2, RA-22). tools\ui\.venv is the dashboard's Python set,
+    # built on the host by install.ps1, ignored (tools\ui\.gitignore) and never shipped; its own files (pyvenv.cfg, the
+    # activate scripts, the Scripts launchers) hold the host's paths. The scan passes over EXACTLY that one folder --
+    # <repo>\tools\ui\.venv\, by its full path, not a .venv anywhere else -- and says so below with the count it passed
+    # over. Every other file under tools\ui, tracked or not, is read: a host word in one still fails V-15. (The compile
+    # caches, __pycache__, are passed over as before 1.3.1.)
+    $vEnvDir = (Join-Path $vUi '.venv') + '\'
+    $hits = @(); $nf = 0; $nEnv = 0
+    foreach ($fi in @(Get-ChildItem -LiteralPath $vUi -Recurse -File -Force | Where-Object { $_.FullName -notmatch '\\__pycache__\\' })) {
+        if ($fi.FullName.StartsWith($vEnvDir, [System.StringComparison]::OrdinalIgnoreCase)) { $nEnv++; continue }
         $nf++
         $txt = [System.IO.File]::ReadAllText($fi.FullName)
         foreach ($p in $pats) { if ($txt.IndexOf($p, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $hits += "$($fi.FullName.Substring($repoRoot.Length + 1)): pattern #$([array]::IndexOf($pats, $p))" } }
     }
-    $d = $r.detail + "    HARD-class scan of tools\ui ($nf file(s)): $($pats.Count) pattern(s) ($(if ($HardPatternFile) { 'the file ' + $HardPatternFile + ' plus' } else { 'no pattern file given:' }) this host's computer name, user name, profile path, host-id); hits: $(if ($hits.Count) { $hits -join '; ' } else { '(none)' })`n"
-    Check -Id 'V-15' -Title 'no host knowledge in tools/ui; dist/ served when present, a plain 404 when absent; the SPA path the only non-/api route' `
+    $d = $r.detail + "    HARD-class scan of tools\ui ($nf file(s) read; passed over: tools\ui\.venv, $nEnv file(s) -- the dashboard's environment, built on the host, ignored, never shipped -- and __pycache__): $($pats.Count) pattern(s) ($(if ($HardPatternFile) { 'the file ' + $HardPatternFile + ' plus' } else { 'no pattern file given:' }) this host's computer name, user name, profile path, host-id); hits: $(if ($hits.Count) { $hits -join '; ' } else { '(none)' })`n"
+    Check -Id 'V-15' -Title 'no host knowledge in tools/ui (tools\ui\.venv, the environment built on the host and never shipped, passed over: that one folder); dist/ served when present, a plain 404 when absent; the SPA path the only non-/api route' `
           -Ok ($r.ok -and $pats.Count -gt 0 -and $nf -ge 10 -and $hits.Count -eq 0) -Detail $d
 } catch { Write-W7Threw 'V-15' $_ } }
 # UI-1 S2-AM1 (s2-amendment-1.md): the figures the dashboard shows, each computed in tools\ui\metrics.py
@@ -942,7 +950,7 @@ try {   # TOP-LEVEL REGION 2 of 4: the P members (Write-W7TopThrew)
 # (UI-2 S2: so do U-50..U-52, whose hook and installer halves run in the U fixture and whose API and browser halves use this folder)
 $pAny = @($pFree + @('U-25', 'U-50', 'U-51', 'U-52') | Where-Object { Want $_ }).Count -gt 0
 $pRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('p7' + [guid]::NewGuid().ToString('N').Substring(0, 8))
-$pPy = Join-Path $repoRoot 'tools\.venv\Scripts\python.exe'
+$pPy = Join-Path $repoRoot 'tools\ui\.venv\Scripts\python.exe'
 $pReader = Join-Path $repoRoot 'tests\lam\wp7-real-feed.py'
 $pFix = Join-Path $repoRoot 'tests\lam\fixtures\real-feed'
 $pClosed = @('passed', 'active', 'pending', 'withdrawn')
@@ -958,9 +966,9 @@ function Get-W7RealFeed { param([string]$Name)
     return ,$res
 }
 # THE SERVICE's INTERPRETER (RELEASE-4 S3 F-P1-fix; S2's P-1): U-19 and U-22 read the real-feed fixture through the service's
-# own reader, and U-30 runs tools\ui\vanguard.cmd -- all three on tools\.venv's python.exe. A project installed with
+# own reader, and U-30 runs tools\ui\vanguard.cmd -- all three on tools\ui\.venv's python.exe. A project installed with
 # -SkipPythonSet has none: those members SKIP BY NAME there (counted, never passed), and run wherever it stands.
-$pNoPy = if (Test-Path -LiteralPath $pPy -PathType Leaf) { $null } else { "no tools\.venv\Scripts\python.exe in this checkout (a project installed with -SkipPythonSet: the Python set is not installed), so the service's interpreter cannot run" }
+$pNoPy = if (Test-Path -LiteralPath $pPy -PathType Leaf) { $null } else { "no tools\ui\.venv\Scripts\python.exe in this checkout (a project installed with -SkipPythonSet: the Python set is not installed), so the service's interpreter cannot run" }
 
 # U-19 -- F-P1b (register row 497, W-1): the milestone status enum closed to four values by an additive amendment
 if ((Want 'U-19') -and $pNoPy) { Check -Id 'U-19' -Title 'F-P1b (row 497): the schema closes milestones.*.status to passed/active/pending/withdrawn by an additive 1.1 amendment (SS14 too); 1.0 lines and every fixture line still validate' -Ok $false -Skipped -Detail "    SKIPPED BY NAME: $pNoPy" }
@@ -1211,11 +1219,31 @@ if (Want 'U-24') { try {
     $d += "    the specimen: dispatch_finalized with partial: true at seq $(@($spec | ForEach-Object { $_.obj.seq }) -join ', '), manifest_state $(@($spec | ForEach-Object { $_.obj.payload.manifest_state } | Sort-Object -Unique) -join ', ')`n"
     $a = Invoke-W7Reader @('api', (Join-Path $pRoot 'u24'), '--plant-finalized', 'w7-u24-state-only,false,PARTIAL', '--plant-finalized', 'w7-u24-neither,false,FINALIZED')
     $errs = if ($a.obj) { @($a.obj.mission.errors | Where-Object { $_.class -ceq 'partial_manifest' }) } else { @() }
+    # RELEASE-5 reading 3, amendment 1, ruling (ag): after row 499's words, exactly and first, each caption carries group B's
+    # suffix (RB-13) and nothing else -- " -- the manifest of session <id>, <n> capture gap(s)" -- with <n> the count on the
+    # feed line the caption is for (each session's LATEST dispatch_finalized, as the service reads it, in the home's own copy
+    # of the worktree feed, plants included) and the plural right: "1 capture gap", otherwise "capture gaps".
+    $u24Last = [ordered]@{}
+    $u24Feed = Join-Path $pRoot 'u24\wt-ui-1\.mission-runtime\telemetry\events.jsonl'
+    if (Test-Path -LiteralPath $u24Feed -PathType Leaf) {
+        foreach ($ln in [System.IO.File]::ReadAllLines($u24Feed)) { $o = $null; try { $o = $ln | ConvertFrom-Json } catch { }; if ($o -and ($o.kind -ceq 'dispatch_finalized')) { $u24Last[[string]$o.payload.dispatch_id] = $o } }
+    }
+    $u24Suffix = { param([string]$Sid)
+        if (-not $u24Last.Contains($Sid)) { return $null }
+        $gc = $u24Last[$Sid].payload.capture_gaps_count
+        if ($null -eq $gc) { return $null }
+        ' -- the manifest of session ' + $Sid + ', ' + [int]$gc + ' capture gap' + $(if ([int]$gc -eq 1) { '' } else { 's' }) }
     $real = @($errs | Where-Object { $_.detail -notmatch 'w7-u24' })
-    $realOk = ($real.Count -eq 2) -and (@($real | Where-Object { $_.detail -cnotmatch '^dispatch \S+ finalized with partial: true, manifest_state FINALIZED$' }).Count -eq 0)
+    # the real-feed sessions whose latest finalization fired partial: true over FINALIZED; each is the caption of exactly one
+    $u24RealSids = @($u24Last.Keys | Where-Object { ($_ -notmatch 'w7-u24') -and ($u24Last[$_].payload.partial -eq $true) -and ([string]$u24Last[$_].payload.manifest_state -ceq 'FINALIZED') })
+    $u24RealHit = @(foreach ($sid in $u24RealSids) {
+        $sx = & $u24Suffix $sid
+        if ($null -ne $sx) { @($real | Where-Object { $_.detail -cmatch ('^dispatch \S+ finalized with partial: true, manifest_state FINALIZED' + [regex]::Escape($sx) + '$') }).Count } else { 0 } })
+    $realOk = ($real.Count -eq 2) -and ($u24RealSids.Count -eq 2) -and (@($u24RealHit | Where-Object { $_ -ne 1 }).Count -eq 0)
     foreach ($e in $real) { $d += "    real-feed dispatch: '$($e.detail)'`n" }
     $so = @($errs | Where-Object { $_.detail -match 'w7-u24-state-only' })
-    $soOk = ($so.Count -eq 1) -and ($so[0].detail -ceq 'dispatch w7-u24-state-only finalized with manifest_state PARTIAL')
+    $soSx = & $u24Suffix 'w7-u24-state-only'
+    $soOk = ($so.Count -eq 1) -and ($null -ne $soSx) -and ($so[0].detail -ceq ('dispatch w7-u24-state-only finalized with manifest_state PARTIAL' + $soSx))
     $ne = @($errs | Where-Object { $_.detail -match 'w7-u24-neither' })
     $d += "    planted manifest_state PARTIAL, partial false: $(if ($so.Count) { "'" + $so[0].detail + "'" } else { '(no PARTIAL error)' }) -> $soOk`n"
     $d += "    planted neither fired (partial false, FINALIZED): PARTIAL errors for it $($ne.Count) (expect 0)$(if ($null -eq $a.obj) { ' -- no answer: ' + $a.tail })`n"
@@ -1340,7 +1368,7 @@ if (Want 'U-29') { try {
 # (SS 1): loopback only, 421 otherwise, --host reserved for the v2 hub. The help text is read through a FILE the command's
 # stdout is redirected to (retrospective SS 5: never a pipe cut short), whitespace and rich's box rules folded. The release
 # notes' words are a CONSTANT here (RELEASE-4 S3 F-P1-fix, S2's P-1): the notes are not installed into a project, so the
-# member does not read them; vanguard.cmd runs on tools\.venv's interpreter, so without one the member SKIPS BY NAME.
+# member does not read them; vanguard.cmd runs on tools\ui\.venv's interpreter, so without one the member SKIPS BY NAME.
 if ((Want 'U-30') -and $pNoPy) { Check -Id 'U-30' -Title 'F-P7c (row 505 g): vanguard ui --help says --host is loopback only, 421 otherwise, reserved for the v2 hub -- the 1.1.0 release notes'' words, held here as a constant' -Ok $false -Skipped -Detail "    SKIPPED BY NAME: $pNoPy (tools\ui\vanguard.cmd runs on it)" }
 elseif (Want 'U-30') { try {
     $d = ''
@@ -1791,7 +1819,11 @@ $copyRel = @('tools\mission-lib.ps1', 'tools\mission-ledger-append.ps1', 'tools\
              'tools\mission-verify.ps1', 'tools\lam\mission-telemetry.ps1', 'tools\lam\mission-gate.ps1', 'tools\lam\lam-gate-class.ps1',
              'tools\lam\lam-verify-admission.ps1', 'docs\framework\evidence-manifest.schema.json',
              'tools\mission-dispatch.ps1', 'tools\lam\transcribe-validator-results.ps1', 'tools\lam\transcribe_validator_results.py',
-             'tools\lam\commit_ledger.py', 'tools\lam\emit-mission-event.ps1')
+             'tools\lam\commit_ledger.py', 'tools\lam\emit-mission-event.ps1',
+             # RELEASE-5 reading 3, amendment 1, ruling (af): every installed file the 1.3.1 snapshot writer reads its rules
+             # from (tools\lam\mission-telemetry.ps1: the close tool it lifts the ledger's reader from, the stop evaluator it
+             # lifts the HALT rule from, and the legacy census it reads beside the evaluator) -- as an installed project holds them
+             'tools\mission-close-milestone.ps1', 'tools\lam\mission-goal-check.ps1', 'tools\lam\legacy-halt-census.txt')
 foreach ($sub in @('tools\evidence-hooks-next\hooks', 'tools\framework\hooks')) {
     foreach ($fi in @(Get-ChildItem -LiteralPath (Join-Path $repoRoot $sub) -Recurse -File -ErrorAction SilentlyContinue)) {
         $copyRel += $fi.FullName.Substring($repoRoot.Length).TrimStart('\')
@@ -1857,7 +1889,7 @@ $fx['f committed'] = ($fc.code -eq 0)
 # 5. the fresh init checkout x\, under h2\: the verbs whose cores are Python or git (see .DESCRIPTION)
 $X  = Join-Path $T 'x'
 $XO = Join-Path $T 'xo.git'
-$basePy = Join-Path $repoRoot 'tools\.venv\Scripts\python.exe'
+$basePy = Join-Path $repoRoot 'tools\ui\.venv\Scripts\python.exe'
 $xEnv = @{ VANGUARD_HOME = $H2; MISSION_DISPATCH_ID = 'w7-verb'; CLAUDE_PROJECT_DIR = $null }
 New-Item -ItemType Directory -Path $X -Force | Out-Null
 $xi = Invoke-W7 -File (Join-Path $repoRoot 'mission.ps1') -Argv @('init', '-Target', $X) -Env @{ VANGUARD_HOME = $H2 }
@@ -1865,14 +1897,14 @@ $fx['mission init of x exit 0'] = ($xi.code -eq 0)
 $null = Copy-W7Framework -Dest $X
 $xm = Join-Path $X '.mission\mission.yaml'
 if (Test-Path -LiteralPath $xm) { Write-W7File $xm (([System.IO.File]::ReadAllText($xm)) -replace '(?m)^state:\s*\S+', 'state: Executing') }
-# THE LOM ENTRY RUNS <project>\tools\.venv\Scripts\python.exe: a venv of this checkout's own interpreter, made
+# THE LOM ENTRY RUNS <project>\tools\ui\.venv\Scripts\python.exe: a venv of this checkout's own interpreter, made
 # --without-pip (no network), and the STUB core beside it -- what the real core leaves for the entry, nothing more.
-# (RELEASE-4 S3 F-P1-fix: with no tools\.venv interpreter in this checkout -- a project installed with -SkipPythonSet -- the
+# (RELEASE-4 S3 F-P1-fix: with no tools\ui\.venv interpreter in this checkout -- a project installed with -SkipPythonSet -- the
 # venv is not made and the fixture says so; F-0 then reads it, never a throw that ends the reading.)
 if (Test-Path -LiteralPath $basePy -PathType Leaf) {
-    $xv = Invoke-W7Native -Exe $basePy -Argv @('-m', 'venv', '--without-pip', (Join-Path $X 'tools\.venv'))
+    $xv = Invoke-W7Native -Exe $basePy -Argv @('-m', 'venv', '--without-pip', (Join-Path $X 'tools\ui\.venv'))
     $fx['x: the venv the LOM entry runs (exit 0)'] = ($xv.code -eq 0)
-} else { $fx['x: the venv the LOM entry runs (exit 0)'] = $false; $fx['x: the venv not made'] = 'no tools\.venv\Scripts\python.exe in this checkout' }
+} else { $fx['x: the venv the LOM entry runs (exit 0)'] = $false; $fx['x: the venv not made'] = 'no tools\ui\.venv\Scripts\python.exe in this checkout' }
 Write-W7File (Join-Path $X 'tools\worker-runner\dispatch_entry.py') @'
 import json, os, sys, time, uuid
 # THE WP-7 STUB CORE: the committed brief the real runner writes before its spawn -- its target list, then an
@@ -2129,6 +2161,16 @@ function Invoke-W7LedgerAppend { param([string]$Tag, [string]$Dispatch = 'w7-ver
 $script:w7Tx = $null
 function Invoke-W7TranscribeOnce {
     if ($script:w7Tx) { return $script:w7Tx }
+    # RELEASE-5 reading 3, amendment 2, ruling (ak): under ruling (l) a -Write of verdicts the spawn ledger already binds
+    # changes no derived state by itself, so whether its snapshot offer was seen depended on which member had offered one
+    # before. The row's own derived-state change -- x's current_milestone moved and committed -- is made immediately before
+    # the one -Write, so the -Write's offer finds the state changed whichever member drives it: the row proves that the
+    # transcriber offers the snapshot, not that its own write caused a change (the validator's form, seat 4's round 2).
+    $txMf = Join-Path $X '.mission\mission.yaml'
+    $txMt = [System.IO.File]::ReadAllText($txMf)
+    $txMn = if ($txMt -match '(?m)^current_milestone:') { $txMt -replace '(?m)^current_milestone:.*$', 'current_milestone: M-W7-TX' } else { $txMt.TrimEnd() + "`ncurrent_milestone: M-W7-TX`n" }
+    Write-W7File $txMf $txMn
+    $null = Invoke-W7Git $X @('add', '--', '.mission/mission.yaml'); $null = Invoke-W7Git $X @('commit', '-q', '-m', 'w7 fixture: a new current milestone, immediately before the -Write')
     $b = Get-W7Feed -Root $X
     $r = Invoke-W7 -File (Join-Path $X 'tools\lam\transcribe-validator-results.ps1') -Argv @('-Arc', 'w7', '-Assertion', 'A-W7-T1,A-W7-T2', '-Write', '-PythonExe', $basePy) -Env $xEnv -Cwd $X
     $a = Get-W7Feed -Root $X
@@ -2509,13 +2551,36 @@ exit 0
     $revokeOffer = { Invoke-W7 -File $fnCall -Argv @('-Verb', $mgVerb, '-Function', 'Send-LamGateTelemetry', '-ScriptRoot', $sLam, '-Root', $S, '-Snapshot') -Env @{ VANGUARD_HOME = $H } }
     $closeOffer  = { Invoke-W7 -File $fnCall -Argv @('-Verb', $rnVerb, '-Function', 'Send-LamDispatchSnapshot', '-ScriptRoot', $sLam, '-Root', $S) -Env @{ VANGUARD_HOME = $H } }
     # REVOKE (validator round 4's A-U5): revoking a halt-ruling gate reopens its HALT.
-    Write-W7File (Join-Path $S '.mission-runtime\halts\HALT-W7-02.md') "# HALT-W7-02`n`n**Severity:** low`n`nThe WP-7 instrument's second HALT, answered by a halt-ruling gate.`n"
+    # RELEASE-5 reading 3, amendment 2, ruling (aj): THE GATE IS THE SHAPE THE CONSOLE MINTS. The 1.3.1 writer's open set is
+    # the stop evaluator's (RB-8), and the evaluator answers a HALT only by a halt-ruling gate carrying its halt_id and a
+    # binds_sha256 equal to the HALT's bytes. The mint itself is the console's alone (see .DESCRIPTION: its HARNESS-SESSION
+    # and NOT-INTERACTIVE conditions fire in any agent session, and this instrument does not defeat a human touchpoint), so
+    # the gate's bytes are taken from approve's own composition -- `approve -ComposeOnly`, which runs every refusal and
+    # composition step, needs no token, runs none of the session conditions and writes nothing -- and the instrument writes
+    # exactly those bytes where the mint would. The row first shows the evaluator answering the HALT: open HALTs as before.
+    $preSnap = @(Get-W7Kind (Get-W7Feed -Root $S) 'mission_snapshot') | Select-Object -Last 1
+    $openPre = if ($preSnap) { [int]$preSnap.obj.payload.counts.open_halts } else { -1 }
+    $hHalt = Join-Path $S '.mission-runtime\halts\HALT-W7-02.md'
+    Write-W7File $hHalt "# HALT-W7-02`n`n**Severity:** low`n`nThe WP-7 instrument's second HALT, answered by a halt-ruling gate.`n"
+    $hSha = ([BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.IO.File]::ReadAllBytes($hHalt)))).Replace('-', '').ToLowerInvariant()
     $hg = Join-Path $S '.mission\gates\halt-ruling-HALT-W7-02.yaml'
-    Write-W7File $hg "kind: halt-ruling`nid: HALT-W7-02`nbinds: .mission-runtime/halts/HALT-W7-02.md`ncreated_at: 2026-11-01T00:00:00.000Z`n"
+    $hc = Invoke-W7 -File (Join-Path $S 'tools\lam\mission-gate.ps1') -Argv @('approve', '-Kind', 'halt-ruling', '-Id', 'HALT-W7-02', '-Binds', '.mission-runtime\halts\HALT-W7-02.md',
+                     '-Ruling', 'w7: HALT-W7-02 answered by the WP-7 instrument', '-MissionRoot', $S, '-ComposeOnly') -Env @{ VANGUARD_HOME = $H; CLAUDE_PROJECT_DIR = $null } -Cwd $S
+    $hcw = @(@($hc.out) | ForEach-Object { [string]$_ } | Where-Object { $_ -match '^LAMCOMPOSE write ' })
+    $hcName = ''; $hcBytes = $null
+    if ($hcw.Count -eq 1) { $hcp = $hcw[0].Split(' '); $hcName = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($hcp[2])); $hcBytes = [Convert]::FromBase64String($hcp[4]) }
+    $hcSha = @(@($hc.out) | ForEach-Object { [string]$_ } | Where-Object { $_ -match '^LAMCOMPOSE binds_sha256 ' } | ForEach-Object { $_.Split(' ')[2] }) -join ','
+    if ($null -ne $hcBytes) { [System.IO.File]::WriteAllBytes($hg, $hcBytes) }
+    $hgText = if (Test-Path -LiteralPath $hg) { [System.IO.File]::ReadAllText($hg) } else { '' }
+    $gateOk = ($hc.code -eq 0) -and ($hcw.Count -eq 1) -and ($hcName -ceq 'halt-ruling-HALT-W7-02.yaml') -and ($hcSha -ceq $hSha) -and
+              ([regex]::Matches($hgText, '(?m)^halt_id: HALT-W7-02\r?$').Count -eq 1) -and ([regex]::Matches($hgText, ('(?m)^binds_sha256: ' + $hSha + '\r?$')).Count -eq 1)
     $null = Invoke-W7Git $S @('add', '--', '.mission/gates/halt-ruling-HALT-W7-02.yaml'); $null = Invoke-W7Git $S @('commit', '-q', '-m', 'w7 fixture: a halt-ruling gate answering HALT-W7-02')
     $null = & $revokeOffer   # the feed's snapshot brought up to this state
     $lastSnap = @(Get-W7Kind (Get-W7Feed -Root $S) 'mission_snapshot') | Select-Object -Last 1
     $openBefore = if ($lastSnap) { [int]$lastSnap.obj.payload.counts.open_halts } else { -1 }
+    $hState = if ($lastSnap -and $lastSnap.obj.payload.halts -and $lastSnap.obj.payload.halts.'HALT-W7-02') { [string]$lastSnap.obj.payload.halts.'HALT-W7-02'.state } else { '(not in the snapshot)' }
+    $preOk = $gateOk -and ($openPre -ge 0) -and ($openBefore -eq $openPre) -and ($hState -ceq 'answered')
+    $d += "    the halt-ruling gate as approve composes it (mission-gate.ps1 approve -ComposeOnly, exit $($hc.code); one write $hcName; halt_id HALT-W7-02 and binds_sha256 the HALT's bytes: $gateOk), written where the mint writes it: HALT-W7-02 $hState, open_halts $openPre -> $openBefore (expect answered, unchanged) -> $preOk`n"
     Write-W7File $hg (([System.IO.File]::ReadAllText($hg)).TrimEnd() + "`nrevoked_at: 2026-11-02T00:00:00.000Z`nrevoked_by: w7-fixture`nrevoked_reason: `"w7: revoked by the WP-7 instrument`"`n")
     $bR = Get-W7Feed -Root $S
     $rv1 = & $revokeOffer
@@ -2529,7 +2594,7 @@ exit 0
     # inside the revoke block (never past where settle's begins), after revoke's one write
     $revokeRead = [regex]::IsMatch($mgText, "(?s)'revoke' \{(?:(?!'settle' \{).)*?WriteAllBytes\(\`$p, \`$resultBytes\)(?:(?!'settle' \{).)*?Send-LamGateTelemetry -Snapshot")
     $rvCalled = @($rv1.out | Where-Object { $_ -eq 'CALLED Send-LamGateTelemetry' }).Count -eq 1
-    $rvOk = $rvCalled -and ($openBefore -ge 0) -and ($sR.Count -eq 1) -and ([int]$sR[0].obj.payload.counts.open_halts -eq ($openBefore + 1)) -and -not (Test-W7Line $sR[0]) -and ($nR2 -eq 0) -and $revokeRead
+    $rvOk = $preOk -and $rvCalled -and ($openBefore -ge 0) -and ($sR.Count -eq 1) -and ([int]$sR[0].obj.payload.counts.open_halts -eq ($openBefore + 1)) -and -not (Test-W7Line $sR[0]) -and ($nR2 -eq 0) -and $revokeRead
     $d += "    revoke's stamp on a halt-ruling gate, then revoke's own Send-LamGateTelemetry -Snapshot (lifted from mission-gate.ps1: $rvCalled): $($sR.Count) snapshot(s) (expect 1)$(if ($sR.Count) { "; open_halts $openBefore -> $($sR[0].obj.payload.counts.open_halts) (expect +1)" }); the offer again, nothing changed: $nR2 (expect 0)`n"
     $d += "      read: mission-gate revoke offers the snapshot (Send-LamGateTelemetry -Snapshot) after its WriteAllBytes: $revokeRead -> $rvOk`n"
     # THE LAM RUNNER'S CLOSE (validator round 2's U-5): a handoff beside <id>.yaml closes the dispatch -- the snapshot counts
@@ -2538,6 +2603,13 @@ exit 0
     $dR = Join-Path $S '.mission\dispatches\D-W7R.yaml'
     Write-W7File $dR "id: D-W7R`nmission_id: $smokeMissionId`nkind: mainline`nfeature_id: F-W7`nassertion_targets: [A-W7]`n"
     $null = Invoke-W7Git $S @('add', '--', '.mission/dispatches/D-W7R.yaml'); $null = Invoke-W7Git $S @('commit', '-q', '-m', 'w7 fixture: a dispatch D-W7R, open')
+    # RELEASE-5 reading 3, ruling (aa): OPEN IS A WORKER SPAWNED AND NOT DONE (group B, RB-11). D-W7R is given the spawn-ledger
+    # line a spawned worker has -- event spawn, its seq, kind worker, its dispatch_id -- so the writer reads it open before its
+    # handoff and the count falls by one when the handoff lands. Appended, never overwriting: the smoke mission holds no
+    # ledger of its own, and .mission-runtime is ignored, so the tree stays clean for the verbs.
+    $dRLedger = Join-Path $S '.mission-runtime\lam\spawn-ledger.jsonl'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $dRLedger) -Force | Out-Null
+    [System.IO.File]::AppendAllText($dRLedger, ('{"event":"spawn","seq":1,"kind":"worker","dispatch_id":"D-W7R"}' + "`n"), (New-Object System.Text.UTF8Encoding($false)))
     $null = & $closeOffer   # the feed's snapshot brought up to this state (D-W7R open)
     $lastSnap = @(Get-W7Kind (Get-W7Feed -Root $S) 'mission_snapshot') | Select-Object -Last 1
     $openD0 = if ($lastSnap) { [int]$lastSnap.obj.payload.counts.open_dispatches } else { -1 }
@@ -2579,8 +2651,13 @@ exit 0
     # read here as readers instead -- none calls the feed's writer or opens any file for writing (its tests\, which
     # write their own per-test homes, aside).
     $writers = @(); $readers = @(); $readerWrites = @()
+    # Two Python environments are passed over, each by its full path (RELEASE-5 group A amendment 2, RA-22, V-15's rule):
+    # tools\ui\.venv, the dashboard's, and tools\.venv, the host's own -- built on the host, never the framework's code.
+    # A .venv anywhere else under tools is read. (__pycache__, as before.)
+    $u5Envs = @(((Join-Path $repoRoot 'tools\ui\.venv') + '\'), ((Join-Path $repoRoot 'tools\.venv') + '\'))
     foreach ($fi in @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tools') -Recurse -File -Include '*.ps1', '*.psm1', '*.py' -ErrorAction SilentlyContinue)) {
-        if ($fi.FullName -match '\\(\.venv|__pycache__)\\') { continue }
+        if ($fi.FullName -match '\\__pycache__\\') { continue }
+        if (@($u5Envs | Where-Object { $fi.FullName.StartsWith($_, [System.StringComparison]::OrdinalIgnoreCase) }).Count) { continue }
         $rel = $fi.FullName.Substring($repoRoot.Length).TrimStart('\')
         $txt = [System.IO.File]::ReadAllText($fi.FullName)
         if ($rel -match '^tools\\ui\\' -and $rel -notmatch '^tools\\ui\\tests\\') {

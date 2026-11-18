@@ -1,6 +1,6 @@
 """WP-7's group-B members (UI-2 S2; the S2 contract B-1..B-11): U-39 .. U-49, the API halves and the planted faces.
 
-Run by tools\\.venv's interpreter with -I; prints one JSON object {"ok": bool, "detail": [lines], ...}. Every figure a
+Run by tools\\ui\\.venv's interpreter with -I; prints one JSON object {"ok": bool, "detail": [lines], ...}. Every figure a
 member asserts is DERIVED HERE FROM THE FIXTURE by this file's own reading -- the smoke mission's .mission files and git
 history (regex, git), the hand-composed feeds' lines -- never by the snapshot writer's or the service's code, which are
 what is under test: the writer through tests\\lam\\wp7-smoke-feed.ps1 (the replay), the service through
@@ -172,7 +172,13 @@ def replay(run, smoke_root=None, tree=None, out=None):
     out = out or os.path.join(run, "replay-%s.jsonl" % (os.path.basename(tree) if tree else "smoke"))
     argv = [PS, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", os.path.join(HERE, "wp7-smoke-feed.ps1"), "-Out", out, "-Framework", REPO]
     argv += ["-Tree", tree] if tree else ["-SmokeRoot", smoke_root]
-    r = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8")
+    env = dict(os.environ)
+    # RELEASE-5 SHELL (row 562): Windows PowerShell builds its own module path when none is given; one inherited from a
+    # PowerShell 7 parent (WP-7 run under pwsh) names 7's module folders first, where 5.1's Get-FileHash does not resolve.
+    for name in list(env):
+        if name.lower() == "psmodulepath":
+            env.pop(name, None)
+    r = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", env=env)
     if r.returncode != 0:
         raise SystemExit("the replay failed: " + (r.stdout + r.stderr)[-400:])
     return out

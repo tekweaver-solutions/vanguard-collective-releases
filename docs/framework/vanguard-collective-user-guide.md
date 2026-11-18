@@ -1,4 +1,4 @@
-# Vanguard Collective 1.3.0 -- the operator's guide
+# Vanguard Collective 1.3.2 -- the operator's guide
 
 This guide says what the parts of the framework are, what each one records, who may write it, and
 how to read what the acceptance instruments say about it. It does not repeat the procedures: the
@@ -48,14 +48,61 @@ The runner refuses to dispatch until the pre-push decider is installed at the ho
 
 The goal evaluator reads a goal file, `.mission\goals\<id>.yaml`, runs each of its detectors
 against disk, and writes `<id>.verdict.yaml` beside it. The verdict is one of `MET`, `NOT_MET`,
-`HALT`, `AWAITING_AMENDMENT_GATE`, `AWAITING_DISPATCH_GATE`, `HANDOFF_ADMITTED` or `GOAL_ABSENT`,
-and the evaluator exits 0 if and only if the verdict is `MET`. A detector this file does not
+`HALT`, `AWAITING_AMENDMENT_GATE`, `AWAITING_DISPATCH_GATE`, `AWAITING_OPERATOR`, `HANDOFF_ADMITTED` or
+`GOAL_ABSENT`, and the evaluator exits 0 if and only if the verdict is `MET`. A detector this file does not
 implement is refused, never skipped: a skipped detector would be a goal reporting MET over a check
 nobody ran.
 
 Run with `-AsStopHook`, the same file is the Stop hook. `NOT_MET` blocks the session from stopping
 and names the failing detectors, so the session continues on evidence. `MET`, `HALT` and the
 admitted stops do not block. A HALT outranks a fully satisfied goal: control returns to the human.
+
+**Waiting on the operator (`tools/mission-cli/config/adr-046-operator-wait-stop-bound-to-a-gate.md`).** A seat may stop when it has done its part and the next act is yours. It does
+this by naming ONE gate it is waiting on. It does not place a holding file and does not raise a HALT.
+
+- **Opting in.** A goal admits such a stop only if it declares the detector `- type: operator_wait_present`. The type
+  takes no keys, and the smoke goal does not declare it.
+- **The line.** The seat writes the first line of `.mission-runtime\lam\STATUS.md` as
+  `OPERATOR WAIT gate <kind> <id> <minted|settled>`, and nothing else on that line. `<kind>` is one of push,
+  amendment-material, dispatch, supersession, completion-acceptance or reclose. `<id>` is the gate's id. `settled`
+  applies to push only.
+- **The stop.** While the condition is unmet, the stop is admitted: the verdict is `AWAITING_OPERATOR` (exit 7 by
+  hand). The verdict's `operator_wait` list names the wait, its gate and what was read.
+
+**What releases each wait.**
+
+| condition | released when | refused when |
+|---|---|---|
+| `minted` | your mint of `.mission\gates\<kind>-<id>.yaml` | -- |
+| `settled` on push | your console `settle` after your push | the gate was consumed by an in-session push, revoked or disqualified |
+
+**A settle of an amendment-material or reclose gate is not a wait.** A line naming `settled` on those kinds is
+refused, and that case stays a HALT: the settle observes a commit the seat makes, so the seat could withhold it. A
+seat may still wait `minted` on such a gate.
+
+**Once released, a wait never admits again.** The record `.mission-runtime\lam\operator-wait-releases.jsonl` keeps
+every release and every hook admission. Nothing in it needs cleaning up, and it is never read as a HALT.
+
+**A push settle wait that no act of yours can release is void.** This is a push gate consumed by anything but your
+console settle, or one carrying part of a consume block. Such a wait is refused. If it was admitted, it is recorded
+void, which frees the one-wait slot.
+
+**What is refused.** The evaluator refuses the stop, and the goal decides, for:
+
+- a line out of that form, or free text;
+- any other observable (a ledger tag, a log line, a file and its hash);
+- a gate the evaluator cannot read for certain;
+- a second wait while an earlier one is unreleased.
+
+An open HALT outranks a wait. **A host act and a ruling that is no gate still need a HALT.**
+
+**The one misuse it knowingly admits.** A seat can name a gate you never mean to mint, and stop with its work undone.
+What bounds it:
+
+- your goal's opt-in;
+- the claim, printed in the verdict and the hook's reason;
+- the record;
+- one wait at a time, until you mint that gate.
 
 `mission.ps1 smoke` is the first use of it: it runs the project's installed evaluator over the
 `SMOKE-MISSION` goal that `mission.ps1 init` wrote.
@@ -453,31 +500,51 @@ failure). A count line whose numbers no instrument could print is not read at al
   where it was looked for. Where a member could measure some of its rows, it still shows them, and a
   row that was measured and missed fails the member: a measured miss outranks an unmeasurable row.
 
-**Why skips are expected on a fresh project.** A skip names an environment, not a defect. A
-reading of a fresh install of this release -- a new git project with a bare origin, the install from
-the ZIP, `mission init`, the smoke mission built, the container engine up -- failed nothing and
-showed 67 named skips with the Python set installed (`-Python`) and 70 without it
-(`-SkipPythonSet`), each with its reason on its face:
+**Why skips are expected on a fresh project.** A skip names an environment, not a defect.
+A full reading of a fresh install of this release -- a new git project with a bare origin, the install from the ZIP
+with the Python set, `mission init`, `mission smoke` (MET), `mission register`, the smoke mission built, the container
+engine up -- failed nothing, and read:
+
+| instrument | passed | skipped (by name) |
+|---|---|---|
+| WP-1 | 42 of 43 | H-12 |
+| WP-2 | 75 of 78 | R-16, R-B, R-57 |
+| WP-3 | 69 of 77 | C-1k, C-1v, C-1w, C-1bd, C-1be, C-2c, C-2d, C-3e |
+| WP-4 | 67 of 70 | T-42, T-53, T-54 |
+| WP-5 | 10 of 10 | none |
+| WP-6 | 13 of 13 | none |
+| WP-7 | 25 of 89 | V-1 to V-20, L-1 to L-16, F-0, U-4, U-5, U-10, U-13 to U-16, U-20, U-21, U-24 to U-29, U-32, U-35, U-38, U-41, U-43, U-45, U-47 to U-52 |
+
+With the container engine down -- read at 1.3.1, on a fresh install of 1.3.1, and not taken again for 1.3.2, since no
+file 1.3.2 changed reads the engine -- WP-3 read 69 of 77 with 8 named skips -- **C-1aw** skipped in
+place of C-1bd, which it then measured -- and WP-5, WP-6 and WP-7's F-0 and U-1 to U-52 as with the engine up (10 of
+10, 13 of 13, and 25 passed with 28 skipped). Without the Python set (WP-5, WP-6 and WP-7's F-0 and U-1 to U-52 read),
+WP-5 and WP-6 read the same, and WP-7 skips eleven members more -- the members that need the Python set: U-19, U-22,
+U-30, U-31, U-33, U-34, U-39, U-40, U-42, U-44 and U-46. Each skip carries its reason on its face:
 
 - **No project acceptance record: WP-1 H-12, WP-2 R-16 and R-B, WP-3 C-1v, C-1w and C-2d.** Each
   measures against a project's own acceptance record, `docs/framework/LAM-ACCEPT.md`, which no
   release after 0.2.0 ships: the record is neither in the checkout nor in its history.
-- **No venv with pytest: WP-2 R-57, WP-3 C-1k and C-1be.** Each runs a fixture's pytest in the first
-  of `src\.venv` and `tools\.venv` (the primary checkout's too, from a worktree) that has a
-  `Scripts\python.exe`; the install's `tools\.venv` holds the dashboard's packages and no pytest, so
-  each skips, naming it. With pytest installed there, or a `src\.venv` that has it, they are measured.
-- **The dashboard's tests and source not installed: WP-7 V-1 to V-20 and L-1 to L-16, U-20, U-24 and U-26.** The
-  service's pytest suite and the dashboard's source stay in the framework's development repository.
+- **No project venv with a `Scripts\python.exe`: WP-2 R-57, WP-3 C-1k and C-1be.** Each runs a fixture's pytest in the first
+  of `src\.venv` and `tools\.venv` (the project's own environments; the primary checkout's too, from a
+  worktree) that has a `Scripts\python.exe`; the install makes neither -- the dashboard's set is in
+  `tools\ui\.venv` -- so each skips, naming it. With one of them holding pytest, they are measured.
+- **The dashboard's tests and source not installed: WP-7 V-1 to V-20 and L-1 to L-16, U-20, U-24 and U-26, and the
+  browser halves of U-35, U-41, U-43, U-45, U-47, U-48, U-49 and U-50.** The service's pytest suite and the
+  dashboard's source stay in the framework's development repository.
 - **The release tree's `mission.ps1` and `VERSION` not installed: WP-7 F-0, U-4, U-5, U-10, U-13 to U-16 and U-25.** Their fixtures
   are fresh checkouts `mission.ps1 init` makes, and one reads `VERSION`; the members that read only the smoke
   mission are measured.
-- **`mission.ps1` not installed: WP-7 U-28 and U-29.** Each runs the release tree's `mission.ps1`.
+- **`mission.ps1` not installed: WP-7 U-28, U-29 and U-52.** Each runs the release tree's `mission.ps1`.
 - **The project's own `.gitignore`: WP-7 U-27.** It reads the release tree's `.gitignore`,
   which is not installed; an installed project's is its own.
-- **`provenance/` not installed: WP-7 U-21.** It holds the settings template to its manifest
+- **`provenance/` not installed: WP-7 U-21 and U-51.** Each holds the settings template to its manifest
   row, and the manifest is not installed.
-- **No Python set, without `-Python` only: WP-7 U-19, U-22 and U-30.** They run the service on `tools\.venv`'s
-  interpreter, which an install with `-SkipPythonSet` does not make.
+- **No HARD pattern file: WP-7 U-32.** It reads the operator's HARD pattern file through `-HardPatternFile`,
+  which is never tracked.
+- **An installed project: WP-7 U-38.** An installed project holds `framework.lock` and not this guide.
+- **No Python set: WP-7 U-19, U-22, U-30, U-31, U-33, U-34, U-39, U-40, U-42, U-44 and U-46.** They run the
+  service on `tools\ui\.venv`'s interpreter, which an install without the Python set does not make.
 - **No goal-check registration file: WP-3 C-2c.** There is no `.claude\settings.local.json` in the
   checkout, nor in the primary checkout when the reading runs in a worktree. Once that file exists
   the member is measured: it must register a command Stop hook that runs `mission-goal-check.ps1`
@@ -539,7 +606,8 @@ nothing to an agent, writes nothing into a project, and holds no cost figure.
 - **Stats**: Green -- green assertions over all of them, the headline; the pass rate of those evaluated,
   green over green and red, always labelled so; dispatches finalized against PARTIAL; validator rounds
   confirmed against refuted; HALTs raised and resolved and the mean time to resolve; the tool-call non-zero
-  exit rate, or "not captured" where no exit code was captured; and the time spent on each milestone.
+  exit rate, or "exit code not captured" where no exit code was captured (the harness gives the hooks none);
+  and the time spent on each milestone.
 
 Every figure carries its formula and the window it was read over, and is computed when it is asked for,
 never stored. Every tile carries a badge naming what it was read as of -- the stream, its last `seq` and
@@ -568,10 +636,49 @@ value the service runs with (`/api/missions`, `settings.tail_window_bytes`).
 checkout -- `host_id`, `checkout_path`, `mission_id`, `registered_at`, `framework_version` -- appended by
 `mission init`, by `mission.ps1 register -Target <checkout>` (a mission made before the feed existed, or a
 worktree made by hand, which is a stream of its own), and by `install.ps1` over a project whose mission
-already has its feed folder. Rows are never pruned: a row whose checkout is gone is shown stale. Two
+already has its feed folder. Rows are never pruned: a row whose checkout folder is gone is shown removed --
+never counted as a stale stream, and left out of the framework-version comparison (from 1.3.1). Two
 checkouts of one mission are grouped by `mission_id` on the Fleet screen.
 
-**Starting it.** From the project, after the install put its Python set in `tools\.venv` (INSTALL.md
+**How old a reading is, and a fresh snapshot.** Much of what the Project and Stats screens show is read from
+the newest `mission_snapshot` line of the mission's feed: each assertion's status and rounds (from 1.3.1, read
+from the spawn ledger's bound validator results by the close tool's own reader, else from
+`.mission\validator-results`, and, for one not judged, why), the milestone tallies, the current spec version
+(from `.mission\spec\current.txt`), the HALT states (open is what the stop evaluator counts unanswered; a HALT
+file it does not count is set aside), the dispatch states, and the goal verdicts the verify card reads. Both
+screens say which snapshot that is -- its `seq` and when it was written -- and how many feed lines came after
+it. A snapshot is written only by a lifecycle command, and only when what it derives has changed: `mission.ps1
+init` and `register`, the stage verbs that commit, the dispatch runner's open and close, `mission-gate`'s
+approve, settle and revoke, and the validator-result transcriber; `mission verify` and the hooks write none.
+To write a fresh snapshot now, run, from the release folder:
+
+```powershell
+.\mission.ps1 register -Target C:\work\my-project
+```
+
+It keeps the project's registry row as it is, appends `/.mission-runtime/` to a root `.gitignore` that has no
+line ignoring that folder (creating the file if there is none), and appends a
+snapshot to that checkout's own feed when the derived state differs from the newest snapshot in it -- so, where a
+mission has several checkouts, target the one the screens' snapshot line names (`seq <n> of <checkout>`); always,
+the first time after an upgrade to
+1.3.2, whose snapshot carries readings an older one lacks. Until then the screens show each such reading as
+not in this snapshot, with this command. It prints nothing about the snapshot itself: where the mission's state
+cannot be derived, no line is written, the command still exits 0, and the cause is logged to
+`.mission-runtime\evidence\<dispatch>\hook-errors.log` (`session-unknown` when no dispatch or session names the
+run, as from a plain terminal) -- so the screens' snapshot line, which names the
+snapshot they read and the lines after it, is the place to see whether a fresh one was written.
+
+**The evidence an assertion stands on.** Each judged assertion names it in one of four words: *working copy* (the
+result file its spawn-ledger `complete` line binds, re-hashed equal where it lies), *archive copy* (for a milestone
+whose spec status is done, the working copy being gone: a file of the result's own name anywhere under
+`.mission-runtime\lam\validators`, re-hashed equal, shown with its path), *record alone* (the same, with no copy of
+the bound bytes found: the `complete` line's own verdict, marked on the page and counted apart in the milestone's
+tally) or *old results folder* (`.mission\validator-results`). A host keeps that archive by copying each placed
+result file, under its own name, into any folder under `.mission-runtime\lam\validators` before the next round's
+preparation removes the working copy -- the dashboard only reads it, and `mission close-milestone` still demands the
+working copy.
+
+**Starting it.** From the project, after the install put its Python set in `tools\ui\.venv` (INSTALL.md
 section 5):
 
 ```powershell

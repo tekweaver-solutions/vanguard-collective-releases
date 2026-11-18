@@ -1,9 +1,9 @@
 # tools/ui -- the service's pinned set (UI-1 S2, F1): fastapi, uvicorn, typer and what they require.
-# Every line is the wheel pip installed into tools\.venv at S2 (one install from PyPI, its report's
+# Every line is the wheel pip installed into the service's venv at S2 (one install from PyPI, its report's
 # archive hashes). Install with: python -m pip install --require-hashes -r tools/ui/requirements.txt
 # UI-1 S4 (operator ruling of 2026-11-04): pyyaml is not the service's -- the framework's own Python tools import it
-# (tools/lam/transcribe_validator_results.py among them), and tools\.venv, which install.ps1 makes for this set, is the
-# interpreter those tools take first; the venv carries every package a shipped tool imports. Its hash is the
+# (tools/lam/transcribe_validator_results.py among them), and tools\ui\.venv, which install.ps1 makes for this set
+# (RELEASE-5), is the interpreter those tools take first; the venv carries every package a shipped tool imports. Its hash is the
 # cp314 win_amd64 wheel's, fetched once from PyPI.
 
 annotated-doc==0.0.5 \

@@ -40,7 +40,7 @@ the words its leaf: a sentence so worded is read FRESH, REUSED or NOT RUN. A lea
 openings would be read by it, and an instrument whose own file name held ` -- ` would read UNREAD; no instrument
 is named either way.
 THE ARM that admitted the stop is the `verdict:` word and nothing else: HALT, AWAITING_AMENDMENT_GATE,
-AWAITING_DISPATCH_GATE, HANDOFF_ADMITTED, or none (MET, NOT_MET), or GOAL_ABSENT. The lists of a lower arm are still
+AWAITING_DISPATCH_GATE, AWAITING_OPERATOR (ADR-046), HANDOFF_ADMITTED, or none (MET, NOT_MET), or GOAL_ABSENT. The lists of a lower arm are still
 written under a higher verdict, and under an open HALT an eligible HANDOFF head reads `ELIGIBLE, NOT SPENT`: the
 record is then expected to hold no line for that brief, and this tool says so, or names the line that does.
 
@@ -93,7 +93,8 @@ SUBCOMMANDS
       write: {CLOCKMS}, and {SEAM_FROM_FIRST} and {SEAM_FROM_END} -- the spans from the two stamps of the line
       `SEAM BASES first <stamp> end <stamp>` in the brief --predecessor-brief names. --replace-handoff is the
       successor's: line 1 must begin HANDOFF, the head found is SAID (in the form or out of it; its brief re-hashed,
-      or why it is no file) and replaced either way, and the new line 1 may begin neither HANDOFF nor AWAITING.
+      or why it is no file) and replaced either way, and the new line 1 may begin none of HANDOFF, AWAITING and
+      OPERATOR WAIT.
       --place-handoff is the outgoing seat's: the new line 1 must be a HANDOFF head in the evaluator's own form,
       holding no token, whose two digests are the brief's, re-hashed -- the brief a FILE: a device's name, which
       reads as no bytes, is REFUSED. The write is ONE temporary file of one fixed
@@ -623,6 +624,10 @@ def statement(verdict, root):
     elif word in ("AWAITING_AMENDMENT_GATE", "AWAITING_DISPATCH_GATE"):
         lines = verdict["lists"].get(word.lower(), [])
         out.append("ARM %s %d line(s): %s" % (word, len(lines), " ; ".join(lines) or "(none named)"))
+    elif word == "AWAITING_OPERATOR":
+        # ADR-046: the operator-wait arm's admitted stop; its line is the verdict's own `operator_wait` list.
+        lines = verdict["lists"].get("operator_wait", [])
+        out.append("ARM AWAITING_OPERATOR %d line(s): %s" % (len(lines), " ; ".join(lines) or "(none named)"))
     elif word == "HANDOFF_ADMITTED":
         recorded = RECORDED_AT_RX.search(handoff_detail)
         digests = ADMITTED_LINE_RX.search(" ".join(verdict["lists"].get("handoff_admitted", [])) or handoff_detail)
@@ -1055,9 +1060,13 @@ def run_head(args):
         if not head.startswith("HANDOFF"):
             raise Refused(["line 1 of STATUS.md does not begin HANDOFF, so there is no HANDOFF head to replace (it reads: " +
                            cut(head, 120) + ")"])
-        if new_first.startswith("HANDOFF") or new_first.startswith("AWAITING"):
-            raise Refused(["the new line 1 begins " + ("HANDOFF" if new_first.startswith("HANDOFF") else "AWAITING") +
-                           ": --replace-handoff places a plain head, which the evaluator reads as no HANDOFF head"])
+        # ADR-046: nor OPERATOR WAIT -- a successor that replaced a HANDOFF head with a wait line would be admitted its
+        # first stop, the stop the handoff charter withholds.
+        for opening in ("HANDOFF", "AWAITING", "OPERATOR WAIT"):
+            if new_first.startswith(opening):
+                raise Refused(["the new line 1 begins " + opening +
+                               ": --replace-handoff places a plain head, which the evaluator reads as no HANDOFF head"
+                               " and no OPERATOR WAIT line"])
         said = head_found(root, head, record)
     else:
         in_first = LINE_TOKEN_RX.findall(new_first)

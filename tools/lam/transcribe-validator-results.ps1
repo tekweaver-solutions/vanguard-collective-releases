@@ -78,8 +78,8 @@ param(
     # STOP on any result whose verdict is not PASS.
     [switch]$RequirePass,
 
-    # An explicit interpreter. Otherwise: $env:MISSION_PYTHON, then tools\.venv\Scripts\python.exe,
-    # then `python` on PATH.
+    # An explicit interpreter. Otherwise: $env:MISSION_PYTHON, then tools\ui\.venv\Scripts\python.exe (the set
+    # install.ps1 installs, PyYAML among it), then `python` on PATH.
     [string]$PythonExe
 )
 
@@ -100,8 +100,8 @@ $py = $null
 foreach ($cand in @(
         $PythonExe,
         $env:MISSION_PYTHON,
-        (Join-Path $toolsDir '.venv\Scripts\python.exe'),
-        (Join-Path $toolsDir '.venv/bin/python'))) {
+        (Join-Path $toolsDir 'ui\.venv\Scripts\python.exe'),
+        (Join-Path $toolsDir 'ui/.venv/bin/python'))) {
     if ($cand -and (Test-Path -LiteralPath $cand)) { $py = (Resolve-Path -LiteralPath $cand).Path; break }
 }
 if (-not $py) {
@@ -109,7 +109,7 @@ if (-not $py) {
     if ($onPath) { $py = $onPath.Source }
 }
 if (-not $py) {
-    Write-Error "no Python interpreter found. Run 'uv sync' in tools\, or pass -PythonExe."
+    Write-Error "no Python interpreter found. Install the framework's Python set into tools\ui\.venv (INSTALL.md section 5), or pass -PythonExe."
     exit 3
 }
 

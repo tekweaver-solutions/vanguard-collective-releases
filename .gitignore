@@ -7,7 +7,7 @@
 # R11: Claude Code's per-checkout files at this root, its local settings and its worktrees. The leading slashes anchor both to this root, and .claude/settings.json is named by neither.
 /.claude/settings.local.json
 /.claude/worktrees/
-# The Python tests' interpreter, made by python -m venv tools\.venv; the instruments prefer it too. The leading slash anchors it to this root.
+# A development checkout's tools\.venv from before 1.3.1, when it was the Python tests' interpreter; that is tools\ui\.venv now (tools/ui/.gitignore ignores it). The leading slash anchors this to this root.
 /tools/.venv/
 # Python's bytecode caches, which the test runs leave beside the sources; never committed.
 __pycache__/

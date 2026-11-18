@@ -1,0 +1,2 @@
+# The dashboard's pinned Python set, which install.ps1 makes here (tools\ui\.venv); never committed.
+/.venv/

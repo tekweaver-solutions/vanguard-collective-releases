@@ -11,11 +11,17 @@ drivers terminate non-zero -- that is the contract-before-code RED proof. The gu
 once BUILD-M-56 lands the helpers and rewires the sites.
 """
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+# RELEASE-5 SHELL (row 562): every PowerShell child the guards in this folder start takes this process's environment. A
+# PSModulePath inherited from a PowerShell 7 parent (pwsh -> uv or python -> pytest) names 7's module folders first, and
+# a Windows PowerShell 5.1 child then cannot resolve Get-FileHash. Taken out here, each edition builds its own path.
+os.environ.pop("PSModulePath", None)
 
 _TOOLS = Path(__file__).resolve().parents[2]          # repo/tools
 _CLI = Path(__file__).resolve().parent                 # repo/tools/tests/cli

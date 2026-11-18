@@ -67,6 +67,15 @@ def mission_stats(events, window):
     partial = sum(1 for f in fin if derive.is_partial(f))
     out["dispatches_finalized"] = _stat(len(fin) - partial, "count of dispatches whose latest dispatch_finalized is not partial", window)
     out["dispatches_partial"] = _stat(partial, "count of dispatches whose latest dispatch_finalized has partial true or manifest_state PARTIAL", window)
+    # RELEASE-5 group B (RB-13; validator round 1): partial is the manifest's word, never a state of the dispatch -- the
+    # dispatches finalized, whatever their manifest, and the partial manifests with their capture gaps, apart (the two
+    # figures above keep their 1.2.0 meaning for the series that read them)
+    mf = derive.manifests(events)
+    out["dispatches_closed"] = _stat(len(fin), "count of dispatches with a dispatch_finalized line (a finalized line whose dispatch_id is an "
+                                               "opened line's session_id is that dispatch's), whatever their manifest", window)
+    out["manifests_partial"] = _stat(sum(1 for m in mf if m["partial"]), "count of sealed manifests whose latest dispatch_finalized line reads "
+                                     "partial true, on the sessions they belong to; capture_gaps = the sum of their capture_gaps_count", window,
+                                     capture_gaps=sum(m["capture_gaps_count"] or 0 for m in mf if m["partial"]))
 
     rounds = {}
     for e in derive.of_kind(events, "assertion_result"):
@@ -193,7 +202,14 @@ def _open_dispatches(events):
 
 
 def _open_halts(events):
-    return [h["raised"] for _, h in sorted(derive.halts(events).items()) if h["raised"] is not None and h["resolved"] is None]
+    """The halt_raised lines of the open HALTs. RELEASE-5 group B (RB-8, ruling (m); validator round 1): the open set is
+    derive.open_halt_ids -- over a 1.3.1 snapshot the stop evaluator's own reading -- the one every figure counts."""
+    hs = derive.halts(events)
+    return [hs[hid]["raised"] for hid in sorted(derive.open_halt_ids(events)) if hid in hs and hs[hid]["raised"] is not None]
+
+
+def _open_halt_count(events):
+    return len(derive.open_halt_ids(events))
 
 
 def _partial_count(events):
@@ -244,13 +260,22 @@ def last_verify(events, clock, window, against=MISSION_CLOCK):
          "of the latest mission_snapshot at or before it; checks = the number of arms run; age_s = " + against + " - its ts, seconds")
     v = derive.latest_verify(events)
     if v is None:
-        return _stat(None, f, window, verdict=None, scope=None, checks=None, divergences=None, ts=None, age_s=None, source=None)
+        return _stat(None, f, window, verdict=None, scope=None, checks=None, divergences=None, ts=None, age_s=None, source=None,
+                     evaluator=None, blocking=None)
     p = v["line"]["payload"]
     arms = p.get("arms_run") if isinstance(p.get("arms_run"), list) else []
+    ev = derive.verify_reading(events)
     return _stat(p.get("verdict"), f, window, verdict=p.get("verdict"),
                  scope={"milestone": _milestone_at(events, v), "arms_run": p.get("arms_run"), "against": p.get("against")},
                  checks=len(arms), divergences=p.get("divergences"), ts=v["ts"], age_s=_seconds(v["ts"], clock),
-                 source=v["line"]["source_path"] + "@" + v["line"]["sha256"])
+                 source=v["line"]["source_path"] + "@" + v["line"]["sha256"],
+                 # RELEASE-5 group B (RB-7): the stop evaluator's reading of this run, and whether the card blocks
+                 evaluator=ev, blocking=_verify_blocks(p, ev), evaluator_rule=derive.VERIFY_READING_RULE, evaluator_note=_evaluator_note(events, ev))
+
+
+def _verify_blocks(payload, reading):
+    """RB-7: a verify that did not PASS blocks unless the stop evaluator's reading of that same run admits it."""
+    return payload.get("verdict") != "PASS" and not (reading is not None and reading["admits"])
 
 
 def open_figure(events, window):
@@ -265,12 +290,31 @@ def spec_version(events, clock, window):
     f = ("value = the to_version of the mission's latest spec_bumped line in feed order; amendments = the number of spec_bumped lines; "
          "age_s = " + MISSION_CLOCK + " - its ts, seconds")
     bumps = derive.of_kind(events, "spec_bumped")
+    # RELEASE-5 group B (RB-6): the mission's current spec version as the latest snapshot read it from the mission's own state
+    # (.mission/spec/current.txt); the spec_bumped lines stay the history (a close bumps the spec with no such line)
+    sv = (derive.latest_snapshot(events) or {"line": {"payload": {}}})["line"].get("payload", {}).get("spec_version")
+    state = sv.get("current") if isinstance(sv, dict) and isinstance(sv.get("current"), str) and sv.get("current") else None
+    last = bumps[-1] if bumps else None
+    lp = last["line"]["payload"] if last else {}
+    if state is not None:
+        fs = ("value = the mission's current spec version, read by the snapshot writer from the mission's own state (" + str(sv.get("source")) +
+              "), the latest snapshot's spec_version; last_bumped = the to_version of the latest spec_bumped line (the history); amendments = the "
+              "number of spec_bumped lines")
+        return _stat(state, fs, window, amendments=len(bumps), from_version=lp.get("from_version"), amendment_id=lp.get("amendment_id"),
+                     ts=last["ts"] if last else None, age_s=_seconds(last["ts"], clock) if last else None, reason=None, basis="state",
+                     last_bumped=lp.get("to_version"), current_spec_version=sv.get("current_spec_version"), state_note=None)
+    # RB-16: the state's version is not in a snapshot an earlier writer wrote -- said, with the command; the history stands
+    note = ("the mission state's spec version is " + derive.not_in_snapshot(events)) if derive.snapshot_lacks(events, "spec_version") else None
     if not bumps:
-        return _stat(None, f, window, amendments=0, from_version=None, amendment_id=None, ts=None, age_s=None, reason="no spec_bumped line")
-    b = bumps[-1]
-    p = b["line"]["payload"]
-    return _stat(p.get("to_version"), f, window, amendments=len(bumps), from_version=p.get("from_version"), amendment_id=p.get("amendment_id"),
-                 ts=b["ts"], age_s=_seconds(b["ts"], clock), reason=None)
+        return _stat(None, f, window, amendments=0, from_version=None, amendment_id=None, ts=None, age_s=None, reason="no spec_bumped line",
+                     basis=None, last_bumped=None, state_note=note)
+    return _stat(lp.get("to_version"), f, window, amendments=len(bumps), from_version=lp.get("from_version"), amendment_id=lp.get("amendment_id"),
+                 ts=last["ts"], age_s=_seconds(last["ts"], clock), reason=None, basis="spec_bumped", last_bumped=lp.get("to_version"), state_note=note)
+
+
+def _evaluator_note(events, reading):
+    """RB-16: where no evaluator reading is shown because the snapshot carries no goal verdicts (an earlier writer's), say so."""
+    return ("the stop evaluator's reading is " + derive.not_in_snapshot(events)) if reading is None and derive.snapshot_lacks(events, "goal_verdicts") else None
 
 
 def clock_window(window, clock, against=FLEET_CLOCK):
@@ -317,7 +361,10 @@ def live(events, clock, window):
         p = o["line"]["payload"]
         dispatches.append({"dispatch_id": did, "kind": p.get("kind"), "feature": p.get("feature"), "milestone": _milestone_at(events, o),
                            "opened_ts": o["ts"], "elapsed_s": _seconds(o["ts"], clock), "formula": LIVE_DISPATCH_FORMULA, "window": window})
-    return {"sessions": sessions, "dispatches": dispatches, "window": window, "formula": {
+    # RELEASE-5 group B (RB-14; validator round 1): per open session, how many of its tool calls carry no exit code -- beside the
+    # rows (whose fields V-19 holds closed), so a session of captured and null codes never reads a bare count over the null ones
+    uncaptured = {s["session_id"]: sum(1 for c in codes.get(s["session_id"], []) if c is None) for s in sessions}
+    return {"sessions": sessions, "dispatches": dispatches, "window": window, "exit_codes_not_captured": uncaptured, "formula": {
         "sessions": "the open sessions (session ids whose latest session_start has no session_stop after it), by id; role and started_ts from that session_start",
         "tool_calls": "the mission's tool_call lines naming the session",
         "failed_calls": "those of them with exit_code captured and non-zero; null, note \"not captured\", when no exit_code of the session is captured",
@@ -397,8 +444,41 @@ def milestones(events, clock, window):
     return {"list": rows, "progress": progress, "reason": None, "basis": basis, "tile": progress}
 
 
+def milestone_tally(events):
+    """RELEASE-5 group B (RB-4): milestone id -> {total, green, judged}: the latest snapshot's milestones map, and its
+    milestone_tally -- the writer's count of each milestone's judged assertions (green or red) over the same snapshot's
+    assertions; judged None where the snapshot carries no such tally (a writer before 1.3.1). Amendment 3 (RB-25): record_alone,
+    the writer's count of the milestone's assertions judged on the record alone, counted apart -- None where the snapshot
+    carries no such count (a writer before 1.3.2)."""
+    snap = derive.latest_snapshot(events)
+    tally = derive.snapshot_map(snap, "milestone_tally")
+    out = {}
+    for mid, m in derive.snapshot_map(snap, "milestones").items():
+        if isinstance(m, dict):
+            t = tally.get(mid) if isinstance(tally.get(mid), dict) else {}
+            out[mid] = {"total": derive.as_int(m.get("assertions_total")), "green": derive.as_int(m.get("assertions_green")),
+                        "judged": derive.as_int(t.get("assertions_judged")), "record_alone": derive.as_int(t.get("assertions_record_alone"))}
+    return out
+
+
 def halts_open(events, window):
-    return _stat(len(_open_halts(events)), "count of HALT ids whose latest halt_raised has no halt_resolved after it", window)
+    t = derive.halt_times(events)
+    readings = derive.goal_readings(events)
+    goals = [g["goal"] for g in readings if isinstance(g["goal"], dict) and g["goal"].get("read")]
+    names = sorted({str(g.get("goal")) for g in goals})
+    # RB-16 over RB-17 (builder-side review): where no checkout's snapshot carries the goal reading, the allowlist figure is
+    # null and the tile says so, with the command
+    lacking = bool(readings) and all(g["goal"] is None for g in readings)
+    return _stat(_open_halt_count(events), "count of HALT ids open, the one set the HALT card, the errors and the fleet count "
+                                           "(derive.open_halt_ids): over a 1.3.1 snapshot, the HALTs the stop evaluator's own detector "
+                                           "reports unanswered when run for the governing goal (the goal the mission's Stop hook runs, "
+                                           "its legacy allowlist included), each by its own checkout's newest snapshot, and any raised "
+                                           "after that snapshot in a place its rule counts (derive.HALT_PRECEDENCE); over an earlier "
+                                           "snapshot, its halts map and the feed's halt_raised lines with no halt_resolved after them -- "
+                                           "which cannot tell the HALTs the evaluator does not count apart", window,
+                 # amendment 1 (RB-17): beside the open count, the HALTs the governing goal's legacy allowlist answers, and that goal
+                 answered_allowlist=None if lacking else sum(1 for v in t.values() if v["state"] == "answered_allowlist"), goals=names,
+                 goal_note=("the governing goal the HALT rule was read for is " + derive.not_in_snapshot(events)) if lacking else None)
 
 
 def mission_kpis(events, stats, window):
@@ -553,8 +633,8 @@ def fleet_stats(missions, fleet_figures, clock, window):
             "assertions_green": fleet_figures["assertions_green"],
             "partial_manifests": _stat(sum(_partial_count(m["events"]) for m in missions),
                                        "over every mission: dispatches whose latest dispatch_finalized has partial true or manifest_state PARTIAL", window),
-            "halts_open": _stat(sum(len(_open_halts(m["events"])) for m in missions),
-                                "over every mission: HALT ids whose latest halt_raised has no halt_resolved after it", window),
+            "halts_open": _stat(sum(_open_halt_count(m["events"]) for m in missions),
+                                "over every mission: its HALTs-open figure (derive.open_halt_ids, the set its HALT card counts)", window),
             "tool_call_failure_rate": _stat(_ratio(nonzero, captured) if captured else NOT_CAPTURED,
                                             "over every mission: tool_call lines with exit_code non-zero / tool_call lines with exit_code captured; "
                                             "\"not captured\" when no exit_code is", window, numerator=nonzero, denominator=captured, tool_calls=calls),
@@ -607,8 +687,21 @@ def halt_card(events, clock, window):
         if age is not None and age >= 0 and (oldest is None or age > oldest["age_s"]):
             oldest = {"halt_id": r["halt_id"], "age_s": age, "raised_at": r["raised_at"], "raised_basis": r["raised_basis"]}
     open_unknown = [r["halt_id"] for r in opn if r.get("age_s") is None or r["age_s"] < 0]
+    # amendment 1: each checkout's HALTs by its own newest snapshot -- a figure no checkout's snapshot carries reads null, and
+    # one that some checkout's snapshot does not carry says so (RB-16)
+    snaps = list(derive.checkout_snapshots(events).values())
+    lacks = [s for s in snaps if "halt_reading" not in (s["line"].get("payload") or {})]
+    goals = derive.goal_readings(events)
     return _stat(len(opn), "HALTs open (" + derive.HALT_PRECEDENCE + ")", window, open=len(opn), answered=len(ans),
                  withdrawn=sum(1 for r in rows if r["state"] == "withdrawn"),
+                 # RELEASE-5 group B (RB-8): the HALTs the stop evaluator does not count, counted apart -- never open; RB-16: a
+                 # snapshot an earlier writer wrote cannot tell them apart, and says so
+                 set_aside=None if (snaps and len(lacks) == len(snaps)) else sum(1 for r in rows if r["state"] == "set_aside"),
+                 set_aside_note=("the HALTs the stop evaluator does not count are " + derive.not_in_snapshot(events)) if lacks else None,
+                 # amendment 1 (RB-17): the HALTs the governing goal's legacy allowlist answers, counted apart from those a gate
+                 # answers; and the goal each checkout's snapshot read (null and a note where a snapshot predates the reading)
+                 answered_allowlist=None if (goals and all(g["goal"] is None for g in goals)) else sum(1 for r in rows if r["state"] == "answered_allowlist"),
+                 goal_readings=goals,
                  mean_ttr_s=round(sum(spans) / len(spans), 3) if spans else None,
                  median_ttr_s=round(statistics.median(spans), 3) if spans else None, measured=len(spans),
                  unknown=unknown, oldest_open=oldest, open_unknown=open_unknown, clock=clock, against=MISSION_CLOCK,
@@ -648,15 +741,20 @@ def verify_card(events, window):
     its additive divergence_list; with no such list, its divergences count only, and the list "not carried"."""
     v = derive.latest_verify(events)
     if v is None:
-        return _stat(None, "no verify_result line", window, listed=None, count=None, carried=False)
+        return _stat(None, "no verify_result line", window, listed=None, count=None, carried=False, verify_verdict=None, evaluator=None, blocking=None)
     d = derive.verify_divergences(v)
     p = v["line"]["payload"]
+    # RELEASE-5 group B (RB-7): the verify tool's own verdict in its own word, the stop evaluator's reading of that same run
+    # (derive.VERIFY_READING_RULE) beside it, and whether the card blocks
+    ev = derive.verify_reading(events)
+    extra = {"verify_verdict": p.get("verdict"), "evaluator": ev, "blocking": _verify_blocks(p, ev), "evaluator_rule": derive.VERIFY_READING_RULE,
+             "evaluator_note": _evaluator_note(events, ev)}
     if d is None:
         return _stat(p.get("divergences"), "the latest verify_result's divergences count (it carries no divergence_list)", window,
-                     listed=None, count=p.get("divergences"), carried=False, verdict=p.get("verdict"), ts=v["ts"], seq=v["seq"])
+                     listed=None, count=p.get("divergences"), carried=False, verdict=p.get("verdict"), ts=v["ts"], seq=v["seq"], **extra)
     return _stat(len(d["listed"]), "the latest verify_result's divergence_list: kinds " + ", ".join(sorted(derive.DIVERGENCE_KINDS)) +
                  "; kept-equal (a kept file now equal to upstream) is no divergence", window, listed=d["listed"], count=len(d["listed"]),
-                 carried=True, unrecognized=d["unrecognized"], kept_equal=d["kept_equal"], verdict=p.get("verdict"), ts=v["ts"], seq=v["seq"])
+                 carried=True, unrecognized=d["unrecognized"], kept_equal=d["kept_equal"], verdict=p.get("verdict"), ts=v["ts"], seq=v["seq"], **extra)
 
 
 def sessions_card(events, window):
@@ -672,20 +770,30 @@ def sessions_card(events, window):
 
 
 def dispatches_card(events, window):
-    """B-11: dispatches by state -- on the feed (open / finalized / partial) and as the artifacts state them (the latest
-    snapshot's dispatch_detail: open / handed_off / superseded); None (no data) where neither is carried."""
+    """B-11: dispatches by state -- on the feed (open / finalized, the opened and finalized lines of one dispatch joined on its
+    session; RELEASE-5 group B: partial is no state of a dispatch, counted on the manifests apart with their capture gaps) and
+    as the artifacts state them (the latest snapshot's dispatch_detail, each word of RB-11); None (no data) where neither is
+    carried."""
     disp = derive.dispatches(events)
     feed = None
+    manifests = None
     if disp:
+        # RELEASE-5 group B (RB-12, RB-13): the opened / finalized pair joined on its session is one dispatch; partial is the
+        # manifest's word, never a state of the dispatch -- counted with its capture gaps on the manifests, apart
         fin = [d["finalized"] for d in disp.values() if d["finalized"] is not None]
-        partial = sum(1 for f in fin if derive.is_partial(f))
-        feed = {"open": sum(1 for d in disp.values() if d["opened"] is not None and d["finalized"] is None), "finalized": len(fin) - partial, "partial": partial}
+        feed = {"open": sum(1 for d in disp.values() if d["opened"] is not None and d["finalized"] is None), "finalized": len(fin)}
+        mf = derive.manifests(events)
+        manifests = {"partial": sum(1 for m in mf if m["partial"]), "capture_gaps": sum(m["capture_gaps_count"] or 0 for m in mf if m["partial"])}
     det = derive.snapshot_map(derive.latest_snapshot(events), "dispatch_detail")
     art = None
+    # RB-16: the 1.3.1 dispatch words carry their basis; a snapshot whose entries carry none was written before them
+    words_note = ("the dispatch words of 1.3.1 are " + derive.not_in_snapshot(events)) if det and any(isinstance(d, dict) and "basis" not in d for d in det.values()) else None
     if det:
         art = {}
         for d in det.values():
             s = d.get("state") if isinstance(d, dict) else None
             art[str(s)] = art.get(str(s), 0) + 1
-    return _stat(None if feed is None and art is None else (feed or art), "the feed's dispatch_opened / dispatch_finalized lines; the snapshot's dispatch_detail states",
-                 window, feed=feed, artifacts=art)
+    return _stat(None if feed is None and art is None else (feed or art), "the feed's dispatch_opened / dispatch_finalized lines (a finalized line "
+                 "whose dispatch_id is an opened line's session_id is that dispatch's); the snapshot's dispatch_detail states; manifests = the "
+                 "sealed manifests with partial true and their capture gaps, on their sessions -- no state of a dispatch",
+                 window, feed=feed, artifacts=art, manifests=manifests, words_note=words_note)

@@ -40,17 +40,17 @@ HOOK_SCRIPT = Path(__file__).parent / "gateway_hook.py"
 # pydantic live in user-site, which the test's deliberate env scrub
 # ({PATH,SYSTEMROOT,TEMP,TMP}; APPDATA dropped) makes invisible — and the
 # scrub is correct per the hook's argv-only contract, so the fix is the
-# interpreter, not the env. tools/.venv carries yaml + pydantic by lock,
+# interpreter, not the env. tools/ui/.venv carries yaml + pydantic by lock,
 # so the venv interpreter resolves them without user-site anchors.
 _VENV_PYTHON = (
-    Path(__file__).resolve().parent.parent / ".venv" / "Scripts" / "python.exe"
+    Path(__file__).resolve().parent.parent / "ui" / ".venv" / "Scripts" / "python.exe"
 )
 
 pytestmark = pytest.mark.skipif(
     not _VENV_PYTHON.exists(),
     reason=(
-        "framework venv absent at tools/.venv/Scripts/python.exe; run "
-        "`uv sync` in tools/ — hook tests target the venv interpreter"
+        "framework venv absent at tools/ui/.venv/Scripts/python.exe; run "
+        "install.ps1's Python set (INSTALL.md section 5) — hook tests target the venv interpreter"
     ),
 )
 

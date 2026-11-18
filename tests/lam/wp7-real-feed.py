@@ -1,6 +1,6 @@
 """WP-7's reader of the real-feed fixture (RELEASE-4 S1, group P): tests/lam/fixtures/real-feed, read through the service.
 
-Run by tools\\.venv's interpreter with -I; prints one JSON object on stdout. Never writes the fixture: a plant goes into
+Run by tools\\ui\\.venv's interpreter with -I; prints one JSON object on stdout. Never writes the fixture: a plant goes into
 the per-run home's own copy of a feed.
 
   validate <jsonl>...                 every line against docs/framework/mission-event.schema.json, by tools/ui/schema.py:

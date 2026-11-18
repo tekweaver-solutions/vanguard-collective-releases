@@ -110,7 +110,9 @@
   else ~/.vanguard). The telemetry folder inside the target is mission init's to make, not this script's.
   A target that has its row already gets that row's framework_version rewritten to this release's, its other
   fields and every other row byte for byte as they were (UI-2 S1 A-5, register row 526); a target without
-  one is registered only as before, never by the rewrite.
+  one is registered only as before, never by the rewrite. A run over a target ALREADY AT THIS VERSION -- a
+  project upgraded in a work tree and merged, say -- writes nothing under the target and rewrites its row the
+  same way where it names another version (RELEASE-5, register row 530); -WhatIf there prints the planned line.
 
   framework.lock -- JSON lines, LF, UTF-8 without BOM, rewritten whole by every run that writes; lock_format 2.
   Line 1 is the header: lock, lock_format, eol_rule, version, previous_version (null on a fresh install),
@@ -135,22 +137,28 @@
   installer hashes it, after checking that its RELEASE member is this tree's RELEASE byte for byte.
   Without it zip_sha256 is null.
 
-  THE PYTHON SET (UI-1 S4, ruling F4). A run that writes -- a fresh install or an upgrade -- then installs the
-  dashboard service's pinned Python set into the target's tools\.venv, after the lock is in place:
-      <tools\.venv's python> -m pip install --require-hashes --only-binary :all: -r <target>\tools\ui\requirements.txt
-  from PyPI (the network, as the venv always needed). tools\.venv is the target's own when it holds
+  THE PYTHON SET (UI-1 S4, ruling F4; RELEASE-5, rows 561 and 563). A run that writes -- a fresh install or an
+  upgrade -- then installs the dashboard service's pinned Python set into the target's tools\ui\.venv, the
+  framework's own folder beside the command file, after the lock is in place:
+      <tools\ui\.venv's python> -m pip install --require-hashes --only-binary :all: -r <target>\tools\ui\requirements.txt
+  from PyPI (the network, as the venv always needed). tools\ui\.venv is installed into when it holds
   Scripts\python.exe and that interpreter is CPython 3.14 for win-amd64 -- the platform the hashes pin; any
-  other interpreter there is left untouched and the step fails. With no tools\.venv the step makes one, with
+  other interpreter there is left untouched and the step fails. With no tools\ui\.venv the step makes one, with
   -Python when given, else the py launcher's 3.14 (py -3.14), else python on PATH, each held to CPython 3.14
   win-amd64. Every file and the lock stand whatever the step does: when it fails (no such interpreter, pip
-  refusing a hash, no network) the reason and the command to run are printed and the exit code is 4. A run
-  that writes nothing (-WhatIf, -Verify, a target already at this version) installs nothing; -WhatIf says what
-  the step would do. -SkipPythonSet leaves tools\.venv as it stands (`vanguard ui` needs the set).
+  refusing a hash, no network) the reason and the two commands that build the set -- venv, then pip -- are
+  printed and the exit code is 4. A run that writes nothing (-WhatIf, -Verify, a target already at this version)
+  installs nothing, so a run again over a target whose set failed builds nothing; -WhatIf says what the step would do. -SkipPythonSet leaves tools\ui\.venv as it stands (`vanguard ui` needs the set).
+  THE HOST'S FOLDER: tools\.venv, where releases before 1.3.1 put the set, is the environment of a host project
+  living under tools\ (uv's, for one) and this script never reads, writes, moves or deletes it.
   THE vanguard COMMAND is tools\ui\vanguard.cmd, installed with the files: `<target>\tools\ui\vanguard.cmd ui`
-  starts the dashboard with tools\.venv's interpreter (INSTALL.md section 7).
+  starts the dashboard with tools\ui\.venv's interpreter (INSTALL.md section 7); tools\ui\.gitignore, installed
+  with it, keeps the folder out of the project's git status -- the one rule that does: the step makes the folder
+  with venv's --without-scm-ignore-files, so no .gitignore of venv's own stands inside it.
   -WhatIf also says, writing nothing: the host registration below (host-id, the registry row) and the
   mission-event feed's ignore rule (/.mission-runtime/ in the target's .gitignore), which this script
-  never writes -- mission init writes it, and mission.ps1 register for a mission made before the feed.
+  never writes -- mission init writes it, and mission.ps1 register for a mission made before the feed. Over a
+  target already at this version, -WhatIf names the host-id as that run reads it (it mints none).
 
   MARK OF THE WEB. This script copies bytes; it never runs, dot-sources or imports a file from the
   source tree. A file it writes is a new file and carries no Zone.Identifier stream, whatever the
@@ -181,17 +189,18 @@
   from upstream' (UI-2 S1 A-8, register row 518). Reads lock_format 1 and 2, and says which it read. A not-written row
   names no file the framework wrote, and is passed over and counted.
 .PARAMETER Python
-  The CPython 3.14 (win-amd64) interpreter THE PYTHON SET makes tools\.venv with, where the target has none.
+  The CPython 3.14 (win-amd64) interpreter THE PYTHON SET makes tools\ui\.venv with, where the target has none.
 .PARAMETER SkipPythonSet
-  Install the files and the lock only; tools\.venv is left as it stands.
+  Install the files and the lock only; tools\ui\.venv is left as it stands.
 
 .NOTES
   EXIT: 0 done, or already installed and verified (or nothing to report); 2 refused, nothing written;
   3 -Verify, or a run over a target already at this version, found differences; 1 the source or the
   target could not be used -- a clone off its release tag, or with local changes, or one git cannot
   confirm, among them; 4 the files and the lock are installed, and the Python set is not (THE PYTHON SET);
-  5 the files and the lock are installed, and the target's host registry row could not be rewritten to this
-  release's framework_version (UI-2 S1 A-5, register row 526; the registry is named).
+  5 the files and the lock are installed (or, over a target already at this version, were already in place), and
+  the target's host registry row could not be rewritten to this release's framework_version (UI-2 S1 A-5,
+  register row 526; RELEASE-5, row 530; the registry is named).
 #>
 [CmdletBinding()]
 param(
@@ -215,6 +224,7 @@ $script:LockId       = 'vanguard-collective/framework.lock'
 $script:EolRule      = 'fold-crlf-text'
 $script:EolValues    = @('lf', 'crlf', 'mixed', 'binary')
 $script:ReadBound    = 67108864
+$script:SetFolder    = 'tools\ui\.venv'   # THE PYTHON SET's folder, the framework's own (RELEASE-5, rows 561 and 563)
 $script:PathLimit    = 260
 $script:FolderLimit  = 248
 $script:NameChars    = [char[]]@([System.IO.Path]::GetInvalidFileNameChars() | Where-Object { $_ -ne [char]'\' -and $_ -ne [char]'/' })
@@ -536,16 +546,16 @@ function Get-PythonIdentity {
 function Get-PythonSetPlan {
     # THE PYTHON SET (header), decided and written nothing: { action = into | create | fail; exe; base; why; text }.
     param([Parameter(Mandatory = $true)][string]$TargetRoot)
-    $venv = Join-Path $TargetRoot 'tools\.venv'
+    $venv = Join-Path $TargetRoot $script:SetFolder
     $vpy = Join-Path $venv 'Scripts\python.exe'
-    $guard = Get-PathRefusal -Rel 'tools/.venv/Scripts/python.exe' -Root $TargetRoot
-    if ($guard) { return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "the path guard refuses tools\.venv: $guard" } }
+    $guard = Get-PathRefusal -Rel (($script:SetFolder -replace '\\', '/') + '/Scripts/python.exe') -Root $TargetRoot
+    if ($guard) { return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "the path guard refuses $($script:SetFolder): $guard" } }
     if (Test-Path -LiteralPath $vpy -PathType Leaf) {
         $id = Get-PythonIdentity -Exe $vpy
-        if ($id -and $id.fits) { return [pscustomobject]@{ action = 'into'; exe = $vpy; base = $null; why = "the target's tools\.venv (CPython $($id.version), $($id.platform))" } }
-        return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "the target's tools\.venv is $(if ($id) { "$($id.impl) $($id.version) $($id.platform)" } else { 'an interpreter that does not run' }), not CPython 3.14 win-amd64; it is left untouched" }
+        if ($id -and $id.fits) { return [pscustomobject]@{ action = 'into'; exe = $vpy; base = $null; why = "the target's $($script:SetFolder) (CPython $($id.version), $($id.platform))" } }
+        return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "the target's $($script:SetFolder) is $(if ($id) { "$($id.impl) $($id.version) $($id.platform)" } else { 'an interpreter that does not run' }), not CPython 3.14 win-amd64; it is left untouched" }
     }
-    if (Test-Path -LiteralPath $venv) { return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "tools\.venv stands in the target without Scripts\python.exe; it is left untouched" } }
+    if (Test-Path -LiteralPath $venv) { return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "$($script:SetFolder) stands in the target without Scripts\python.exe; it is left untouched" } }
     $tried = New-Object System.Collections.Generic.List[string]
     $cands = @()
     if ($Python) { $cands += , @('-Python', $Python, @()) }
@@ -555,10 +565,12 @@ function Get-PythonSetPlan {
     }
     foreach ($c in $cands) {
         $id = Get-PythonIdentity -Exe $c[1] -Pre $c[2]
-        if ($id -and $id.fits) { return [pscustomobject]@{ action = 'create'; exe = $vpy; base = $id.exe; why = "tools\.venv made by $($c[0]): $($id.exe) (CPython $($id.version), $($id.platform))" } }
+        if ($id -and $id.fits) { return [pscustomobject]@{ action = 'create'; exe = $vpy; base = $id.exe; why = "$($script:SetFolder) made by $($c[0]): $($id.exe) (CPython $($id.version), $($id.platform))" } }
         $tried.Add("$(if ($c[0] -eq '-Python') { '-Python ' + $c[1] } else { $c[0] }): $(if ($id) { "$($id.impl) $($id.version) $($id.platform)" } else { 'does not run' })")
     }
-    return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "no CPython 3.14 win-amd64 interpreter to make tools\.venv with ($(if ($tried.Count) { $tried -join '; ' } else { 'neither py nor python is on PATH' })); name one with -Python" }
+    # RELEASE-5 group B, amendment 3 (RB-29): "name one with -Python" is advice for a run that has not yet written -- the
+    # -WhatIf line says it; after the lock is written a run again writes nothing, so the line printed then gives the commands
+    return [pscustomobject]@{ action = 'fail'; exe = $vpy; base = $null; why = "no CPython 3.14 win-amd64 interpreter to make $($script:SetFolder) with ($(if ($tried.Count) { $tried -join '; ' } else { 'neither py nor python is on PATH' }))"; hint = 'name one with -Python' }
 }
 
 function Install-PythonSet {
@@ -567,7 +579,8 @@ function Install-PythonSet {
     param([Parameter(Mandatory = $true)]$Plan, [Parameter(Mandatory = $true)][string]$TargetRoot)
     if ($Plan.action -eq 'fail') { return $Plan.why }
     if ($Plan.action -eq 'create') {
-        $r = Invoke-Program -Exe $Plan.base -ArgList @('-m', 'venv', (Join-Path $TargetRoot 'tools\.venv'))
+        # --without-scm-ignore-files: no '*' .gitignore of venv's own inside it; tools\ui\.gitignore is the one rule.
+        $r = Invoke-Program -Exe $Plan.base -ArgList @('-m', 'venv', '--without-scm-ignore-files', (Join-Path $TargetRoot $script:SetFolder))
         if ($r.code -ne 0) { return "$($Plan.base) -m venv exited $($r.code): $((@($r.out) | Select-Object -Last 3) -join ' | ')" }
     }
     $r = Invoke-Program -Exe $Plan.exe -ArgList @('-m', 'pip', 'install', '--require-hashes', '--only-binary', ':all:', '--disable-pip-version-check', '--no-input', '-r', (Join-Path $TargetRoot 'tools\ui\requirements.txt'))
@@ -619,6 +632,50 @@ function Read-RegistryText {
     $bom = ($b.Length -ge 3 -and $b[0] -eq 0xEF -and $b[1] -eq 0xBB -and $b[2] -eq 0xBF)
     $t = if ($bom) { $script:Utf8NoBom.GetString($b, 3, $b.Length - 3) } else { $script:Utf8NoBom.GetString($b) }
     return @{ text = $t; bom = $bom }
+}
+
+function Set-RegistryRowVersion {
+    # UI-2 S1 A-5 (row 526), RELEASE-5 (row 530): THE TARGET'S ROW, ITS framework_version SET TO -Version -- that value only
+    # (Get-RegistryRowEdit); the file rewritten whole through a temporary file beside it and File.Replace, so a reader sees
+    # the old bytes or the new ones, a UTF-8 BOM kept where the file had one. Returns changed (the row was rewritten), old
+    # (the value it had, quoted, or '(none)') and failure ('' unless the registry could not be written: then why, and the
+    # caller exits 5). A registry with no row for the target, or one already at -Version, is not written.
+    param([Parameter(Mandatory = $true)][string]$Reg, [Parameter(Mandatory = $true)][string]$TargetRoot, [Parameter(Mandatory = $true)][string]$Version)
+    $rt = Read-RegistryText -Path $Reg
+    $ed = Get-RegistryRowEdit -Text $rt.text -TargetRoot $TargetRoot -Version $Version
+    $old = if ($null -eq $ed.old) { '(none)' } else { "'" + $ed.old + "'" }
+    if (-not ($ed.found -and $ed.changed)) { return @{ changed = $false; old = $old; failure = '' } }
+    $tmp = $Reg + '.install-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.tmp'
+    try {
+        $new = $script:Utf8NoBom.GetBytes($ed.text)
+        if ($rt.bom) { $new = [byte[]](@(0xEF, 0xBB, 0xBF) + $new) }
+        [System.IO.File]::WriteAllBytes($tmp, $new)
+        [System.IO.File]::Replace($tmp, $Reg, [NullString]::Value)   # no backup file ($null would be passed as '')
+        return @{ changed = $true; old = $old; failure = '' }
+    } catch {
+        try { if ([System.IO.File]::Exists($tmp)) { [System.IO.File]::Delete($tmp) } } catch { }
+        return @{ changed = $false; old = $old; failure = "the host registry row was NOT updated: $Reg still says framework_version $old for $TargetRoot, and this run installed '$Version' ($($_.Exception.Message)); make the file writable and run the same release again -- every file is judged already-identical and the row is rewritten" }
+    }
+}
+
+function Get-StaleRegistryRow {
+    # RELEASE-5 (register row 530): the target's registry row where a run that writes would rewrite it -- the target carries
+    # a mission and the feed's folder (the conditions of THE HOST REGISTRATION at the end of this script and of
+    # Get-RegistrationPlan), the registry holds a row for it, and that row's framework_version is not -Version. Returns the
+    # registry's path, or $null. Reads only.
+    param([Parameter(Mandatory = $true)][string]$TargetRoot, [Parameter(Mandatory = $true)][string]$Version)
+    $vgHome = if ($env:VANGUARD_HOME) { $env:VANGUARD_HOME } else { Join-Path $env:USERPROFILE '.vanguard' }
+    $reg = Join-Path $vgHome 'projects.yaml'
+    $mf = Join-Path $TargetRoot '.mission\mission.yaml'
+    if (-not [System.IO.File]::Exists($mf)) { return $null }
+    $mm = [regex]::Matches([System.IO.File]::ReadAllText($mf), '(?m)^id:[ \t]*([^\s#]+)')
+    if (-not ($mm.Count -eq 1 -and $mm[0].Groups[1].Value -ne 'null')) { return $null }
+    if (-not $mm[0].Groups[1].Value.Trim('"', "'")) { return $null }   # an empty quoted id, as the writing run reads it
+    if (-not [System.IO.Directory]::Exists((Join-Path $TargetRoot '.mission-runtime\telemetry'))) { return $null }
+    if (-not [System.IO.File]::Exists($reg)) { return $null }
+    $ed = Get-RegistryRowEdit -Text (Read-RegistryText -Path $reg).text -TargetRoot $TargetRoot -Version $Version
+    if ($ed.found -and $ed.changed) { return $reg }
+    return $null
 }
 
 function Get-RegistrationPlan {
@@ -1166,7 +1223,35 @@ switch ($mode) {
         }
         $diff = Invoke-Verify -Lock $lock -TargetRoot $targetRoot
         if ($diff -gt 0) { Stop-Install 3 "already installed at $version, and $diff file(s) differ from framework.lock (above). Nothing was written; framework.lock is untouched." }
+        # RELEASE-5 (register row 530): THE ROW CARRIES THE LOCK'S VERSION HERE TOO. A project upgraded in a work tree and
+        # merged reaches its registered root with every file and the lock already this release's, and this branch ended
+        # before THE HOST REGISTRATION below, so the root's row kept the version first registered. The row the target
+        # already has is rewritten to this version -- the same edit under the same conditions as a run that writes
+        # (Get-StaleRegistryRow), the same exit 5 for a registry that cannot be written. Nothing is minted or appended
+        # here, and nothing under the target is written. As in the writing run, a registry or mission file that cannot
+        # be read is said and the run still stands.
+        # -WhatIf SAYS WHAT THIS RUN DOES (amendment 2, RA-19): its line has an upgrade's planned form, but its host-id is
+        # read as this run reads it -- 'no host-id' where the file is absent, for this run mints none -- and not as
+        # Get-RegistrationPlan reads it for a run that writes ('a host-id would be minted', '... kept'). Read as done, the
+        # planned line is the line the run then prints.
+        try {
+            $staleReg = Get-StaleRegistryRow -TargetRoot $targetRoot -Version $version
+            if ($staleReg) {
+                $hidPath = Join-Path (Split-Path -Parent $staleReg) 'host-id'
+                $hid = if ([System.IO.File]::Exists($hidPath)) { "host-id $(([System.IO.File]::ReadAllText($hidPath)).Trim())" } else { 'no host-id' }
+                if ($WhatIf) {
+                    $edW = Get-RegistryRowEdit -Text (Read-RegistryText -Path $staleReg).text -TargetRoot $targetRoot -Version $version
+                    Say "planned host registration: $hid; the target's row in $staleReg would be rewritten: framework_version $(if ($null -eq $edW.old) { '(none)' } else { "'" + $edW.old + "'" }) -> '$version' (its other fields kept)"
+                }
+                else {
+                    $rowSet = Set-RegistryRowVersion -Reg $staleReg -TargetRoot $targetRoot -Version $version
+                    if ($rowSet.changed) { Say "host registration: $hid; the target's row in ${staleReg}: framework_version $($rowSet.old) rewritten to '$version', its other fields kept" }
+                    elseif ($rowSet.failure) { $script:RegistryRowFailure = $rowSet.failure; Say "host registration: $hid; $($script:RegistryRowFailure)" }
+                }
+            }
+        } catch { Say "NOTE: the host registration did not complete ($($_.Exception.Message)); the target is already installed and nothing in it depends on it." }
         Say "already installed: $version in $targetRoot; nothing was written, and framework.lock is untouched."
+        if ($script:RegistryRowFailure) { Say "REGISTRY NOT UPDATED: $($script:RegistryRowFailure)"; exit 5 }
         exit 0
     }
     'downgrade' {
@@ -1305,11 +1390,11 @@ if ($byPath.ContainsKey('tools/ui/requirements.txt') -and (Test-Path -LiteralPat
 }
 if ($WhatIf) {
     $pyPlan = $null
-    if ($SkipPythonSet) { Say 'planned python set: skipped (-SkipPythonSet); tools\.venv is left as it stands' }
+    if ($SkipPythonSet) { Say "planned python set: skipped (-SkipPythonSet); $($script:SetFolder) is left as it stands" }
     elseif ($pinCount -eq 0) { Say 'planned python set: none (this release pins no Python set)' }
     else {
         $pyPlan = Get-PythonSetPlan -TargetRoot $targetRoot
-        if ($pyPlan.action -eq 'fail') { Say "planned python set: NOT INSTALLED -- $($pyPlan.why); the files and framework.lock would be written and the run would exit 4" }
+        if ($pyPlan.action -eq 'fail') { Say "planned python set: NOT INSTALLED -- $($pyPlan.why)$(if ($pyPlan.PSObject.Properties['hint']) { '; ' + $pyPlan.hint }); the files and framework.lock would be written and the run would exit 4" }
         else { Say "planned python set: $($pyPlan.why); then pip install --require-hashes --only-binary :all: -r tools\ui\requirements.txt ($pinCount pinned package(s), from PyPI)" }
     }
     $vc = @($plan | Where-Object { $_.path -ceq 'tools/ui/vanguard.cmd' })
@@ -1471,22 +1556,11 @@ try {
             # reader sees the old bytes or the new ones. A registry that cannot be written is NOT a note: the row would go
             # on naming a version the target no longer has, so the run says so, naming the registry, and exits 5 once
             # the install itself is reported (every file and the lock stand).
-            $vgRt = Read-RegistryText -Path $vgReg
-            $vgEd = Get-RegistryRowEdit -Text $vgRt.text -TargetRoot $targetRoot -Version $version
-            if ($vgEd.found -and $vgEd.changed) {
-                $vgOld = if ($null -eq $vgEd.old) { '(none)' } else { "'" + $vgEd.old + "'" }
-                $vgTmp = $vgReg + '.install-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.tmp'
-                try {
-                    $vgNew = $vgUtf8.GetBytes($vgEd.text)
-                    if ($vgRt.bom) { $vgNew = [byte[]](@(0xEF, 0xBB, 0xBF) + $vgNew) }
-                    [System.IO.File]::WriteAllBytes($vgTmp, $vgNew)
-                    [System.IO.File]::Replace($vgTmp, $vgReg, [NullString]::Value)   # no backup file ($null would be passed as '')
-                    $vgNote = "host-id $vgHostId; the target's row in ${vgReg}: framework_version $vgOld rewritten to '$version', its other fields kept"
-                } catch {
-                    try { if ([System.IO.File]::Exists($vgTmp)) { [System.IO.File]::Delete($vgTmp) } } catch { }
-                    $script:RegistryRowFailure = "the host registry row was NOT updated: $vgReg still says framework_version $vgOld for $targetRoot, and this run installed '$version' ($($_.Exception.Message)); make the file writable and run the same release again -- every file is judged already-identical and the row is rewritten"
-                    $vgNote = "host-id $vgHostId; $($script:RegistryRowFailure)"
-                }
+            $vgSet = Set-RegistryRowVersion -Reg $vgReg -TargetRoot $targetRoot -Version $version
+            if ($vgSet.changed) { $vgNote = "host-id $vgHostId; the target's row in ${vgReg}: framework_version $($vgSet.old) rewritten to '$version', its other fields kept" }
+            elseif ($vgSet.failure) {
+                $script:RegistryRowFailure = $vgSet.failure
+                $vgNote = "host-id $vgHostId; $($script:RegistryRowFailure)"
             }
         }
         else {
@@ -1504,14 +1578,21 @@ try {
 } catch { Say "NOTE: the host registration did not complete ($($_.Exception.Message)); the install is complete and nothing in it depends on it." }
 # THE PYTHON SET (header), after the lock: every file stands whatever it does.
 $pySetWhy = ''
-if ($SkipPythonSet) { Say 'python set: skipped (-SkipPythonSet); tools\.venv is as it stood, and vanguard ui needs the set' }
+if ($SkipPythonSet) { Say "python set: skipped (-SkipPythonSet); $($script:SetFolder) is as it stood, and vanguard ui needs the set" }
 elseif ($pinCount -gt 0) {
     $pyPlan = Get-PythonSetPlan -TargetRoot $targetRoot
     if ($pyPlan.action -ne 'fail') { Say "python set: $($pyPlan.why)" }
     $pySetWhy = Install-PythonSet -Plan $pyPlan -TargetRoot $targetRoot
     if ($pySetWhy) {
-        Say "PYTHON SET NOT INSTALLED: $pySetWhy. The files and framework.lock are installed; vanguard ui needs the set: make $targetRoot\tools\.venv with CPython 3.14 (win-amd64) and run $targetRoot\tools\.venv\Scripts\python.exe -m pip install --require-hashes --only-binary :all: -r $targetRoot\tools\ui\requirements.txt"
-    } else { Say "python set: $pinCount pinned package(s) in tools\.venv, installed with --require-hashes" }
+        # RELEASE-5 group B, amendment 3 (RB-29): the target is now at this version, so a run again writes nothing and builds
+        # nothing; the line gives the two commands Install-PythonSet runs -- venv, then pip with its own arguments -- each
+        # path quoted as PowerShell reads a literal, to paste as printed
+        # (validator round 1: every character PowerShell reads as a single quote -- U+0027, U+2018, U+2019, U+201A, U+201B -- doubled)
+        $pyQ = { param($p) "'" + ($p -replace ("(['" + [char]0x2018 + [char]0x2019 + [char]0x201A + [char]0x201B + "])"), '$1$1') + "'" }
+        Say "PYTHON SET NOT INSTALLED: $pySetWhy. The files and framework.lock are installed, so install.ps1 run again over this target -- with -Python or without -- builds nothing: a run over a target already at this version writes nothing. vanguard ui needs the set; build it with the two commands the installer's own step runs, from PowerShell (with another CPython 3.14 win-amd64 python.exe in py -3.14's place, if you name one):"
+        Say ("  py -3.14 -m venv --without-scm-ignore-files " + (& $pyQ "$targetRoot\$($script:SetFolder)"))
+        Say ("  & " + (& $pyQ "$targetRoot\$($script:SetFolder)\Scripts\python.exe") + " -m pip install --require-hashes --only-binary :all: --disable-pip-version-check --no-input -r " + (& $pyQ "$targetRoot\tools\ui\requirements.txt"))
+    } else { Say "python set: $pinCount pinned package(s) in $($script:SetFolder), installed with --require-hashes" }
 }
 Say "done: $countText"
 Say ("framework.lock written: {0} line(s) for {1} file(s), sha256 {2}" -f $lockLines.Count, $plan.Count, (Get-FileSha256Hex -Path $lockPath))

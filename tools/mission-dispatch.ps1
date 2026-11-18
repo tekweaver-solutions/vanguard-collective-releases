@@ -118,9 +118,9 @@ if ($missionContent -notmatch '(?m)^state:\s*Executing\s*$') {
 }
 
 # ----- Resolve Python interpreter + dispatch_entry -----
-$venvPython = Join-Path $projectRoot "tools\.venv\Scripts\python.exe"
+$venvPython = Join-Path $projectRoot "tools\ui\.venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {
-    Write-Error "Framework venv Python not found at $venvPython. Run 'uv sync' first."
+    Write-Error "Framework venv Python not found at $venvPython. Install the framework's Python set (INSTALL.md section 5) first."
     exit 3
 }
 $dispatchEntry = Join-Path $projectRoot "tools\worker-runner\dispatch_entry.py"

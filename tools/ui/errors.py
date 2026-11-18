@@ -25,6 +25,8 @@ _BY = {c[0]: (n, c) for n, c in enumerate(CLASSES)}
 HALT_SEVERITY = {"critical": ("critical", 1), "blocking": ("critical", 1), "high": ("high", 2), "low": ("low", 4)}
 HALT_WARNING = ("medium", 3)
 BLOCKING_HALT = ("critical", "high", "blocking")
+# RELEASE-5 group B (RB-7): a verify refusal the stop evaluator's reading of that same run admits warns as medium
+ADMITTED = ("medium", 3)
 
 
 def halt_word(sev):
@@ -53,23 +55,49 @@ def mission_errors(events, streams, ahead_days):
     in seq order). Returns the errors, ranked."""
     identity = {s["key"]: s["identity"] for s in streams}
     out = []
-    for hid, h in sorted(derive.halts(events).items()):
-        if h["raised"] is not None and h["resolved"] is None:
+    # RELEASE-5 group B (RB-8, ruling (m); validator round 1): the open set every figure counts -- over a 1.3.1 snapshot the
+    # stop evaluator's own reading
+    opened = derive.open_halt_ids(events)
+    hs = derive.halts(events)
+    # validator round 1 (RB-8): the record of an open HALT no hook raised a line for is the snapshot of the checkout that holds
+    # it -- never another checkout's
+    holders, snaps = derive.halt_holders(events), derive.checkout_snapshots(events)
+    for hid in sorted(opened):
+        snap = snaps.get(holders.get(hid)) or derive.latest_snapshot(events)
+        h = hs.get(hid) or {}
+        if h.get("raised") is not None:
             sev = h["raised"]["line"]["payload"].get("severity")
             out.append(_error("open_halt", h["raised"], "HALT %s (severity %s) raised, not resolved" % (hid, sev), identity,
                               HALT_SEVERITY.get(halt_word(sev), HALT_WARNING)))
+        elif snap is not None:
+            # validator round 2: an open HALT no hook raised a line for (the hook raises one for HALT-*.md only) -- the snapshot
+            # that reads it open is the record; its severity is not recorded, so it is a warning (HALT_SEVERITY's absent word)
+            out.append(_error("open_halt", snap, "HALT %s (severity not recorded: no halt_raised line names it; the newest snapshot "
+                                                 "reads it open) not resolved" % hid, identity, HALT_SEVERITY.get(halt_word(None), HALT_WARNING)))
     for did, d in sorted(derive.dispatches(events).items()):
         f = d["finalized"]
         if f is not None and derive.is_partial(f):
-            out.append(_error("partial_manifest", f, "dispatch %s finalized with %s" % (did, ", ".join(derive.partial_fields(f))), identity))
+            # RELEASE-5 group B (RB-13): and the session whose manifest it is, with its capture gaps (the hooks' count)
+            fp = f["line"]["payload"]
+            gaps = derive.as_int(fp.get("capture_gaps_count"))
+            out.append(_error("partial_manifest", f, "dispatch %s finalized with %s -- the manifest of session %s, %s" % (
+                did, ", ".join(derive.partial_fields(f)), derive._id(fp.get("dispatch_id")),
+                "capture gaps not recorded" if gaps is None else "%d capture gap%s" % (gaps, "" if gaps == 1 else "s")), identity))
     v = derive.latest_verify(events)
     if v is not None:
         p = v["line"]["payload"]
         div = derive.as_int(p.get("divergences"))
+        # RELEASE-5 group B (RB-7): a refusal the stop evaluator's reading of the same run admits is said beside that reading,
+        # in its own words, and is no blocking error (a warning)
+        ev = derive.verify_reading(events)
+        adm = ev is not None and ev["admits"] and p.get("verdict") != "PASS"
+        tail = (" -- the stop evaluator's reading of this run (goal %s, evaluated_at %s): %s; the boundary it disclosed: %s"
+                % (ev["goal"], ev["evaluated_at"], ev["word"], ev["boundary"] or "none named")) if adm else ""
         if div is not None and div > 0:
-            out.append(_error("testimony_conflict", v, "the last mission verify (verdict %s) found %d divergence(s) between testimony and the runner's anchors" % (p.get("verdict"), div), identity))
+            out.append(_error("testimony_conflict", v, "the last mission verify (verdict %s) found %d divergence(s) between testimony and the runner's anchors" % (p.get("verdict"), div) + tail,
+                              identity, ADMITTED if adm else None))
         elif p.get("verdict") != "PASS":
-            out.append(_error("failed_verify", v, "the last mission verify's verdict is %s" % p.get("verdict"), identity))
+            out.append(_error("failed_verify", v, "the last mission verify's verdict is %s" % p.get("verdict") + tail, identity, ADMITTED if adm else None))
     for gid, g in sorted(derive.gates(events).items()):
         if g["kind"] == "gate_expired":
             out.append(_error("expired_gate", g, "gate %s (%s) expired at %s" % (gid, g["line"]["payload"].get("kind"), g["line"]["payload"].get("expires_at")), identity))

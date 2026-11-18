@@ -6047,8 +6047,8 @@ function Invoke-T30Gate {
     return [pscustomobject]@{ Code = $code; Text = ((@($raw) | ForEach-Object { "$_" }) -join "`n") }
 }
 
-# the interpreter the transcription wrapper would pick: $env:MISSION_PYTHON, this tree's tools\.venv, the PRIMARY
-# checkout's tools\.venv, then PATH. The primary checkout is the parent of git's common dir (git rev-parse
+# the interpreter the transcription wrapper would pick: $env:MISSION_PYTHON, this tree's tools\ui\.venv, the PRIMARY
+# checkout's tools\ui\.venv, then PATH. The primary checkout is the parent of git's common dir (git rev-parse
 # --git-common-dir), so a reading in a linked worktree -- which has no venv of its own, since adding a worktree copies
 # no untracked file -- picks the interpreter a reading at the primary checkout picks. At the primary checkout the two
 # venv candidates are one path, tried once. WP-3 keeps its own copy of this order for seat.py; the two change together.
@@ -6056,25 +6056,25 @@ $t30PyExe = $null
 $t30PyFrom = ''
 $t30PrimaryRoot = ''
 $t30PrimaryVenv = ''
-$t30TreeVenv = Join-Path $repoRoot 'tools\.venv\Scripts\python.exe'
+$t30TreeVenv = Join-Path $repoRoot 'tools\ui\.venv\Scripts\python.exe'
 $t30Cd = ''
 $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 try { $t30Cd = (@(& git -C $repoRoot rev-parse --git-common-dir 2>$null) -join '').Trim() } catch { $t30Cd = '' } finally { $ErrorActionPreference = $prevEap }
 if ($t30Cd) {
     if (-not [System.IO.Path]::IsPathRooted($t30Cd)) { $t30Cd = Join-Path $repoRoot $t30Cd }
     $t30PrimaryRoot = Split-Path -Parent ([System.IO.Path]::GetFullPath($t30Cd.Replace('/', '\')).TrimEnd('\'))
-    $t30PrimaryVenv = Join-Path $t30PrimaryRoot 'tools\.venv\Scripts\python.exe'
+    $t30PrimaryVenv = Join-Path $t30PrimaryRoot 'tools\ui\.venv\Scripts\python.exe'
     if ([string]::Equals([System.IO.Path]::GetFullPath($t30PrimaryVenv), [System.IO.Path]::GetFullPath($t30TreeVenv), [System.StringComparison]::OrdinalIgnoreCase)) { $t30PrimaryVenv = '' }
 }
 foreach ($t30PyCand in @(
         [pscustomobject]@{ from = 'MISSION_PYTHON'; path = [string]$env:MISSION_PYTHON },
-        [pscustomobject]@{ from = "this tree's tools\.venv"; path = $t30TreeVenv },
-        [pscustomobject]@{ from = "the primary checkout's tools\.venv"; path = $t30PrimaryVenv })) {
+        [pscustomobject]@{ from = "this tree's tools\ui\.venv"; path = $t30TreeVenv },
+        [pscustomobject]@{ from = "the primary checkout's tools\ui\.venv"; path = $t30PrimaryVenv })) {
     if ($t30PyCand.path -and (Test-Path -LiteralPath $t30PyCand.path)) { $t30PyExe = $t30PyCand.path; $t30PyFrom = $t30PyCand.from; break }
 }
 if (-not $t30PyExe) { $t30OnPath = Get-Command python -ErrorAction SilentlyContinue; if ($t30OnPath) { $t30PyExe = $t30OnPath.Source; $t30PyFrom = 'python on the PATH' } }
 Write-Host ""
-Write-Host "python    : $(if ($t30PyExe) { $t30PyExe } else { '(none resolved)' })   (from: $(if ($t30PyFrom) { $t30PyFrom } else { 'nowhere' }); order: MISSION_PYTHON, this tree's tools\.venv, the primary checkout's tools\.venv, python on the PATH)"
+Write-Host "python    : $(if ($t30PyExe) { $t30PyExe } else { '(none resolved)' })   (from: $(if ($t30PyFrom) { $t30PyFrom } else { 'nowhere' }); order: MISSION_PYTHON, this tree's tools\ui\.venv, the primary checkout's tools\ui\.venv, python on the PATH)"
 Write-Host "            the primary checkout's candidate: $(if ($t30PrimaryVenv) { $t30PrimaryVenv + $(if (Test-Path -LiteralPath $t30PrimaryVenv) { '' } else { '   (absent)' }) } elseif ($t30PrimaryRoot) { '(the primary checkout is this tree: the same path as this tree''s)' } else { '(git named no common dir)' })"
 
 function Invoke-T30Transcribe {

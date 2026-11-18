@@ -30,7 +30,7 @@
   THE RELEASE (UI-1 S4): release.ps1 builds the dashboard (npm ci --offline, npm run build) and reads its notices with
   pip-licenses, so a case that builds the ZIP (d, e, f, g, u7, u10, k1, k4) needs -LicensePython, the interpreter of an
   environment holding pip-licenses, and reads the pinned Python set's licences in -ServicePython's environment (by
-  default -Repo's tools\.venv). The ZIP is HEAD's files less the dashboard's private source and the service's tests, plus
+  default -Repo's tools\ui\.venv). The ZIP is HEAD's files less the dashboard's private source and the service's tests, plus
   ui/dist/**, THIRD-PARTY-NOTICES and RELEASE; its manifest names the generated members, so an install from it holds
   more files than one from a clone of the development repository: e, f and g read the expanded release's own set.
   THE PYTHON SET: every install a case runs is the files and the lock only (Run adds -SkipPythonSet); case py measures
@@ -84,7 +84,7 @@
         inside the scope and a missing pattern file exit 2; no -HostRepo, H3 not evaluated
     py  the Python set (UI-1 S4 P-5) with no network: -WhatIf with no interpreter exit 4, NOT INSTALLED, the vanguard
         command, the host-id to be minted, the ignore rule mission init's, nothing written; the install itself exit 4, every
-        file and the lock written, the pip command named, -Verify 0; a tools\.venv with no interpreter left untouched;
+        file and the lock written, the pip command named, -Verify 0; a tools\ui\.venv with no interpreter left untouched;
         -SkipPythonSet exit 0; this host's CPython 3.14 named: the venv made with it and the hash-checked pip install
         planned; a mission with the feed folder: the registry row planned, mission.ps1 register named for the ignore rule
     u   upgrade over a 0.1.1-locked target (the real host's header) to a synthetic 0.1.2; a hard-linked file
@@ -218,9 +218,51 @@
         from upstream', exit 3
     kv2 the step after the NOTICE block is added (UI-2 S1 A-9; row 518): INSTALL.md section 6 and the 1.3.0 notes name
         -Verify and 'kept, now equal to upstream'
+    ra1-ra8 RELEASE-5 package ENV (group A contract, rows 561 and 563): the dashboard's pinned Python set in tools\ui\.venv,
+        a folder of the framework's own, and tools\.venv the host's. These install the set for real (-Python naming this
+        host's CPython 3.14, pip over the network); ra4-ra6 also need uv, ra5 a CPython 3.13 uv finds; without one the case
+        SKIPS BY NAME. ra1 a fresh install: every pin's dist-info in tools\ui\.venv, no tools\.venv. ra2 there, with no
+        tools\.venv on disk, vanguard.cmd ui --help exits 0, and fails with tools\ui\.venv moved aside. ra3 a REAL 1.3.0
+        install (the v1.3.0 tag cloned, its own installer, the set in tools\.venv) upgraded to a synthetic 1.3.1 of HEAD:
+        -WhatIf predicts tools\ui\.venv and writes nothing, the upgrade builds it, tools\.venv's pyvenv.cfg and every
+        dist-info name and METADATA sha256 equal before and after, -Verify 0; a planted write is caught. ra4 a host uv
+        project in tools\ (typing-extensions 4.12.2, click 8.1.8): after the suite launcher, Invoke-SuiteDefaultRun as
+        installed, the dashboard's environment is unchanged and ui --help exits 0. ra5 the same fixture, the host's
+        environment made on 3.13: its test asserting (3, 13) passes through the launcher. ra6 no uv project under tools\:
+        the launcher's exit, message and created files recorded; the dashboard's environment unchanged; a planted write
+        caught. ra7 every tools\.venv / tools/.venv in the release set explained by file and count. ra8 install, mission
+        init, git: nothing under tools/ui/.venv/ in git status; the ignore rule removed, it shows
+    ra9, ra10, ra11, ra15 RELEASE-5 package SHELL (group A contract, rows 562 and 538; amendment 1): a Windows PowerShell 5.1
+        child started by the framework from anything but PowerShell itself takes no PSModulePath, so each edition builds its
+        own module path. ra9 a fresh install and a synthetic host uv project whose test starts Windows PowerShell and hashes a
+        known file: through the suite launcher (Invoke-SuiteDefaultRun) under a PowerShell 7 parent and a 5.1 parent, the
+        child's hash equals the parent's; and the installed tools\tests\cli\conftest.py beside a probe test, pytest under
+        both parents, the same. ra10 every installer-owned file that names the powershell or pwsh executable in code,
+        classed by form, each through the cured path or listed with its reason; the & rows' reason measured under pwsh;
+        a planted launch line and a planted cure removal named. ra11 the 1.3.1 notes' sentence on WP-1..WP-4 under
+        PowerShell 7, its pinned paragraph as amendment 2 re-cut it (a first screen; the judge is packaging's validator over
+        the kept captures; the notes clause a named skip until packaging writes them). ra15 the launcher under Windows PowerShell 5.1 over a
+        host uv project whose run writes to stderr returns the exit code and the tally PowerShell 7 returns, for a passing
+        and a failing suite. ra9 and ra15 need uv, pwsh and pytest from PyPI or uv's cache; without one they SKIP BY NAME
+    ra12, ra13 RELEASE-5 package REGISTRY (group A contract, rows 530 and 567), a scratch VANGUARD_HOME. ra12 a registered
+        project (git, framework.lock tracked) upgraded from 1.2.1 to 1.2.2 in a work tree and merged; then -WhatIf and the
+        installer at the root, every file already identical: -WhatIf names the row's rewrite and writes nothing, the run
+        rewrites framework_version to the lock's and keeps every other registry byte, a second run writes none, a read-only
+        registry exits 5 naming it. ra13 an installed project (no VERSION file), mission init, a work tree cut from it and
+        Register-MissionWorktree from the installed mission-telemetry.ps1, the call the dispatcher makes at spawn: the work
+        tree's row carries its framework.lock's version (tracked), or its primary root's (not tracked), never ''
+    ra16-ra20 RELEASE-5 group A amendment 2: the code paths cured on a validator finding without a member. ra16 the suite
+        launcher with uv absent from PATH ends the call with an error naming uv and returns no result, under PowerShell 7 and
+        5.1, called as the framework's callers call it and by a caller at ErrorActionPreference Continue (needs pwsh; else
+        SKIPS BY NAME). ra17 the already-installed run with a registry it cannot read (held FileShare.None here): a NOTE
+        naming it, exit 0, nothing written. ra18 an empty quoted mission id (id: '') is no mission to the already-installed
+        run as to a run that writes: no row rewritten or appended, -WhatIf the same. ra19 the already-installed -WhatIf, a row
+        for the root and no host-id file: no "a host-id would be minted" line, and its planned line, read as done, is the run's
+        line byte for byte. ra20 rows written by mission init and mission.ps1 register carry the target's framework.lock
+        version, or the release's VERSION where it has none
 #>
 param(
-    [Parameter(Mandatory)][ValidateSet('a', 'b', 'c', 'd', 'e', 'f', 'g', 'gu', 'ga', 'gh', 'py', 'u', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'v', 'k1', 'k2', 'k3', 'k4', 'h4', 'h5', 'h6', 'h7', 'h8', 'h10', 'h14', 'h16', 'h18', 'l1', 'l6', 'l2', 'l3', 'l4', 'l5', 'l8', 'enc', 'rg1', 'kv1', 'kv2', 'p7', 'h11', 'd524')][string]$Case,
+    [Parameter(Mandatory)][ValidateSet('a', 'b', 'c', 'd', 'e', 'f', 'g', 'gu', 'ga', 'gh', 'py', 'u', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8', 'u9', 'u10', 'v', 'k1', 'k2', 'k3', 'k4', 'h4', 'h5', 'h6', 'h7', 'h8', 'h10', 'h14', 'h16', 'h18', 'l1', 'l6', 'l2', 'l3', 'l4', 'l5', 'l8', 'enc', 'rg1', 'kv1', 'kv2', 'p7', 'h11', 'd524', 'ra1', 'ra2', 'ra3', 'ra4', 'ra5', 'ra6', 'ra7', 'ra8', 'ra9', 'ra10', 'ra11', 'ra12', 'ra13', 'ra15', 'ra16', 'ra17', 'ra18', 'ra19', 'ra20')][string]$Case,
     [Parameter(Mandatory)][string]$Repo,
     [Parameter(Mandatory)][string]$Out,
     [string]$Tag = 'vc-r1',
@@ -411,9 +453,9 @@ function SourceUnchanged { param($Clone)
 }
 function Build-Zip { param([string]$Clone)
     # release.ps1 reads its notices with pip-licenses from -LicensePython (a scratch environment) over -ServicePython's
-    # environment (by default -Repo's tools\.venv, which a clone has not got).
+    # environment (by default -Repo's tools\ui\.venv, which a clone has not got).
     if (-not $LicensePython) { throw 'a case that builds the release ZIP needs -LicensePython, the interpreter of an environment holding pip-licenses' }
-    $svc = if ($ServicePython) { $ServicePython } else { Join-Path $Repo 'tools\.venv\Scripts\python.exe' }
+    $svc = if ($ServicePython) { $ServicePython } else { Join-Path $Repo 'tools\ui\.venv\Scripts\python.exe' }
     $r = Run (Join-Path $Clone 'release.ps1') @('-LicensePython', $LicensePython, '-ServicePython', $svc)
     L "release.ps1 in the clone: exit $($r.code)"; $r.out | ForEach-Object { L "  | $_" }
     if ($r.code -ne 0) { throw 'release.ps1 refused in the clone' }
@@ -575,6 +617,127 @@ function CheckRows2 { param($Lk, [string]$Label, [string]$Disposition)
     Check "${Label}: every row reads disposition $Disposition and kind = its class; columns path,sha256,disposition,eol,kind and upstream_sha256 = sha256(fold(source)) on the $templateHost template and host-config rows" ($bad.Count -eq 0)
 }
 
+# ------------------------------------------------------------------------------------------------
+# RELEASE-5 PACKAGE ENV (group A contract, RA-1..RA-8): the dashboard's pinned Python set in a folder of the framework's
+# own, $EnvOwned, beside the command file in tools\ui; $EnvHost the host's. Each member reads disk or a process exit.
+# ra1-ra6 and ra8 run pip for real (-Python naming this host's CPython 3.14, PyPI over the network); ra4-ra6 need uv;
+# ra5 also a CPython 3.13 uv finds. Without one, the member SKIPS BY NAME: a CHECK SKIP line, never a pass.
+$EnvOwned = 'tools\ui\.venv'
+$EnvHost = 'tools\.venv'
+function Get-Py314 {
+    # This host's CPython 3.14 win-amd64 (py -3.14, else python on PATH), its sys.executable; $null where none.
+    foreach ($c in @(@('py', '-3.14'), @('python'))) {
+        if (-not (Get-Command $c[0] -ErrorAction SilentlyContinue)) { continue }
+        $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $o = @(& $c[0] @($c | Select-Object -Skip 1) -I -c 'import sys,sysconfig;print(sys.implementation.name,sys.version_info[0],sys.version_info[1],sysconfig.get_platform(),sys.executable)' 2>$null) } finally { $ErrorActionPreference = $p }
+        $f = @(([string]($o | Select-Object -Last 1)).Trim() -split ' ', 5)
+        if ($f.Count -eq 5 -and $f[0] -eq 'cpython' -and $f[1] -eq '3' -and $f[2] -eq '14' -and $f[3] -eq 'win-amd64') { return $f[4] }
+    }
+    return $null
+}
+function Test-PyPI {
+    try { $null = Invoke-WebRequest -UseBasicParsing -Uri 'https://pypi.org/simple/pip/' -Method Head -TimeoutSec 20; return $true } catch { return $false }
+}
+function Skip { param([string]$Why) L "CHECK SKIP  ($Case) $Why" }
+function EnvState { param([string]$Venv)
+    # A Python environment as these members compare it: pyvenv.cfg's sha256, then one line per *.dist-info folder, its
+    # name and its METADATA's sha256, sorted ordinally. '' where the folder does not stand.
+    if (-not (Test-Path -LiteralPath $Venv -PathType Container)) { return '' }
+    $lines = New-Object System.Collections.Generic.List[string]
+    $cfg = Join-Path $Venv 'pyvenv.cfg'
+    $lines.Add('pyvenv.cfg ' + $(if (Test-Path -LiteralPath $cfg -PathType Leaf) { FileSha $cfg } else { 'absent' }))
+    $sp = Join-Path $Venv 'Lib\site-packages'
+    $names = @(); if (Test-Path -LiteralPath $sp) { $names = @([System.IO.Directory]::GetDirectories($sp, '*.dist-info') | ForEach-Object { Split-Path -Leaf $_ }) }
+    foreach ($n in (Sorted $names)) { if (-not $n) { continue }; $m = Join-Path $sp "$n\METADATA"; $lines.Add($n + ' ' + $(if (Test-Path -LiteralPath $m -PathType Leaf) { FileSha $m } else { 'no-METADATA' })) }
+    return ($lines -join "`n")
+}
+function NormName { param([string]$S) return ($S.ToLowerInvariant() -replace '[-_.]+', '-') }
+function PinsMissing { param([string]$Venv)
+    # Every name==version tools/ui/requirements.txt pins that has no dist-info folder of that name and version in $Venv.
+    $have = @{}
+    $sp = Join-Path $Venv 'Lib\site-packages'
+    if (Test-Path -LiteralPath $sp) {
+        foreach ($d in [System.IO.Directory]::GetDirectories($sp, '*.dist-info')) {
+            $n = (Split-Path -Leaf $d) -replace '\.dist-info$', ''; $i = $n.LastIndexOf('-')
+            if ($i -gt 0) { $have[(NormName $n.Substring(0, $i)) + '==' + $n.Substring($i + 1)] = 1 }
+        }
+    }
+    $pins = [regex]::Matches([System.IO.File]::ReadAllText((Join-Path $Repo 'tools\ui\requirements.txt')), '(?m)^([A-Za-z0-9][A-Za-z0-9._-]*)==(\S+)')
+    return @($pins | ForEach-Object { (NormName $_.Groups[1].Value) + '==' + $_.Groups[2].Value } | Where-Object { -not $have.ContainsKey($_) })
+}
+function Install-WithSet { param([string]$Inst, [string]$T, [string]$Py, [string[]]$More)
+    # An install that runs THE PYTHON SET for real: -Python names this host's CPython 3.14, so Run adds no -SkipPythonSet.
+    $r = Run $Inst (@('-Target', $T, '-Python', $Py) + @($More))
+    L "install.ps1 -Target $T -Python $Py $(@($More) -join ' '): exit=$($r.code)"
+    $r.out | Where-Object { $_ -match 'python set|PYTHON SET|pip \||done:|installed |upgraded |REFUSED|planned|verify:' } | ForEach-Object { L "  | $_" }
+    return $r
+}
+function Invoke-Vg { param([string]$T, [string[]]$A)
+    # The installed command file, run by cmd.exe, its exit read.
+    $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $o = @(& cmd.exe /d /c (Join-Path $T 'tools\ui\vanguard.cmd') @A 2>&1); $c = $LASTEXITCODE } finally { $ErrorActionPreference = $p }
+    return [pscustomobject]@{ code = $c; out = @($o | ForEach-Object { "$_" }) }
+}
+function Clear-PyEnv {
+    # Nothing of this shell's own Python or uv selection reaches the installed project's runs.
+    foreach ($v in @('VIRTUAL_ENV', 'UV_PROJECT_ENVIRONMENT', 'UV_PYTHON', 'PYTHONPATH', 'PYTHONHOME', 'CONDA_PREFIX')) { Remove-Item -LiteralPath "Env:$v" -ErrorAction SilentlyContinue }
+}
+function Invoke-Launcher { param([string]$T, [string]$Label, [string]$Shell)
+    # THE SUITE LAUNCHER as installed: <T>\tools\mission-lib.ps1 dot-sourced in a child shell and its
+    # Invoke-SuiteDefaultRun called over <T> with -Cwd tools -- its uv line exactly as the installed file holds it. The
+    # child is PowerShell 7 where pwsh is on PATH, else -Shell. Before 1.3.1 (package SHELL, RA-15) mission-lib.ps1's Stop
+    # and the uv line's 2>&1 made uv's first stderr line a terminating error under Windows PowerShell 5.1, so the run never
+    # returned there; ra4-ra6 also drive it under 5.1 now. A throw is written as the result's Threw.
+    $drv = Join-Path $Work "launcher-$Label.ps1"; $res = Join-Path $Work "launcher-$Label.json"
+    [System.IO.File]::WriteAllText($drv, ("param([string]`$Root, [string]`$Res)`n. (Join-Path `$Root 'tools\mission-lib.ps1')`n" +
+        "try { `$r = Invoke-SuiteDefaultRun -Root `$Root -Cwd 'tools'; `$o = `$r | Select-Object ExitCode, Runnable, Passed, Failed, Skipped, Errors, CollectionError, FailedIds, Raw, @{ n = 'Threw'; e = { `$null } } }`n" +
+        "catch { `$o = [pscustomobject]@{ ExitCode = `$null; Raw = ''; Threw = `$_.Exception.Message } }`n" +
+        "[System.IO.File]::WriteAllText(`$Res, (`$o | ConvertTo-Json -Depth 3))`n"), $NoBom)
+    $pw = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $shell = if ($Shell) { $Shell } elseif ($pw) { $pw.Source } else { 'powershell' }
+    $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $ro = @(& $shell -NoProfile -ExecutionPolicy Bypass -File $drv -Root $T -Res $res 2>&1 | ForEach-Object { "$_" }); $rc = $LASTEXITCODE } finally { $ErrorActionPreference = $p }
+    $r = [pscustomobject]@{ code = $rc; out = $ro }
+    $o = $null
+    if (Test-Path -LiteralPath $res -PathType Leaf) { $o = [System.IO.File]::ReadAllText($res) | ConvertFrom-Json }
+    if ($o -and $o.Threw) { L "($Label) the launcher THREW under $shell : $($o.Threw)"; $o = $null }
+    L "($Label) the suite launcher over $T under $shell (driver exit $($r.code)): $(if ($o) { "ExitCode=$($o.ExitCode) Passed=$($o.Passed) Failed=$($o.Failed) Errors=$($o.Errors) CollectionError=$($o.CollectionError) FailedIds=$(@($o.FailedIds) -join ',')" } else { 'no result: ' + (@($r.out | Select-Object -Last 3) -join ' | ') })"
+    if ($o) { foreach ($ln in @(([string]$o.Raw) -split "`r?`n" | Where-Object { $_ } | Select-Object -Last 12)) { L "  launcher | $ln" } }
+    return $o
+}
+function Invoke-Uv { param([string]$Dir, [string[]]$A)
+    $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    Push-Location -LiteralPath $Dir
+    try { $o = @(& uv @A 2>&1); $c = $LASTEXITCODE } finally { Pop-Location; $ErrorActionPreference = $p }
+    return [pscustomobject]@{ code = $c; out = @($o | ForEach-Object { "$_" }) }
+}
+function New-HostUvProject { param([string]$T)
+    # A SYNTHETIC HOST uv PROJECT in <T>\tools: a pyproject pinning typing-extensions 4.12.2 and click 8.1.8 (the
+    # dashboard pins 4.16.0 and 8.5.0) and pytest, its tests in hosttests\ -- one that imports the two, one asserting
+    # the host's interpreter is 3.13 -- and its lock made by uv lock. Returns whether the lock pins both at those versions.
+    $tools = Join-Path $T 'tools'
+    WriteBytes (Join-Path $tools 'pyproject.toml') (Bytes ("[project]`nname = `"hostproject`"`nversion = `"0.0.1`"`nrequires-python = `">=3.13`"`n" +
+        "dependencies = [`"typing-extensions==4.12.2`", `"click==8.1.8`", `"pytest>=8`"]`n`n[tool.uv]`npackage = false`n`n[tool.pytest.ini_options]`ntestpaths = [`"hosttests`"]`n"))
+    WriteBytes (Join-Path $tools 'hosttests\test_host.py') (Bytes ("import sys`n`n`ndef test_the_host_set_imports():`n    import click`n    import typing_extensions`n    assert click and typing_extensions`n`n`n" +
+        "def test_the_host_interpreter_is_3_13():`n    assert sys.version_info[:2] == (3, 13), sys.version`n"))
+    $u = Invoke-Uv $tools @('lock', '--no-progress')
+    L "uv lock in $tools : exit $($u.code)"; $u.out | Select-Object -Last 3 | ForEach-Object { L "  uv | $_" }
+    $lk = Join-Path $tools 'uv.lock'
+    $txt = if (Test-Path -LiteralPath $lk) { [System.IO.File]::ReadAllText($lk) } else { '' }
+    return ($u.code -eq 0) -and ($txt -match '(?m)^name = "typing-extensions"\r?\nversion = "4\.12\.2"') -and ($txt -match '(?m)^name = "click"\r?\nversion = "8\.1\.8"')
+}
+function Find-Py313 {
+    $f = Invoke-Uv $Work @('python', 'find', '3.13')
+    if ($f.code -eq 0 -and $f.out.Count) { return ([string]$f.out[-1]).Trim() }
+    return $null
+}
+function New-EnvInstall { param([string]$T)
+    # The fresh install these members share: the tagged clone's installer into an empty folder, the set installed for real.
+    $null = New-Item -ItemType Directory -Force -Path $T
+    return (Install-WithSet $installer $T $script:py314 @())
+}
+$script:py314 = $null
+
 try {
 switch ($Case) {
 'gh' {
@@ -655,30 +818,35 @@ switch ($Case) {
         $w = Run $installer @('-Target', $t, '-WhatIf', '-Python', $bogus)
         L "(-WhatIf, no interpreter) exit=$($w.code)"; $w.out | Where-Object { $_ -match 'planned|WhatIf' } | ForEach-Object { L "  | $_" }
         Check "(-WhatIf, -Python naming no interpreter) exit 4, the real run's; planned python set NOT INSTALLED naming -Python; the vanguard command tools\ui\vanguard.cmd (install); a host-id to be minted in the scratch home, no registry row (no mission); the ignore rule mission init's; nothing written" (
-            ($w.code -eq 4) -and ((Count $w.out ('^install\.ps1: planned python set: NOT INSTALLED -- no CPython 3\.14 win-amd64 interpreter to make tools\\\.venv with \(-Python ' + [regex]::Escape($bogus) + ': does not run\)')) -eq 1) -and
+            ($w.code -eq 4) -and ((Count $w.out ('^install\.ps1: planned python set: NOT INSTALLED -- no CPython 3\.14 win-amd64 interpreter to make tools\\ui\\\.venv with \(-Python ' + [regex]::Escape($bogus) + ': does not run\)')) -eq 1) -and
             ((Count $w.out '^install\.ps1: planned vanguard command: tools\\ui\\vanguard\.cmd \(install\) -- ') -eq 1) -and
             (Has $w.out "install.ps1: planned host registration: a host-id would be minted in $vh; no registry row (the target carries no mission yet: mission init adds it)") -and
             ((Count $w.out '^install\.ps1: planned telemetry ignore rule: no mission yet: mission init writes the rule /\.mission-runtime/ into the target''s \.gitignore$') -eq 1) -and (Has $w.out 'install.ps1: WhatIf: nothing was written.') -and
             (-not (Test-Path -LiteralPath $t)) -and (-not (Test-Path -LiteralPath (Join-Path $vh 'host-id'))))
         $r = Run $installer @('-Target', $t, '-Python', $bogus)
         L "(install, no interpreter) exit=$($r.code)"; $r.out | Where-Object { $_ -notmatch '^install\.ps1:   install ' } | ForEach-Object { L "  | $_" }
-        Check "(an install, -Python naming no interpreter) exit 4: done: written=$N, framework.lock written, one PYTHON SET NOT INSTALLED line naming the pip command to run, no tools\.venv made" (
+        # RELEASE-5 group B, amendment 3 (RB-29): the line says a run again builds nothing, and the two lines after it are the
+        # commands the installer's own step runs -- venv, then pip with its arguments -- each path quoted
+        Check "(an install, -Python naming no interpreter) exit 4: done: written=$N, framework.lock written, one PYTHON SET NOT INSTALLED line saying a run again builds nothing, then the venv and pip commands to run, no tools\ui\.venv made" (
             ($r.code -eq 4) -and (Has $r.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0") -and (Test-Path -LiteralPath (Join-Path $t 'framework.lock')) -and
-            ((Count $r.out '^install\.ps1: PYTHON SET NOT INSTALLED: .+ -m pip install --require-hashes --only-binary :all: -r .+tools\\ui\\requirements\.txt$') -eq 1) -and (-not (Test-Path -LiteralPath (Join-Path $t 'tools\.venv'))))
+            ((Count $r.out '^install\.ps1: PYTHON SET NOT INSTALLED: .+ builds nothing: a run over a target already at this version writes nothing\. ') -eq 1) -and
+            ((Count $r.out '^install\.ps1:   py -3\.14 -m venv --without-scm-ignore-files ''.+tools\\ui\\\.venv''$') -eq 1) -and
+            ((Count $r.out '^install\.ps1:   & ''.+tools\\ui\\\.venv\\Scripts\\python\.exe'' -m pip install --require-hashes --only-binary :all: --disable-pip-version-check --no-input -r ''.+tools\\ui\\requirements\.txt''$') -eq 1) -and
+            ((Count $r.out 'name one with -Python') -eq 0) -and (-not (Test-Path -LiteralPath (Join-Path $t 'tools\ui\.venv'))))
         $v = Run $installer @('-Target', $t, '-Verify')
         Check '(after it) -Verify exit 0, 0 difference(s): every file stands' (($v.code -eq 0) -and ((Count $v.out "^install\.ps1: verify: $N file\(s\) listed, 0 difference\(s\); ") -eq 1))
         $hid = if (Test-Path -LiteralPath (Join-Path $vh 'host-id')) { ([System.IO.File]::ReadAllText((Join-Path $vh 'host-id'))).Trim() } else { '' }
         $t2 = Join-Path $Work 't2'
-        $null = New-Item -ItemType Directory -Path (Join-Path $t2 'tools\.venv')
+        $null = New-Item -ItemType Directory -Path (Join-Path $t2 'tools\ui\.venv')
         $w2 = Run $installer @('-Target', $t2, '-WhatIf', '-Python', $bogus)
-        Check "(a tools\.venv with no Scripts\python.exe) -WhatIf exit 4, NOT INSTALLED: it stands without an interpreter and is left untouched; the host-id the install minted ($hid) read as kept" (
-            ($w2.code -eq 4) -and ((Count $w2.out '^install\.ps1: planned python set: NOT INSTALLED -- tools\\\.venv stands in the target without Scripts\\python\.exe; it is left untouched') -eq 1) -and
+        Check "(a tools\ui\.venv with no Scripts\python.exe) -WhatIf exit 4, NOT INSTALLED: it stands without an interpreter and is left untouched; the host-id the install minted ($hid) read as kept" (
+            ($w2.code -eq 4) -and ((Count $w2.out '^install\.ps1: planned python set: NOT INSTALLED -- tools\\ui\\\.venv stands in the target without Scripts\\python\.exe; it is left untouched') -eq 1) -and
             ($hid -match '^[0-9a-f-]{36}$') -and ((Count $w2.out ('^install\.ps1: planned host registration: host-id ' + [regex]::Escape($hid) + ' in ' + [regex]::Escape($vh) + ', kept; ')) -eq 1))
         $t3 = Join-Path $Work 't3'
         $r3 = Run $installer @('-Target', $t3, '-SkipPythonSet')
-        Check "(-SkipPythonSet) exit 0, done: written=$N, the line 'python set: skipped (-SkipPythonSet)', no tools\.venv" (($r3.code -eq 0) -and (Has $r3.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0") -and
-            ((Count $r3.out '^install\.ps1: python set: skipped \(-SkipPythonSet\)') -eq 1) -and (-not (Test-Path -LiteralPath (Join-Path $t3 'tools\.venv'))))
-        # A CPython 3.14 on this host, named with -Python, under -WhatIf: the plan makes tools\.venv with it and names pip's
+        Check "(-SkipPythonSet) exit 0, done: written=$N, the line 'python set: skipped (-SkipPythonSet)', no tools\ui\.venv" (($r3.code -eq 0) -and (Has $r3.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0") -and
+            ((Count $r3.out '^install\.ps1: python set: skipped \(-SkipPythonSet\)') -eq 1) -and (-not (Test-Path -LiteralPath (Join-Path $t3 'tools\ui\.venv'))))
+        # A CPython 3.14 on this host, named with -Python, under -WhatIf: the plan makes tools\ui\.venv with it and names pip's
         # hash-checked install of the pinned set. Nothing runs pip.
         $py = $null
         foreach ($c in @(@('py', '-3.14'), @('python'))) {
@@ -691,8 +859,8 @@ switch ($Case) {
         L "a CPython 3.14 win-amd64 on this host: $(if ($py) { $py } else { 'NONE' })"
         $t4 = Join-Path $Work 't4'
         $w4 = if ($py) { Run $installer @('-Target', $t4, '-WhatIf', '-Python', $py) } else { $null }
-        Check "(this host's CPython 3.14, -WhatIf) exit 0; planned python set: tools\.venv made by -Python, then pip install --require-hashes --only-binary :all: -r tools\ui\requirements.txt ($pins pinned package(s), from PyPI); nothing written" (
-            ($null -ne $w4) -and ($w4.code -eq 0) -and ((Count $w4.out ('^install\.ps1: planned python set: tools\\\.venv made by -Python: ' + [regex]::Escape($py) + ' \(CPython 3\.14\.\d+, win-amd64\); then pip install --require-hashes --only-binary :all: -r tools\\ui\\requirements\.txt \(' + $pins + ' pinned package\(s\), from PyPI\)$')) -eq 1) -and
+        Check "(this host's CPython 3.14, -WhatIf) exit 0; planned python set: tools\ui\.venv made by -Python, then pip install --require-hashes --only-binary :all: -r tools\ui\requirements.txt ($pins pinned package(s), from PyPI); nothing written" (
+            ($null -ne $w4) -and ($w4.code -eq 0) -and ((Count $w4.out ('^install\.ps1: planned python set: tools\\ui\\\.venv made by -Python: ' + [regex]::Escape($py) + ' \(CPython 3\.14\.\d+, win-amd64\); then pip install --require-hashes --only-binary :all: -r tools\\ui\\requirements\.txt \(' + $pins + ' pinned package\(s\), from PyPI\)$')) -eq 1) -and
             (-not (Test-Path -LiteralPath $t4)))
         # The registry row and the ignore rule over a target that carries a mission and the feed folder.
         $t5 = Join-Path $Work 't5'
@@ -711,6 +879,828 @@ switch ($Case) {
             ((Count $w6.out '^install\.ps1: planned telemetry ignore rule: the target''s \.gitignore already ignores /\.mission-runtime/ \(or the feed''s folder within it\)$') -eq 1))
         Check 'no -WhatIf wrote a registry' (-not (Test-Path -LiteralPath (Join-Path $vh 'projects.yaml')))
     } finally { $env:VANGUARD_HOME = $vgPrev }
+}
+{ $_ -in 'ra1', 'ra2', 'ra3', 'ra4', 'ra5', 'ra6', 'ra8' } {
+    # RELEASE-5 PACKAGE ENV, the members that install the set for real. A scratch VANGUARD_HOME for the registration.
+    $vgPrev = $env:VANGUARD_HOME
+    $env:VANGUARD_HOME = Join-Path $Work 'vghome'
+    Clear-PyEnv
+    try {
+    $script:py314 = Get-Py314
+    $net = Test-PyPI
+    $uvOk = [bool](Get-Command uv -CommandType Application -ErrorAction SilentlyContinue)
+    L "this host: CPython 3.14 win-amd64 $(if ($script:py314) { $script:py314 } else { 'NONE' }); PyPI reachable $net; uv on PATH $uvOk"
+    $need = @()
+    if (-not $script:py314) { $need += 'no CPython 3.14 win-amd64 on this host' }
+    if (-not $net) { $need += 'PyPI is not reachable (the set is installed from it)' }
+    if (($Case -in 'ra4', 'ra5', 'ra6') -and -not $uvOk) { $need += 'uv is not on PATH (the suite launcher runs it)' }
+    $py313 = $null
+    if ($Case -eq 'ra5' -and $uvOk) { $py313 = Find-Py313; L "a CPython 3.13 uv finds: $(if ($py313) { $py313 } else { 'NONE' })"; if (-not $py313) { $need += 'uv finds no CPython 3.13 (the host environment of RA-5)' } }
+    if ($need.Count) { Skip ("SKIPPED BY NAME: $Case not measured -- " + ($need -join '; ')) }
+    else {
+    switch ($Case) {
+    'ra1' {
+        # RA-1: a fresh install builds the pinned set in the framework-owned folder and creates no tools\.venv.
+        $t = Join-Path $Work 't'
+        $r = New-EnvInstall $t
+        $own = Join-Path $t $EnvOwned
+        $miss = @(PinsMissing $own)
+        L "(RA-1) $EnvOwned\Scripts\python.exe: $(Test-Path -LiteralPath (Join-Path $own 'Scripts\python.exe') -PathType Leaf); pins without a dist-info there: $($miss.Count)$(if ($miss.Count) { ' (' + (($miss | Select-Object -First 5) -join ', ') + ')' }); $EnvHost stands: $(Test-Path -LiteralPath (Join-Path $t $EnvHost))"
+        Check "(RA-1) a fresh install with the Python set exits 0, done: written=$N" (($r.code -eq 0) -and (Has $r.out "install.ps1: done: written=$N already-identical=0 kept=0 retired=0 refused=0"))
+        Check "(RA-1) every name==version tools/ui/requirements.txt pins has its dist-info in $EnvOwned, and $EnvOwned\Scripts\python.exe stands" ((Test-Path -LiteralPath (Join-Path $own 'Scripts\python.exe') -PathType Leaf) -and ($miss.Count -eq 0))
+        Check "(RA-1) no $EnvHost in the target" (-not (Test-Path -LiteralPath (Join-Path $t $EnvHost)))
+    }
+    'ra2' {
+        # RA-2: on that fresh install, with no tools\.venv on disk, "vanguard ui --help" exits 0 and the interpreter it
+        # ran is the owned folder's: moved aside, the same command fails; moved back, it exits 0 again.
+        $t = Join-Path $Work 't'
+        $null = New-EnvInstall $t
+        $hostEnv = Join-Path $t $EnvHost; $own = Join-Path $t $EnvOwned
+        $hadHost = Test-Path -LiteralPath $hostEnv
+        Check "(RA-2) after the fresh install no $EnvHost stands" (-not $hadHost)
+        # Where one stands (the 1.3.0 layout), it is moved aside so the command file is read with none on disk.
+        if ($hadHost) { [System.IO.Directory]::Move($hostEnv, $hostEnv + '-aside') }
+        $v1 = Invoke-Vg $t @('ui', '--help')
+        L "(RA-2) vanguard.cmd ui --help with no $EnvHost on disk: exit $($v1.code); $(@($v1.out | Select-Object -First 2) -join ' | ')"
+        Check "(RA-2) with no $EnvHost on disk, tools\ui\vanguard.cmd ui --help exits 0" ($v1.code -eq 0)
+        $ownStood = Test-Path -LiteralPath $own -PathType Container
+        if ($ownStood) { [System.IO.Directory]::Move($own, $own + '-aside') }
+        $v2 = Invoke-Vg $t @('ui', '--help')
+        if ($ownStood) { [System.IO.Directory]::Move($own + '-aside', $own) }
+        $v3 = Invoke-Vg $t @('ui', '--help')
+        L "(RA-2) $EnvOwned moved aside: exit $($v2.code); moved back: exit $($v3.code)"
+        Check "(RA-2) the interpreter it ran is $EnvOwned's: with that folder moved aside the same command exits non-zero, moved back it exits 0" ($ownStood -and ($v2.code -ne 0) -and ($v3.code -eq 0))
+        if ($hadHost) { [System.IO.Directory]::Move($hostEnv + '-aside', $hostEnv) }
+    }
+    'ra3' {
+        # RA-3: an upgrade of an installed 1.3.0 project builds the owned folder and leaves its tools\.venv untouched.
+        $v130 = ((RunGit $Repo @('rev-parse', 'v1.3.0^{commit}')).out -join '').Trim()
+        $old = New-TaggedClone -Dest (Join-Path $Work 'v130-clone') -Rev $v130
+        L "the 1.3.0 release: $($old.root) at $($old.head), VERSION $($old.version)"
+        $t = Join-Path $Work 't'
+        $null = New-Item -ItemType Directory -Force -Path $t
+        $r0 = Install-WithSet $old.installer $t $script:py314 @()
+        $hostEnv = Join-Path $t $EnvHost; $own = Join-Path $t $EnvOwned
+        $before = EnvState $hostEnv
+        Check "(RA-3) the 1.3.0 project: its own installer exits 0, and $EnvHost holds the set it installed" (($r0.code -eq 0) -and $before -and (@(PinsMissing $hostEnv).Count -eq 0))
+        $src = New-Source -Dir (Join-Path $Work 'src-1.3.1') -Version '1.3.1' -From $Tagged.root -Set $owned -Installer $installer
+        $tb = TreeHashes $t
+        $w = Run $src.installer @('-Target', $t, '-WhatIf', '-Python', $script:py314)
+        L "(RA-3) -WhatIf of the upgrade: exit $($w.code)"; $w.out | Where-Object { $_ -match 'planned|WhatIf' } | ForEach-Object { L "  | $_" }
+        $ta = TreeHashes $t
+        Check "(RA-3) -WhatIf exit 0 predicts the new folder: one planned python set line naming $EnvOwned made by -Python; nothing written (the target's tree, $EnvHost included, byte for byte; no $EnvOwned)" (
+            ($w.code -eq 0) -and ((Count $w.out ('^install\.ps1: planned python set: ' + [regex]::Escape($EnvOwned) + ' made by -Python: ')) -eq 1) -and ($tb.aggregate -eq $ta.aggregate) -and (-not (Test-Path -LiteralPath $own)))
+        $u = Install-WithSet $src.installer $t $script:py314 @()
+        $after = EnvState $hostEnv
+        Check "(RA-3) the upgrade to 1.3.1 exits 0 and builds $EnvOwned with every pinned dist-info" (($u.code -eq 0) -and (Test-Path -LiteralPath (Join-Path $own 'Scripts\python.exe') -PathType Leaf) -and (@(PinsMissing $own).Count -eq 0))
+        L "(RA-3) $EnvHost before/after: $(@($before -split "`n").Count) line(s) each side; equal: $($before -ceq $after)"
+        Check "(RA-3) $EnvHost untouched: pyvenv.cfg's sha256 and every dist-info folder name and METADATA sha256 equal before and after" ($before -and ($before -ceq $after))
+        $vf = Run $src.installer @('-Target', $t, '-Verify')
+        L "(RA-3) -Verify: exit $($vf.code); $(@($vf.out | Where-Object { $_ -match 'verify:' }) -join ' | ')"
+        Check '(RA-3) -Verify afterwards exit 0, 0 difference(s)' (($vf.code -eq 0) -and ((Count $vf.out '^install\.ps1: verify: \d+ file\(s\) listed, 0 difference\(s\); ') -eq 1))
+        # THE PLANTED RED: one byte written into a dist-info METADATA in tools\.venv; the same compare must read it.
+        $md = @([System.IO.Directory]::GetDirectories((Join-Path $hostEnv 'Lib\site-packages'), '*.dist-info') | Select-Object -First 1)
+        $mf = Join-Path $md[0] 'METADATA'
+        $mdBytes = [System.IO.File]::ReadAllBytes($mf)
+        [System.IO.File]::WriteAllBytes($mf, [byte[]]($mdBytes + [byte]10))
+        $planted = EnvState $hostEnv
+        [System.IO.File]::WriteAllBytes($mf, $mdBytes)
+        L "(RA-3) PLANTED RED: one byte appended to $mf -- the compare reads $(if ($planted -ceq $before) { 'EQUAL' } else { 'DIFFERENT' }); restored: $((EnvState $hostEnv) -ceq $before)"
+        Check '(RA-3) the planted write into tools\.venv is caught by the before/after compare' ($planted -cne $before)
+    }
+    { $_ -in 'ra4', 'ra5' } {
+        # RA-4 (the package face) and RA-5 (the interpreter face): an installed project whose tools\ holds a host uv
+        # project; the host makes its environment on 3.13 where none stands (RA-5's host), then the suite launcher runs.
+        $t = Join-Path $Work 't'
+        $r = New-EnvInstall $t
+        $hostEnv = Join-Path $t $EnvHost; $own = Join-Path $t $EnvOwned
+        # The dashboard's environment: the folder this install put the pinned set in.
+        $dash = if (Test-Path -LiteralPath (Join-Path $own 'Scripts\python.exe') -PathType Leaf) { $own } elseif (Test-Path -LiteralPath (Join-Path $hostEnv 'Scripts\python.exe') -PathType Leaf) { $hostEnv } else { $null }
+        L "($Case) the install: exit $($r.code); the dashboard's environment (where the set went): $(if ($dash) { $dash } else { 'NONE' })"
+        Check "($Case) the fresh install exits 0 and its pinned set stands in one folder" (($r.code -eq 0) -and $dash -and (@(PinsMissing $dash).Count -eq 0))
+        if ($dash) {
+            $before = EnvState $dash
+            $lockOk = New-HostUvProject $t
+            Check "($Case) the host uv project in tools\: uv lock exits 0 and the lock pins typing-extensions 4.12.2 and click 8.1.8 (the dashboard pins 4.16.0 and 8.5.0)" $lockOk
+            if (-not (Test-Path -LiteralPath $hostEnv)) {
+                $py313 = Find-Py313
+                if ($py313) { $hv = Invoke-Uv (Join-Path $t 'tools') @('venv', '--no-progress', '--python', $py313, '.venv'); L "($Case) no $EnvHost stood: the host made it, uv venv --python $py313 : exit $($hv.code)" }
+                else { L "($Case) no $EnvHost stood and uv finds no 3.13: uv makes the host's environment itself" }
+            } else { L "($Case) $EnvHost already stood (the install's): the host's uv run takes it" }
+            $run = Invoke-Launcher $t $Case
+            $after = EnvState $dash
+            $vg = Invoke-Vg $t @('ui', '--help')
+            $changed = @(Compare-Object @($before -split "`n") @($after -split "`n") | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" })
+            L "($Case) the dashboard's environment after the launcher: $(if ($changed.Count) { "$($changed.Count) line(s) differ: " + (($changed | Select-Object -First 6) -join '; ') } else { 'unchanged' }); vanguard ui --help exit $($vg.code)"
+            if ($Case -eq 'ra4') {
+                Check '(RA-4) the suite launcher ran (a result was read back from Invoke-SuiteDefaultRun)' ($null -ne $run)
+                Check "(RA-4) after the launcher every dist-info of the dashboard's environment, and its pyvenv.cfg, is unchanged" ($before -ceq $after)
+                Check '(RA-4) after the launcher tools\ui\vanguard.cmd ui --help still exits 0' ($vg.code -eq 0)
+            } else {
+                $hostPy = Join-Path $hostEnv 'pyvenv.cfg'
+                L "(RA-5) $EnvHost pyvenv.cfg: $(if (Test-Path -LiteralPath $hostPy) { (@([System.IO.File]::ReadAllLines($hostPy) | Where-Object { $_ -match '^(version|version_info) ' }) -join '; ') } else { 'absent' })"
+                Check '(RA-5) the host test asserting sys.version_info[:2] == (3, 13), run through the suite launcher, passes: launcher exit 0, 2 passed, 0 failed, no collection error' (
+                    ($null -ne $run) -and ($run.ExitCode -eq 0) -and ($run.Passed -eq 2) -and ($run.Failed -eq 0) -and (-not $run.CollectionError))
+            }
+            # AMENDMENT 1 (RA-4, RA-5): driven under PowerShell 7 above; once more under Windows PowerShell 5.1, the result
+            # recorded and read as the 7 run's. The 7 run synced the host's environment, so uv writes nothing to stderr here:
+            # this reading is no evidence for RA-15 (case ra15 is).
+            $run51 = Invoke-Launcher $t "$Case-ps51" 'powershell'
+            $after51 = EnvState $dash
+            $vg51 = Invoke-Vg $t @('ui', '--help')
+            L "($Case) under Windows PowerShell 5.1: $(if ($run51) { "returned ExitCode=$($run51.ExitCode) Passed=$($run51.Passed) Failed=$($run51.Failed) CollectionError=$($run51.CollectionError)" } else { 'no result (see the THREW line above)' }); the dashboard's environment $(if ($after51 -ceq $before) { 'unchanged' } else { 'CHANGED' }); vanguard ui --help exit $($vg51.code)"
+            if ($Case -eq 'ra4') {
+                Check '(RA-4, Windows PowerShell 5.1) the launcher returns there too, its exit code and tally the PowerShell 7 run''s; the dashboard''s environment unchanged and ui --help exit 0' (
+                    ($null -ne $run51) -and ($null -ne $run) -and ($run51.ExitCode -eq $run.ExitCode) -and ($run51.Passed -eq $run.Passed) -and ($run51.Failed -eq $run.Failed) -and ($after51 -ceq $before) -and ($vg51.code -eq 0))
+            } else {
+                Check '(RA-5, Windows PowerShell 5.1) the host test asserting (3, 13) passes through the launcher there too: exit 0, 2 passed, 0 failed, no collection error' (
+                    ($null -ne $run51) -and ($run51.ExitCode -eq 0) -and ($run51.Passed -eq 2) -and ($run51.Failed -eq 0) -and (-not $run51.CollectionError))
+            }
+        }
+    }
+    'ra6' {
+        # RA-6, THE UNMEASURED CASE: a fresh install with NO uv project under tools\; the launcher's run measured and
+        # recorded -- its exit, its message, what it creates -- and the dashboard's environment unchanged after it.
+        $t = Join-Path $Work 't'
+        $r = New-EnvInstall $t
+        $own = Join-Path $t $EnvOwned; $hostEnv = Join-Path $t $EnvHost
+        $dash = if (Test-Path -LiteralPath (Join-Path $own 'Scripts\python.exe') -PathType Leaf) { $own } elseif (Test-Path -LiteralPath (Join-Path $hostEnv 'Scripts\python.exe') -PathType Leaf) { $hostEnv } else { $null }
+        Check '(RA-6) the fresh install exits 0, its pinned set in one folder, and no pyproject.toml or uv.lock under tools\' (($r.code -eq 0) -and $dash -and (-not (Test-Path -LiteralPath (Join-Path $t 'tools\pyproject.toml'))) -and (-not (Test-Path -LiteralPath (Join-Path $t 'tools\uv.lock'))))
+        if ($dash) {
+            $before = EnvState $dash
+            $tb = TreeHashes $t
+            $run = Invoke-Launcher $t 'ra6'
+            $ta = TreeHashes $t
+            $after = EnvState $dash
+            $made = @($ta.map.Keys | Where-Object { -not $tb.map.ContainsKey($_) })
+            $gone = @($tb.map.Keys | Where-Object { -not $ta.map.ContainsKey($_) })
+            $chg = @($ta.map.Keys | Where-Object { $tb.map.ContainsKey($_) -and $tb.map[$_] -ne $ta.map[$_] })
+            L "(RA-6) MEASURED: launcher ExitCode $(if ($run) { $run.ExitCode } else { '(none read)' }); Runnable $(if ($run) { $run.Runnable }); CollectionError $(if ($run) { $run.CollectionError })"
+            if ($run) { foreach ($ln in @(([string]$run.Raw) -split "`r?`n" | Where-Object { $_ })) { L "  (RA-6) message | $ln" } }
+            L "(RA-6) MEASURED: files created under the project $($made.Count)$(if ($made.Count) { ': ' + (($made | Select-Object -First 12) -join ', ') }); removed $($gone.Count); changed $($chg.Count)$(if ($chg.Count) { ': ' + (($chg | Select-Object -First 6) -join ', ') })"
+            Check '(RA-6) the launcher''s run was measured (a result read back from Invoke-SuiteDefaultRun)' ($null -ne $run)
+            Check "(RA-6) whatever the launcher did, the dashboard's environment is unchanged after it (pyvenv.cfg and every dist-info name and METADATA)" ($before -ceq $after)
+            # The same launcher once more under Windows PowerShell 5.1 (validator round 1, finding 6): what it does there is
+            # recorded -- a throw included -- and the dashboard's environment read again. AMENDMENT 1: before RA-15's cure the
+            # call threw there on the interpreter's stderr line; now it returns, and its reading is held to PowerShell 7's.
+            $t51b = TreeHashes $t
+            $run51 = Invoke-Launcher $t 'ra6-ps51' 'powershell'
+            $t51a = TreeHashes $t
+            $made51 = @($t51a.map.Keys | Where-Object { -not $t51b.map.ContainsKey($_) })
+            $gone51 = @($t51b.map.Keys | Where-Object { -not $t51a.map.ContainsKey($_) })
+            $chg51 = @($t51a.map.Keys | Where-Object { $t51b.map.ContainsKey($_) -and $t51b.map[$_] -ne $t51a.map[$_] })
+            $res51 = Join-Path $Work 'launcher-ra6-ps51.json'
+            $threw51 = if (Test-Path -LiteralPath $res51) { [string](([System.IO.File]::ReadAllText($res51) | ConvertFrom-Json).Threw) } else { '(no result file)' }
+            L "(RA-6) MEASURED under Windows PowerShell 5.1: $(if ($run51) { "ExitCode $($run51.ExitCode); Runnable $($run51.Runnable); CollectionError $($run51.CollectionError)" } else { 'no run object' }); threw: $(if ($threw51) { $threw51 } else { 'no' }); files created $($made51.Count), removed $($gone51.Count), changed $($chg51.Count)"
+            if ($run51) { foreach ($ln in @(([string]$run51.Raw) -split "`r?`n" | Where-Object { $_ })) { L "  (RA-6, 5.1) message | $ln" } }
+            Check "(RA-6) under Windows PowerShell 5.1 too, the dashboard's environment is unchanged after the launcher" ((EnvState $dash) -ceq $before)
+            $msg7 = if ($run) { @(([string]$run.Raw) -split "`r?`n" | Where-Object { $_ -match 'No module named' }) -join '' } else { '' }
+            $msg51 = if ($run51) { @(([string]$run51.Raw) -split "`r?`n" | Where-Object { $_ -match 'No module named' }) -join '' } else { '' }
+            Check "(RA-6, amendment 1) under Windows PowerShell 5.1 the launcher RETURNS, as under PowerShell 7: the same exit code, runnable count, collection-error reading and message, and no file created, removed or changed" (
+                ($null -ne $run51) -and ($null -ne $run) -and ($run51.ExitCode -eq $run.ExitCode) -and ($run51.Runnable -eq $run.Runnable) -and ($run51.CollectionError -eq $run.CollectionError) -and
+                $msg51 -and ($msg51 -ceq $msg7) -and ($made51.Count -eq 0) -and ($gone51.Count -eq 0) -and ($chg51.Count -eq 0))
+            $md = @([System.IO.Directory]::GetDirectories((Join-Path $dash 'Lib\site-packages'), '*.dist-info') | Select-Object -First 1)
+            $mf = Join-Path $md[0] 'METADATA'; $mdBytes = [System.IO.File]::ReadAllBytes($mf)
+            [System.IO.File]::WriteAllBytes($mf, [byte[]]($mdBytes + [byte]10)); $planted = EnvState $dash; [System.IO.File]::WriteAllBytes($mf, $mdBytes)
+            L "(RA-6) PLANTED RED: one byte appended to $mf -- the compare reads $(if ($planted -ceq $before) { 'EQUAL' } else { 'DIFFERENT' })"
+            Check '(RA-6) the planted write into the dashboard''s environment is caught by the same compare' ($planted -cne $before)
+        }
+    }
+    'ra8' {
+        # RA-8: a fresh project after install and mission init shows nothing under the owned folder in git status.
+        $t = Join-Path $Work 't'
+        $r = New-EnvInstall $t
+        $own = Join-Path $t $EnvOwned
+        $mi = Run (Join-Path $Tagged.root 'mission.ps1') @('init', '-Target', $t)
+        L "(RA-8) install exit $($r.code); mission init exit $($mi.code)"
+        $null = RunGit $t @('init', '-q'); $null = RunGit $t @('config', 'core.autocrlf', 'false')
+        $null = RunGit $t @('config', 'user.name', 'falsifier-fixture'); $null = RunGit $t @('config', 'user.email', 'falsifier-fixture@localhost')
+        $null = RunGit $t @('add', '-A'); $null = RunGit $t @('commit', '-q', '-m', 'the installed framework and the initialised mission')
+        $st = RunGit $t @('-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all')
+        $under = @($st.out | Where-Object { $_ -match ' tools/ui/\.venv/' })
+        $tracked = @((RunGit $t @('ls-files', 'tools/ui/.venv')).out | Where-Object { $_ })
+        L "(RA-8) $EnvOwned stands with Scripts\python.exe: $(Test-Path -LiteralPath (Join-Path $own 'Scripts\python.exe') -PathType Leaf); git status --porcelain -uall lines $(@($st.out | Where-Object { $_ }).Count), under tools/ui/.venv/ $($under.Count); tracked under it $($tracked.Count)"
+        Check "(RA-8) install exit 0 and mission init exit 0; $EnvOwned stands, holding the interpreter" (($r.code -eq 0) -and ($mi.code -eq 0) -and (Test-Path -LiteralPath (Join-Path $own 'Scripts\python.exe') -PathType Leaf))
+        Check '(RA-8) git status --porcelain (untracked files all) shows nothing under tools/ui/.venv/, and git add -A took nothing from it' (($st.code -eq 0) -and ($under.Count -eq 0) -and ($tracked.Count -eq 0))
+        # THE PLANTED RED: the ignore rule removed -- every line ignoring a .venv folder taken out of each .gitignore of
+        # the project that holds one (the root's and tools\ui's) -- and the folder must show.
+        $kept = @{}; $removed = @()
+        foreach ($gi in @((Join-Path $t '.gitignore'), (Join-Path $t 'tools\ui\.gitignore'))) {
+            if (-not (Test-Path -LiteralPath $gi -PathType Leaf)) { continue }
+            $kept[$gi] = [System.IO.File]::ReadAllBytes($gi)
+            $rows = @($L1.GetString($kept[$gi]).Split([char]10))
+            $keepRows = @($rows | Where-Object { $_.TrimEnd("`r").Trim() -notmatch '^/?(tools/ui/)?\.venv/?$' })
+            $removed += @($rows | Where-Object { $_.TrimEnd("`r").Trim() -match '^/?(tools/ui/)?\.venv/?$' } | ForEach-Object { "$(Split-Path -Leaf (Split-Path -Parent $gi))/.gitignore: $($_.TrimEnd("`r"))" })
+            [System.IO.File]::WriteAllBytes($gi, $L1.GetBytes(($keepRows -join "`n")))
+        }
+        # Nothing else is touched: in particular a .gitignore of venv's own inside the folder (CPython 3.13 and later
+        # write one holding '*' unless told not to) is left as the install left it, and read.
+        $st2 = RunGit $t @('-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all')
+        foreach ($gi in $kept.Keys) { [System.IO.File]::WriteAllBytes($gi, $kept[$gi]) }
+        $under2 = @($st2.out | Where-Object { $_ -match ' tools/ui/\.venv/' })
+        $selfGi = Join-Path $own '.gitignore'
+        $stBack = RunGit $t @('-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all')
+        L "(RA-8) a .gitignore of the folder's own: $(if (Test-Path -LiteralPath $selfGi) { 'STANDS' } else { 'none' })"
+        L "(RA-8) PLANTED RED: the project's rule line(s) removed: $(if ($removed.Count) { $removed -join '; ' } else { 'none stood' }) -- lines under tools/ui/.venv/: $($under2.Count); the rules put back: $(@($stBack.out | Where-Object { $_ -match ' tools/ui/\.venv/' }).Count)"
+        Check '(RA-8) the ignore rule removed, the folder shows in git status (no other rule hides it: the folder carries no .gitignore of its own); put back, it is hidden again' (
+            ($under2.Count -gt 0) -and ($removed.Count -gt 0) -and (-not (Test-Path -LiteralPath $selfGi)) -and (@($stBack.out | Where-Object { $_ -match ' tools/ui/\.venv/' }).Count -eq 0))
+    }
+    }
+    }
+    } finally { $env:VANGUARD_HOME = $vgPrev }
+}
+'ra7' {
+    # RA-7: no shipped text still places the dashboard's set in tools\.venv. Every file of the release set (the tagged
+    # clone's tracked files less the dashboard's private source and the service's tests) is read; every "tools\.venv" or
+    # "tools/.venv" is listed with its reason, by file and count. A file not in the table, or a count the table does not
+    # say, is unexplained and fails.
+    $why = [ordered]@{
+        '.gitignore'                                   = @(2, "this repository's own rules: a development checkout made before 1.3.1 still holds the old folder; not installed")
+        '.worktreeinclude'                             = @(1, "names the host's product venv paths a worker worktree excludes (K-2)")
+        'docs/RELEASE-NOTES-v1.0.0.md'                 = @(3, 'the historical notes of a release that used that layout')
+        'docs/RELEASE-NOTES-v1.1.0.md'                 = @(10, 'the historical notes of a release that used that layout')
+        'docs/RELEASE-NOTES-v1.2.0.md'                 = @(3, 'the historical notes of a release that used that layout')
+        'docs/RELEASE-NOTES-v1.3.0.md'                 = @(2, 'the historical notes of a release that used that layout')
+        'provenance/manifest.jsonl'                    = @(24, 'the reason texts of earlier rows, provenance history')
+        'install.ps1'                                  = @(1, 'the header says the installer never reads or writes it: the host''s')
+        'INSTALL.md'                                   = @(2, 'section 5 says the folder is the host''s and an upgrade leaves it')
+        'docs/QUICKSTART.md'                           = @(1, "WP-2 R-57 and WP-3 C-1k/C-1be's skip: they try the project's own src\.venv and tools\.venv for pytest")
+        'docs/framework/vanguard-collective-user-guide.md' = @(1, "WP-2 R-57 and WP-3 C-1k/C-1be's skip: they try the project's own src\.venv and tools\.venv for pytest")
+        'tests/lam/instrument-WP-2.ps1'                = @(2, "R-57's candidates for the host's product venv holding pytest")
+        'tests/lam/instrument-WP-3.ps1'                = @(5, "C-1k and C-1be's candidates for the host's product venv holding pytest")
+        'tests/lam/instrument-WP-7.ps1'                = @(2, "U-5's writer census passes over the host's own environment, by its full path, beside tools\ui\.venv (amendment 2, RA-22): never the dashboard's set")
+        'tests/install/falsify.ps1'                    = @(-1, 'this falsifier names the host''s folder to judge that the installer leaves it (any count)')
+        'docs/RELEASE-NOTES-v1.3.1.md'                 = @(4, 'the 1.3.1 notes, shipped unedited (1.3.2 packaging, PK-17): they state the move; each line was judged at v1.3.1')
+        'docs/RELEASE-NOTES-v1.3.2.md'                 = @(-1, 'the 1.3.2 notes state the move (each line listed below)')
+    }
+    $ls = RunGit $Tagged.root @('-c', 'core.quotePath=false', 'ls-files')
+    $files = @($ls.out | Where-Object { $_ -and -not (Test-NotReleased $_) })
+    $found = [ordered]@{}
+    foreach ($f in $files) {
+        $p = Join-Path $Tagged.root ($f -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { continue }
+        $n = [regex]::Matches([System.IO.File]::ReadAllText($p), '(?i)tools[\\/]+\.venv').Count
+        if ($n -gt 0) { $found[$f] = $n }
+    }
+    L "(RA-7) release-set files read: $($files.Count); files naming tools\.venv or tools/.venv: $($found.Count)"
+    $bad = @()
+    foreach ($f in $found.Keys) {
+        if ($why.Contains($f)) {
+            $ok = ($why[$f][0] -eq -1) -or ($why[$f][0] -eq $found[$f])
+            L ("  (RA-7) {0,3}  {1} -- {2}{3}" -f $found[$f], $f, $why[$f][1], $(if ($ok) { '' } else { "  UNEXPLAINED: the table says $($why[$f][0])" }))
+            if (-not $ok) { $bad += $f }
+        } else { L ("  (RA-7) {0,3}  {1} -- UNEXPLAINED" -f $found[$f], $f); $bad += $f }
+    }
+    # THE RELATIVE FORMS (validator round 1): a file can reach tools\.venv without spelling it -- the 1.3.0 command
+    # file's "%~dp0..\.venv", Python's parent.parent / ".venv" beside tools\, PowerShell's Join-Path $toolsDir '.venv',
+    # a path.join(..., "tools", ".venv", ...). Every one in the release set is listed; none is explained.
+    $relForms = [ordered]@{
+        'a ..\.venv beside the folder'           = '(?i)%~dp0\.\.[\\/]+\.venv|\.\.[\\/]+\.venv[\\/]+(Scripts|bin)'
+        'parent.parent / ".venv"'                = 'parent\.parent\s*/\s*[''"]\.venv[''"]'
+        'Join-Path $toolsDir ''.venv'''          = '(?i)Join-Path\s+\$toolsDir\s+[''"]\.venv'
+        'path.join(..., "tools", ".venv")'       = '[''"]tools[''"]\s*,\s*[''"]\.venv[''"]'
+    }
+    $relHits = @()
+    foreach ($f in $files) {
+        # This falsifier spells each form to find it; it is the one file not read for them (said here, by name).
+        if ($f -ceq 'tests/install/falsify.ps1') { continue }
+        $p = Join-Path $Tagged.root ($f -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { continue }
+        $txt = [System.IO.File]::ReadAllText($p)
+        foreach ($k in $relForms.Keys) { foreach ($m in [regex]::Matches($txt, $relForms[$k])) { $ln = ($txt.Substring(0, $m.Index) -split "`n").Count; $relHits += "$f`:$ln ($k) $($m.Value)" } }
+    }
+    L "(RA-7) relative forms reaching tools\.venv in the release set: $($relHits.Count)"
+    foreach ($h in $relHits) { L "  (RA-7) UNEXPLAINED $h" }
+    Check "(RA-7) no release-set file reaches tools\.venv by a relative form ($($relForms.Count) forms read); found: $($relHits.Count)" ($relHits.Count -eq 0)
+    $notes = Join-Path $Tagged.root 'docs\RELEASE-NOTES-v1.3.2.md'
+    if (Test-Path -LiteralPath $notes -PathType Leaf) {
+        # JUDGED, NOT ONLY LISTED (validator round 2): each notes line naming tools\.venv must place it as the host's or
+        # as an earlier release's -- the line also names tools\ui\.venv, the host, or a release before 1.3.1 -- else it
+        # is read as placing the set there, and fails.
+        $nBad = @(); $nAll = 0
+        $i = 0; foreach ($ln in [System.IO.File]::ReadAllLines($notes)) {
+            $i++
+            if ($ln -notmatch '(?i)tools[\\/]+\.venv') { continue }
+            $nAll++
+            $ok = $ln -match '(?i)tools[\\/]+ui[\\/]+\.venv|\bhost|\b1\.[0-2]\.\d+\b|\b1\.3\.0\b'
+            L "  (RA-7) docs/RELEASE-NOTES-v1.3.2.md:$i $(if ($ok) { 'ok' } else { 'PLACES THE SET THERE' })  $ln"
+            if (-not $ok) { $nBad += $i }
+        }
+        Check "(RA-7) the 1.3.2 notes: every line naming tools\.venv ($nAll) also names tools\ui\.venv, the host or a release before 1.3.1; failing: $($nBad.Count)$(if ($nBad.Count) { ' (lines ' + ($nBad -join ', ') + ')' })" ($nBad.Count -eq 0)
+    } else { Skip 'SKIPPED BY NAME: (RA-7) docs/RELEASE-NOTES-v1.3.2.md is not in the tree yet (packaging writes it); its lines are not read' }
+    Check "(RA-7) every tools\.venv / tools/.venv in the release set is explained by file and count; unexplained: $($bad.Count)$(if ($bad.Count) { ' (' + ($bad -join ', ') + ')' })" ($bad.Count -eq 0)
+}
+{ $_ -in 'ra9', 'ra15' } {
+    # RELEASE-5 PACKAGE SHELL (group A contract, rows 562 and 538; amendment 1, RA-15). A fresh install (files and lock
+    # only) and a SYNTHETIC host uv project in its tools\, the suite launcher -- Invoke-SuiteDefaultRun of the installed
+    # tools\mission-lib.ps1, dot-sourced in a child shell -- run over it under a PowerShell 7 parent and under a Windows
+    # PowerShell 5.1 parent. Needs uv, pwsh and pytest from PyPI (or uv's cache); without one the member SKIPS BY NAME.
+    $vgPrev = $env:VANGUARD_HOME
+    $env:VANGUARD_HOME = Join-Path $Work 'vghome'
+    Clear-PyEnv
+    try {
+    $pw = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $wps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $uvOk = [bool](Get-Command uv -CommandType Application -ErrorAction SilentlyContinue)
+    L "this host: pwsh $(if ($pw) { $pw.Source } else { 'NONE' }); Windows PowerShell $wps $(Test-Path -LiteralPath $wps -PathType Leaf); uv on PATH $uvOk"
+    $need = @()
+    if (-not $pw) { $need += 'no pwsh (PowerShell 7) on PATH -- the PowerShell 7 parent cannot be made' }
+    if (-not (Test-Path -LiteralPath $wps -PathType Leaf)) { $need += 'no Windows PowerShell 5.1' }
+    if (-not $uvOk) { $need += 'uv is not on PATH (the suite launcher runs it)' }
+    $t = Join-Path $Work 't'
+    $tools = Join-Path $t 'tools'
+    if (-not $need.Count) {
+        $null = New-Item -ItemType Directory -Force -Path $t
+        $ri = Run $installer @('-Target', $t)
+        L "install.ps1 -Target $t (files and lock): exit $($ri.code)"
+        if ($ri.code -ne 0) { $need += "the fresh install exited $($ri.code)" }
+    }
+    if (-not $need.Count) {
+        # The host project: pytest only, its tests in hosttests\, its lock made and its environment synced here.
+        WriteBytes (Join-Path $tools 'pyproject.toml') (Bytes ("[project]`nname = `"hostproject`"`nversion = `"0.0.1`"`nrequires-python = `">=3.10`"`n" +
+            "dependencies = [`"pytest>=8`"]`n`n[tool.uv]`npackage = false`n`n[tool.pytest.ini_options]`ntestpaths = [`"hosttests`"]`n"))
+        $lk = Invoke-Uv $tools @('lock', '--no-progress'); L "uv lock in $tools : exit $($lk.code)"
+        if ($lk.code -ne 0) { $need += "uv lock exited $($lk.code) (no network and no cache for pytest): $(@($lk.out | Select-Object -Last 2) -join ' | ')" }
+    }
+    if ($need.Count) { Skip ("SKIPPED BY NAME: $Case not measured -- " + ($need -join '; ')) }
+    else {
+    $ht = Join-Path $tools 'hosttests'
+    function Write-SuiteDriver { param([string]$Path)
+        # The launcher's driver: the PARENT'S own Get-FileHash of the known file written first (RA-9 compares the child's to
+        # it), then Invoke-SuiteDefaultRun from the installed mission-lib.ps1; its result, or what it threw, as JSON.
+        [System.IO.File]::WriteAllText($Path, ("param([string]`$Root, [string]`$Res, [string]`$Known, [string]`$Expected)`n" +
+            "`$ph = ''; if (`$Known) { `$ph = (Get-FileHash -Algorithm SHA256 -LiteralPath `$Known).Hash; [System.IO.File]::WriteAllText(`$Expected, `$ph) }`n" +
+            ". (Join-Path `$Root 'tools\mission-lib.ps1')`n" +
+            "try { `$r = Invoke-SuiteDefaultRun -Root `$Root -Cwd 'tools'; `$o = `$r | Select-Object ExitCode, Runnable, Passed, Failed, Skipped, Errors, Deselected, CollectionError, FailedIds, Raw, @{ n = 'Threw'; e = { `$null } } }`n" +
+            "catch { `$o = [pscustomobject]@{ ExitCode = `$null; Raw = ''; Threw = `$_.Exception.Message } }`n" +
+            "`$o | Add-Member -NotePropertyName ParentHash -NotePropertyValue `$ph -Force`n" +
+            "`$o | Add-Member -NotePropertyName ParentShell -NotePropertyValue (`"`$(`$PSVersionTable.PSEdition) `$(`$PSVersionTable.PSVersion)`") -Force`n" +
+            "[System.IO.File]::WriteAllText(`$Res, (`$o | ConvertTo-Json -Depth 3))`n"), $NoBom)
+    }
+    $drv = Join-Path $Work 'suite-driver.ps1'
+    Write-SuiteDriver $drv
+    function Invoke-SuiteUnder { param([string]$Shell, [string]$Label, [string]$Known, [string]$Expected)
+        $res = Join-Path $Work "suite-$Label.json"
+        if (Test-Path -LiteralPath $res) { [System.IO.File]::Delete($res) }
+        $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $drv, '-Root', $t, '-Res', $res)
+        if ($Known) { $a += @('-Known', $Known, '-Expected', $Expected) }
+        $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $ro = @(& $Shell @a 2>&1 | ForEach-Object { "$_" }); $rc = $LASTEXITCODE } finally { $ErrorActionPreference = $p }
+        $o = $null
+        if (Test-Path -LiteralPath $res -PathType Leaf) { $o = [System.IO.File]::ReadAllText($res) | ConvertFrom-Json }
+        if ($o -and $o.Threw) { L "($Label) the launcher THREW under $($o.ParentShell): $($o.Threw)" }
+        elseif ($o) { L "($Label) the launcher under $($o.ParentShell) RETURNED: ExitCode=$($o.ExitCode) Runnable=$($o.Runnable) Passed=$($o.Passed) Failed=$($o.Failed) Skipped=$($o.Skipped) Errors=$($o.Errors) Deselected=$($o.Deselected) CollectionError=$($o.CollectionError) FailedIds=$(@($o.FailedIds) -join ',')" }
+        else { L "($Label) no result from the driver under $Shell (exit $rc): $(@($ro | Select-Object -Last 3) -join ' | ')" }
+        return $o
+    }
+    switch ($Case) {
+    'ra9' {
+        # RA-9: a Windows PowerShell 5.1 child started by the framework's own launch path resolves Get-FileHash under a
+        # PowerShell 7 parent and under a 5.1 parent: it prints the hash of a known file, equal to the parent's.
+        # LEG A, THE SUITE LAUNCHER: parent shell -> Invoke-SuiteDefaultRun -> uv -> pytest -> the host's test, which starts
+        # Windows PowerShell by its full path and runs Get-FileHash over the known file. The environment is synced first, so
+        # uv writes nothing to stderr on these runs (RA-15 measures that face apart).
+        WriteBytes (Join-Path $ht 'known.txt') (Bytes "a known file the parent and its Windows PowerShell child both hash`n")
+        WriteBytes (Join-Path $ht 'test_child.py') (Bytes ("import os`nimport pathlib`nimport subprocess`n`nHERE = pathlib.Path(__file__).resolve().parent`n`n`n" +
+            "def test_a_windows_powershell_child_hashes_the_known_file():`n" +
+            "    ps = os.path.join(os.environ.get(`"SystemRoot`", r`"C:\Windows`"), `"System32`", `"WindowsPowerShell`", `"v1.0`", `"powershell.exe`")`n" +
+            "    known = HERE / `"known.txt`"`n" +
+            "    r = subprocess.run([ps, `"-NoProfile`", `"-NonInteractive`", `"-Command`", `"(Get-FileHash -Algorithm SHA256 -LiteralPath '%s').Hash`" % known], capture_output=True, text=True)`n" +
+            "    (HERE / `"child-out.txt`").write_text(`"exit=%d`\nstdout=%s`\nstderr=%s`\n`" % (r.returncode, r.stdout.strip(), `" `".join(r.stderr.split())[:240]))`n" +
+            "    assert r.stdout.strip() == (HERE / `"expected.txt`").read_text().strip(), r.stderr[:240]`n"))
+        $sy = Invoke-Uv $tools @('sync', '--no-progress'); L "uv sync in $tools : exit $($sy.code)"
+        $known = Join-Path $ht 'known.txt'; $exp = Join-Path $ht 'expected.txt'; $co = Join-Path $ht 'child-out.txt'
+        $legA = @{}
+        foreach ($sh in @(@('pwsh7', $pw.Source), @('ps51', $wps))) {
+            if (Test-Path -LiteralPath $co) { [System.IO.File]::Delete($co) }
+            $o = Invoke-SuiteUnder $sh[1] "ra9-launcher-$($sh[0])" $known $exp
+            $child = if (Test-Path -LiteralPath $co) { @([System.IO.File]::ReadAllLines($co)) } else { @('(the host test wrote no child-out.txt)') }
+            $ph = if ($o) { [string]$o.ParentHash } else { '' }
+            $chs = (@($child | Where-Object { $_ -like 'stdout=*' }) -join '') -replace '^stdout=', ''
+            L "(RA-9 leg A, $($sh[0])) parent $(if ($o) { $o.ParentShell }) hashed the known file $ph; the Windows PowerShell child: $($child -join ' / ')"
+            $legA[$sh[0]] = ($null -ne $o) -and (-not $o.Threw) -and ($o.ExitCode -eq 0) -and ($o.Passed -eq 1) -and ($o.Failed -eq 0) -and $ph -and ($chs -ceq $ph)
+        }
+        Check '(RA-9 leg A) under a PowerShell 7 parent, the suite launcher''s Windows PowerShell child prints the known file''s hash, equal to the parent''s (the host test passes: ExitCode 0, 1 passed)' $legA['pwsh7']
+        Check '(RA-9 leg A) under a Windows PowerShell 5.1 parent, the same: the child''s hash equals the parent''s, ExitCode 0, 1 passed' $legA['ps51']
+        # LEG B, THE ROSTER'S OWN FOLDER: the installed tools\tests\cli\conftest.py beside a probe test that starts
+        # powershell (found on PATH, as the folder's tests find it) and hashes the known file; pytest started by a
+        # PowerShell 7 parent and by a 5.1 parent, with the host project's interpreter (it holds pytest).
+        $cli = Join-Path $Work 'cli'
+        WriteBytes (Join-Path $cli 'conftest.py') ([System.IO.File]::ReadAllBytes((Join-Path $t 'tools\tests\cli\conftest.py')))
+        WriteBytes (Join-Path $cli 'known.txt') (Bytes "a known file the roster's parent and its Windows PowerShell child both hash`n")
+        WriteBytes (Join-Path $cli 'test_probe.py') (Bytes ("import pathlib`nimport shutil`nimport subprocess`n`nHERE = pathlib.Path(__file__).resolve().parent`n`n`n" +
+            "def test_the_folder_s_windows_powershell_child_hashes_the_known_file():`n" +
+            "    ps = shutil.which(`"powershell`")`n" +
+            "    r = subprocess.run([ps, `"-NoProfile`", `"-NonInteractive`", `"-Command`", `"(Get-FileHash -Algorithm SHA256 -LiteralPath '%s').Hash`" % (HERE / `"known.txt`")], capture_output=True, text=True)`n" +
+            "    (HERE / `"child-out.txt`").write_text(`"exit=%d`\nstdout=%s`\nstderr=%s`\n`" % (r.returncode, r.stdout.strip(), `" `".join(r.stderr.split())[:240]))`n" +
+            "    assert r.stdout.strip() == (HERE / `"expected.txt`").read_text().strip(), r.stderr[:240]`n"))
+        $hpy = Join-Path $tools '.venv\Scripts\python.exe'
+        $pdrv = Join-Path $Work 'pytest-driver.ps1'
+        [System.IO.File]::WriteAllText($pdrv, ("param([string]`$Py, [string]`$Dir, [string]`$Res)`n" +
+            "`$ph = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path `$Dir 'known.txt')).Hash; [System.IO.File]::WriteAllText((Join-Path `$Dir 'expected.txt'), `$ph)`n" +
+            "`$ErrorActionPreference = 'Continue'`n" +
+            "`$o = @(& `$Py -m pytest -q -p no:cacheprovider `$Dir 2>&1 | ForEach-Object { `"`$_`" })`n" +
+            "[System.IO.File]::WriteAllText(`$Res, ((@(`"exit=`$LASTEXITCODE`", `"parent=`$(`$PSVersionTable.PSEdition) `$(`$PSVersionTable.PSVersion)`", `"parenthash=`$ph`") + `$o) -join `"``n`"))`n"), $NoBom)
+        $legB = @{}
+        foreach ($sh in @(@('pwsh7', $pw.Source), @('ps51', $wps))) {
+            $res = Join-Path $Work "roster-$($sh[0]).txt"; $cco = Join-Path $cli 'child-out.txt'
+            if (Test-Path -LiteralPath $cco) { [System.IO.File]::Delete($cco) }
+            $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try { $null = & $sh[1] -NoProfile -ExecutionPolicy Bypass -File $pdrv -Py $hpy -Dir $cli -Res $res 2>&1 } finally { $ErrorActionPreference = $p }
+            $rl = if (Test-Path -LiteralPath $res) { @([System.IO.File]::ReadAllLines($res)) } else { @('exit=(none)') }
+            $child = if (Test-Path -LiteralPath $cco) { @([System.IO.File]::ReadAllLines($cco)) } else { @('(the probe wrote no child-out.txt)') }
+            $phB = (@($rl | Where-Object { $_ -like 'parenthash=*' }) -join '') -replace '^parenthash=', ''
+            $chB = (@($child | Where-Object { $_ -like 'stdout=*' }) -join '') -replace '^stdout=', ''
+            L "(RA-9 leg B, $($sh[0])) $(@($rl | Select-Object -First 2) -join '; '); pytest: $(@($rl | Where-Object { $_ -match 'passed|failed' } | Select-Object -Last 1) -join '')"
+            L "(RA-9 leg B, $($sh[0])) parent hashed the known file $phB; the Windows PowerShell child: $($child -join ' / ')"
+            $legB[$sh[0]] = ($rl -contains 'exit=0') -and $phB -and ($chB -ceq $phB)
+        }
+        Check '(RA-9 leg B) pytest under a PowerShell 7 parent: the installed tools\tests\cli\conftest.py''s folder starts a Windows PowerShell child whose hash of the known file equals the parent''s (pytest exit 0)' $legB['pwsh7']
+        Check '(RA-9 leg B) pytest under a Windows PowerShell 5.1 parent: the same' $legB['ps51']
+    }
+    'ra15' {
+        # RA-15: Invoke-SuiteDefaultRun called from a Windows PowerShell 5.1 host over a host uv project whose run writes at
+        # least one line to stderr RETURNS: the suite's exit code and the same tally fields as under PowerShell 7, for a
+        # passing suite and for a failing one. Each run starts with no tools\.venv, so uv's own first-run lines (the
+        # environment made, the packages installed) go to stderr; the fixture's conftest also writes one line there.
+        WriteBytes (Join-Path $ht 'conftest.py') (Bytes ("import sys`n`n`ndef pytest_unconfigure(config):`n    sys.stderr.write(`"hostproject: a line on stderr after the session`\n`")`n"))
+        WriteBytes (Join-Path $ht 'test_pass.py') (Bytes "def test_one_passes():`n    assert 1 + 1 == 2`n`n`ndef test_two_passes():`n    assert 'a' * 2 == 'aa'`n")
+        $hv = Join-Path $tools '.venv'
+        $fields = @('ExitCode', 'Runnable', 'Passed', 'Failed', 'Skipped', 'Errors', 'Deselected', 'CollectionError')
+        foreach ($suite in @('passing', 'failing')) {
+            if ($suite -eq 'failing') { WriteBytes (Join-Path $ht 'test_fail.py') (Bytes "def test_this_one_fails():`n    assert 1 + 1 == 3`n") }
+            # THE PRECONDITION, read apart from the launcher: the same uv line over a fresh environment, stderr kept apart.
+            Remove-Tree $hv
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = (Get-Command uv -CommandType Application | Select-Object -First 1).Source
+            $psi.Arguments = 'run python -m pytest -q -rfE -p no:cacheprovider'
+            $psi.WorkingDirectory = $tools; $psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+            $pr = [System.Diagnostics.Process]::Start($psi); $eT = $pr.StandardError.ReadToEndAsync(); $oT = $pr.StandardOutput.ReadToEndAsync(); $pr.WaitForExit()
+            $errLines = @(($eT.Result -split "`r?`n") | Where-Object { $_.Trim() })
+            L "(RA-15 $suite) precondition, the uv line run directly over a fresh environment: exit $($pr.ExitCode); stderr lines $($errLines.Count): $(@($errLines | Select-Object -First 4) -join ' | ')"
+            Check "(RA-15 $suite) the fixture's run writes at least one line to stderr (uv's first-run lines, the fixture's own): $($errLines.Count)" ($errLines.Count -ge 1)
+            Remove-Tree $hv
+            $o7 = Invoke-SuiteUnder $pw.Source "ra15-$suite-pwsh7" '' ''
+            Remove-Tree $hv
+            $o5 = Invoke-SuiteUnder $wps "ra15-$suite-ps51" '' ''
+            $ok7 = ($null -ne $o7) -and (-not $o7.Threw)
+            $ok5 = ($null -ne $o5) -and (-not $o5.Threw)
+            $wantExit = if ($suite -eq 'passing') { 0 } else { 1 }
+            Check "(RA-15 $suite) under PowerShell 7 the launcher returns: ExitCode $wantExit, $(if ($suite -eq 'passing') { '2 passed, 0 failed' } else { '2 passed, 1 failed (test_fail.py::test_this_one_fails)' })" (
+                $ok7 -and ($o7.ExitCode -eq $wantExit) -and ($o7.Passed -eq 2) -and ($o7.Failed -eq $(if ($suite -eq 'passing') { 0 } else { 1 })))
+            Check "(RA-15 $suite) under Windows PowerShell 5.1 the launcher RETURNS its result (it does not throw)" $ok5
+            $diff = @()
+            if ($ok7 -and $ok5) {
+                foreach ($f in $fields) { if ([string]$o7.$f -cne [string]$o5.$f) { $diff += "$f 7=$($o7.$f) 5.1=$($o5.$f)" } }
+                if ((@($o7.FailedIds) -join ',') -cne (@($o5.FailedIds) -join ',')) { $diff += "FailedIds 7=$(@($o7.FailedIds) -join ',') 5.1=$(@($o5.FailedIds) -join ',')" }
+            }
+            L "(RA-15 $suite) fields compared ($($fields -join ', '), FailedIds): $(if ($ok7 -and $ok5) { if ($diff.Count) { $diff -join '; ' } else { 'all equal' } } else { 'not compared: a run did not return' })"
+            Check "(RA-15 $suite) under 5.1 the exit code and every tally field equal PowerShell 7's over the same fixture" ($ok7 -and $ok5 -and ($diff.Count -eq 0))
+        }
+    }
+    }
+    }
+    } finally { $env:VANGUARD_HOME = $vgPrev }
+}
+'ra16' {
+    # RA-16 (amendment 2), THE LAUNCHER WITH NO uv: Invoke-SuiteDefaultRun, with uv absent from PATH, ends the call with an
+    # error that names uv, under PowerShell 7 and under Windows PowerShell 5.1, and does not return a result. The tagged
+    # clone's tools\mission-lib.ps1 is dot-sourced in a child shell whose PATH has every folder holding uv taken out; the
+    # child first sets $LASTEXITCODE to a sentinel (37, from cmd.exe /c exit 37), so a launcher that went on past the missing
+    # uv would return that sentinel as the suite's exit code -- a code it did not measure (the RED: the presence check
+    # removed). The child calls it AS THE FRAMEWORK'S CALLERS DO (tools/mission-green-gate-seed.ps1, Test-GreenGate): a
+    # plain statement after the dot-source, no try, no trap. A try around the call would catch the error the uv line itself
+    # raises when the check is gone, and the RED would not show: the first draft of this member did exactly that (its RED
+    # over the planted clone read PASS). The child writes what it read before the call, then -- only if the call statement
+    # ends and the script goes on -- what the call gave; its own output (stderr merged) is kept for the error's text.
+    # TWO CALLERS. (stop) the framework's own: mission-lib.ps1's ErrorActionPreference Stop, which the dot-source sets in
+    # the caller's scope. Measured: there the uv line's own "not recognized" error ends the call even with the presence
+    # check removed, so this caller cannot tell the check from its absence. (continue) a caller that sets
+    # ErrorActionPreference Continue after the dot-source (an operator's script, say): there, with the check removed, the
+    # call RETURNS a result -- ExitCode empty, Runnable 0, Raw empty: the uv statement ends, the try is left before the exit
+    # code is read, and the function goes on to tally nothing. That is the RED the amendment names, a result carrying an
+    # exit code the launcher did not measure (measured under both shells; not the sentinel, which the launcher never reads
+    # there -- the sentinel stays in the fixture so a launcher that returned the stale code would show it by name). The
+    # member holds both callers to RA-16 under both shells.
+    # The folder it is pointed at holds an empty tools\; nothing is installed. Needs pwsh beside Windows PowerShell 5.1;
+    # without it the member SKIPS BY NAME.
+    $pw = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $wps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $lib = Join-Path $Tagged.root 'tools\mission-lib.ps1'
+    L "this host: pwsh $(if ($pw) { $pw.Source } else { 'NONE' }); Windows PowerShell $wps $(Test-Path -LiteralPath $wps -PathType Leaf); the launcher $lib"
+    if (-not $pw -or -not (Test-Path -LiteralPath $wps -PathType Leaf)) { Skip "SKIPPED BY NAME: ra16 not measured -- $(if (-not $pw) { 'no pwsh (PowerShell 7) on PATH' } else { 'no Windows PowerShell 5.1' })" }
+    else {
+        $root = Join-Path $Work 'r'
+        $null = New-Item -ItemType Directory -Force -Path (Join-Path $root 'tools')
+        $drv = Join-Path $Work 'no-uv-driver.ps1'
+        [System.IO.File]::WriteAllText($drv, ("param([string]`$Lib, [string]`$Root, [string]`$Res, [string]`$Pref)`n" +
+            "`$uvDirs = @(@(Get-Command uv -All -ErrorAction SilentlyContinue) | Where-Object { `$_.Source } | ForEach-Object { (Split-Path -Parent `$_.Source).TrimEnd('\') } | Sort-Object -Unique)`n" +
+            "`$env:PATH = (@(`$env:PATH -split ';' | Where-Object { `$_ -and (`$uvDirs -notcontains `$_.TrimEnd('\')) }) -join ';')`n" +
+            "`$uvLeft = @(Get-Command uv -All -ErrorAction SilentlyContinue | ForEach-Object { [string]`$_.Source })`n" +
+            ". `$Lib`n" +
+            "if (`$Pref -eq 'continue') { `$ErrorActionPreference = 'Continue' }`n" +
+            "& `$env:ComSpec /d /c exit 37`n" +
+            "`$sentinel = `$LASTEXITCODE`n" +
+            "[System.IO.File]::WriteAllText(`$Res + '.before', ([pscustomobject]@{ UvDirsRemoved = `$uvDirs.Count; UvLeft = (`$uvLeft -join ', '); Sentinel = `$sentinel; Pref = [string]`$ErrorActionPreference; Shell = (`"`$(`$PSVersionTable.PSEdition) `$(`$PSVersionTable.PSVersion)`") } | ConvertTo-Json))`n" +
+            "`$r = `$null`n" +
+            "`$r = Invoke-SuiteDefaultRun -Root `$Root -Cwd 'tools'`n" +
+            "[System.IO.File]::WriteAllText(`$Res, ([pscustomobject]@{ Returned = (`$null -ne `$r); ExitCode = `$(if (`$r) { `$r.ExitCode }); Runnable = `$(if (`$r) { `$r.Runnable }); Raw = `$(if (`$r) { ([string]`$r.Raw).Trim() } else { '' }) } | ConvertTo-Json))`n"), $NoBom)
+        foreach ($pref in @('stop', 'continue')) {
+        foreach ($sh in @(@('pwsh7', $pw.Source), @('ps51', $wps))) {
+            $lb = "$($sh[0]), caller $pref"
+            $res = Join-Path $Work "no-uv-$($sh[0])-$pref.json"
+            $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try { $ro = @(& $sh[1] -NoProfile -ExecutionPolicy Bypass -File $drv -Lib $lib -Root $root -Res $res -Pref $pref 2>&1 | ForEach-Object { "$_" }); $rc = $LASTEXITCODE } finally { $ErrorActionPreference = $p }
+            $b = $null; $o = $null
+            if (Test-Path -LiteralPath "$res.before" -PathType Leaf) { $b = [System.IO.File]::ReadAllText("$res.before") | ConvertFrom-Json }
+            if (Test-Path -LiteralPath $res -PathType Leaf) { $o = [System.IO.File]::ReadAllText($res) | ConvertFrom-Json }
+            $said = (@($ro | Where-Object { $_ -match '\S' }) -join ' | ') -replace '\s+', ' '
+            if (-not $b) { L "(RA-16 $lb) the child wrote nothing before the call (exit $rc): $said"; Check "(RA-16 $lb) the child read its fixture before the call" $false; continue }
+            L "(RA-16 $lb) under $($b.Shell), the caller's ErrorActionPreference $($b.Pref): uv's folder(s) taken off PATH $($b.UvDirsRemoved); uv left on PATH: '$($b.UvLeft)'; `$LASTEXITCODE set to $($b.Sentinel) before the call"
+            if ($o -and $o.Returned) { L "(RA-16 $lb) the launcher RETURNED a result: ExitCode=$(if ($null -eq $o.ExitCode) { '(empty)' } else { $o.ExitCode }) Runnable=$($o.Runnable)$(if ($null -eq $o.ExitCode) { ' -- no exit code was measured' } elseif ($o.ExitCode -eq $b.Sentinel) { ' -- the sentinel, an exit code it did not measure' }); Raw: '$($o.Raw -replace '\s+', ' ')'" }
+            elseif ($o) { L "(RA-16 $lb) the call statement ended without a result and the script went on" }
+            else { L "(RA-16 $lb) the call ended the child: nothing after it ran (child exit $rc)" }
+            L "(RA-16 $lb) the child's output: $said"
+            Check "(RA-16 $lb) the fixture: uv is absent from the child's PATH (nothing named uv resolves there), the caller's ErrorActionPreference is $pref, and `$LASTEXITCODE reads the sentinel 37 before the call" (
+                (-not $b.UvLeft) -and ($b.Sentinel -eq 37) -and ([string]$b.Pref -eq $pref))
+            Check "(RA-16 $lb) with uv absent from PATH, Invoke-SuiteDefaultRun ends the call with an error naming uv (the child's output: 'uv' is not recognized), and returns no result" (
+                ((-not $o) -or (-not $o.Returned)) -and ($said -match "(?i)'uv' is not recognized"))
+        }
+        }
+    }
+}
+'ra10' {
+    # RA-10: every installer-owned script that starts a "powershell" child, enumerated: the release set's installer-owned
+    # files (the tagged clone's manifest) read as CODE -- PowerShell comments removed by the PowerShell tokenizer, Python
+    # comments and docstrings removed -- and each line naming the executable (powershell or pwsh, lowercase, as a launch
+    # writes it) classed by form: amp (& from PowerShell), sp (Start-Process), psi (a ProcessStartInfo / -FileName), bind (the
+    # path bound to a variable), py (Python), hook (a Claude Code hook registration), other (the name inside text or data).
+    # Each file's forms must equal the table's, and each file goes through the cured path or carries the reason it need
+    # not; a file or a count the table does not hold is unexplained and fails.
+    function Get-Ra10Code { param([string]$Path)
+        $text = [System.IO.File]::ReadAllText($Path)
+        if ($Path -match '\.(ps1|psm1|src)$') {
+            $tk = $null; $pe = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$tk, [ref]$pe)
+            $sb = New-Object System.Text.StringBuilder($text)
+            foreach ($x in $tk) { if ($x.Kind -ne 'Comment') { continue }; for ($i = $x.Extent.StartOffset; $i -lt $x.Extent.EndOffset; $i++) { if ($sb[$i] -ne "`n" -and $sb[$i] -ne "`r") { $sb[$i] = ' ' } } }
+            $text = $sb.ToString()
+        } elseif ($Path -match '\.py$') {
+            $text = [regex]::Replace($text, '(?s)(""".*?"""|''''''.*?'''''')', { param($m) [regex]::Replace($m.Value, '[^\r\n]', ' ') })
+            $text = [regex]::Replace($text, '(?m)(^|\s)#.*$', '$1')
+        }
+        return $text
+    }
+    function Get-Ra10Forms { param([string]$Root, [string[]]$Paths)
+        # The name as a launch writes it -- alone, quoted, or the last part of a path (a backslash or slash before it
+        # counts: validator round 1 found the full path C:\...\WindowsPowerShell\v1.0\powershell.exe passed over).
+        $exe = '(?<![\w.$-])(powershell|pwsh)(\.exe)?(?![\w-])'
+        $per = @{}
+        foreach ($p in $Paths) {
+            if ($p -notmatch '\.(ps1|psm1|py|json|cmd|bat|src)$') { continue }
+            $fp = Join-Path $Root ($p -replace '/', '\')
+            if (-not (Test-Path -LiteralPath $fp -PathType Leaf)) { continue }
+            $n = @{}
+            $codeLines = @((Get-Ra10Code $fp) -split "`n")
+            # A VARIABLE BOUND TO THE EXECUTABLE (validator round 1: WP-7's $psExe): every variable a line naming it
+            # assigns -- $name = ... in PowerShell, name = ... in Python -- and then every other line using that variable
+            # is read as a launch line too, classed by the same forms ('var' where none applies).
+            $bound = @{}
+            foreach ($t in $codeLines) {
+                if ($t -cnotmatch $exe) { continue }
+                # the path itself, not a command line or a launch's output: no & before the name, no switch after it
+                if (($t -match "&\s*\(?['""]?(powershell|pwsh)") -or ($t -match 'Start-Process') -or ($t -match '(?i)\s-(NoProfile|File|Command|NonInteractive|ExecutionPolicy)\b')) { continue }
+                # bound only where the assignment's own right-hand side names it ($proc = Start-Process ..., or another
+                # variable set on the same line, is not the executable's path)
+                foreach ($bm in [regex]::Matches($t, '\$(?:script:|global:)?(\w+)\s*=(?!=)([^;{}]*)')) { if (($bm.Groups[2].Value -cmatch $exe) -and ($bm.Groups[1].Value -notin 'null', '_')) { $bound[$bm.Groups[1].Value] = 1 } }
+                if ($p -match '\.py$') { $pm = [regex]::Match($t, '^\s*(\w+)\s*=(?!=)(.*)$'); if ($pm.Success -and ($pm.Groups[2].Value -cmatch $exe)) { $bound[$pm.Groups[1].Value] = 1 } }
+            }
+            # ... and followed through: a variable assigned from a bound one alone is bound too ($Exe = $psExe), to a fixpoint.
+            $grew = $true
+            while ($grew -and $bound.Count) {
+                $grew = $false
+                $alt = (@($bound.Keys) | ForEach-Object { [regex]::Escape($_) }) -join '|'
+                $chain = if ($p -match '\.py$') { '^\s*(\w+)\s*=(?!=)\s*(?:' + $alt + ')\s*$' } else { '\$(?:script:|global:)?(\w+)\s*=(?!=)\s*\$(?:script:|global:)?(?:' + $alt + ')\s*(?:[;}]|$)' }
+                foreach ($t in $codeLines) { foreach ($cm in [regex]::Matches($t, $chain)) { $v = $cm.Groups[1].Value; if (($v -notin 'null', '_') -and -not $bound.ContainsKey($v)) { $bound[$v] = 1; $grew = $true } } }
+            }
+            $useRx = if ($bound.Count) { $(if ($p -match '\.py$') { '\b(' } else { '\$(?:script:|global:)?(' }) + ((@($bound.Keys) | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\b' } else { $null }
+            $ln = 0
+            foreach ($t in $codeLines) {
+                $ln++
+                $named = $t -cmatch $exe
+                $viaVar = (-not $named) -and $useRx -and ($t -match $useRx)
+                if (-not ($named -or $viaVar)) { continue }
+                # wrap (validator round 2): a launcher function handed the executable -- Invoke-Child -FilePath 'powershell',
+                # Invoke-W7Native -Exe <the full path> -- or handed a variable bound to it.
+                $isWrap = ($named -and ($t -match "(?i)-(FilePath|Exe)\s+\(?\s*(Join-Path\b[^)]*)?['""]?[^'""\s)]*(powershell|pwsh)")) -or
+                          ($viaVar -and ($t -match ('(?i)-(FilePath|Exe)\s+' + $useRx)))
+                $isBind = $named -and -not (($t -match "&\s*\(?['""]?(powershell|pwsh)") -or ($t -match 'Start-Process') -or ($t -match '(?i)\s-(NoProfile|File|Command|NonInteractive|ExecutionPolicy)\b')) -and
+                          (@([regex]::Matches($t, '\$(?:script:|global:)?(\w+)\s*=(?!=)([^;{}]*)') | Where-Object { $_.Groups[2].Value -cmatch $exe }).Count -gt 0)
+                $form = if ($p -match '\.py$') { 'py' } elseif ($p -match '\.json$') { 'hook' } elseif ($t -match 'Start-Process') { 'sp' }
+                    elseif ($t -match '(?i)FileName|ProcessStartInfo') { 'psi' } elseif ($t -match "&\s*\(?['""]?(powershell|pwsh)") { 'amp' }
+                    elseif ($viaVar -and ($t -match ('&\s*' + $useRx))) { 'amp' }
+                    elseif ($isWrap) { 'wrap' }
+                    elseif ($isBind -or ($named -and ($t -match "=\s*.*(powershell|pwsh)(\.exe)?['""]?\s*\)?\s*;?\s*$"))) { 'bind' } elseif ($viaVar) { 'var' } else { 'other' }
+                $n[$form] = 1 + [int]$n[$form]
+                $tt = $t.Trim(); if ($tt.Length -gt 150) { $tt = $tt.Substring(0, 150) }
+                $script:Ra10Lines.Add("$p`:$ln [$form] $tt")
+            }
+            if ($n.Count) { $per[$p] = (@($n.Keys | Sort-Object | ForEach-Object { "$_=$($n[$_])" }) -join ' ') }
+        }
+        return $per
+    }
+    $script:Ra10Lines = New-Object System.Collections.Generic.List[string]
+    function Test-Ra10Cure { param([string]$Root, [string]$Path)
+        # THE CURED PATH, read in the file's own CODE (comments and docstrings removed): the environment handed to the
+        # child has PSModulePath taken out of it (a Python pop of the name).
+        $fp = Join-Path $Root ($Path -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $fp -PathType Leaf)) { return $false }
+        return ((Get-Ra10Code $fp) -match '(?is)[''"]psmodulepath[''"].{0,160}\.pop\(|\.pop\(\s*[''"]psmodulepath[''"]')
+    }
+    $A = 'PowerShell starts it with &: PowerShell 7 hands a powershell it starts so its own (5.1) module path (measured below; register row 522), and Windows PowerShell 5.1 passes its own'
+    $I = 'an acceptance instrument: the acceptance runner starts it under Windows PowerShell 5.1 (tools/lam/lam-instrument-run.ps1, & powershell; row 538), so every child it starts, by & or by Start-Process, inherits 5.1''s own module path'
+    $S = 'a test under tools/framework, the sealed A1 set: SEALED, not edited by this package. Run under Windows PowerShell 5.1 its children inherit 5.1''s path; started directly from PowerShell 7, a child it starts by Start-Process or a ProcessStartInfo would inherit 7''s (not cured: reported)'
+    $W = 'an acceptance instrument (the runner starts it under 5.1, as above); run directly under PowerShell 7, its & children (& $psExe, the full path) get 5.1''s path from PowerShell 7 itself, and its Start-Process children go through its own Start-Process proxy, which hands them the path 5.1 reports (PROXY: read in its code; register row 522)'
+    $T = 'text, not a launch: a command line handed to the guard or a here-string as data'
+    $H = 'a hook registration: Claude Code starts it, not the framework; the child gets Claude Code''s environment (a Claude Code started from a PowerShell 7 terminal hands it 7''s path: reported, not cured -- the hook set is sealed)'
+    $ra10 = [ordered]@{
+        '.claude/settings.json'                                             = @('hook=6', $H)
+        'tests/lam/instrument-WP-1.ps1'                                     = @('amp=8 other=44', "$I; the 44 others: $T")
+        'tests/lam/instrument-WP-2.ps1'                                     = @('amp=46 other=1 psi=1 sp=2', "$I; the other: $T")
+        'tests/lam/instrument-WP-3.ps1'                                     = @('amp=31 other=2 psi=6 sp=3', "$I; the others: $T")
+        'tests/lam/instrument-WP-4.ps1'                                     = @('amp=40 other=6 sp=15', "$I; the others: $T")
+        'tests/lam/instrument-WP-5.ps1'                                     = @('amp=1 other=1', "$I; the other: a markdown fence name")
+        'tests/lam/instrument-WP-6.ps1'                                     = @('amp=8', $I)
+        'tests/lam/instrument-WP-7.ps1'                                     = @('amp=3 bind=1 sp=6 var=9 wrap=3', "$W; the wrap lines hand <the full path> or `$Exe to Invoke-W7Native and Invoke-W7, which start it with & (:271, :288); the var lines carry `$psExe or `$Exe to those")
+        'tests/lam/wp7-group-b.py'                                          = @('py=2', 'CURED: its Windows PowerShell child gets the environment with PSModulePath taken out')
+        'tools/evidence-hooks-next/claude-settings.proposed.json'           = @('hook=6', $H)
+        'tools/evidence-hooks-next/hooks/evidence-dispatch-end.ps1'         = @('amp=1', "the sealed hook set; $A")
+        'tools/evidence-hooks-next/hooks/evidence-pre-compact.ps1'          = @('amp=1', "the sealed hook set; $A")
+        'tools/evidence-hooks-next/hooks/evidence-stop-finalize.ps1'        = @('amp=1', "the sealed hook set; $A")
+        'tools/evidence-hooks-next/hooks/lib/evidence-common.ps1'           = @('bind=1 other=2 sp=1 var=2', 'SEALED (the hook set; not edited by this package): token lists the guard reads (a command lead, a launcher name) and the two lines that test a token against one -- none starts a process; and the text of the git pre-push shim it installs (:2796), which runs `exec powershell ... evidence-pre-push.ps1` below git: a git push typed at a PowerShell 7 prompt hands that 5.1 child 7''s path. Not cured, not measured: reported')
+        'tools/evidence-hooks-next/tests/test-a1-negative.ps1'              = @('amp=1', $A)
+        'tools/evidence-hooks-next/tests/test-dotsegment-forms.ps1'         = @('amp=1', $A)
+        'tools/framework/hooks/settings.evidence-hooks.json'                = @('hook=5', $H)
+        'tools/framework/tests/test-a1-negative.ps1'                        = @('amp=1', $S)
+        'tools/framework/tests/test-a11-verify-anchor-arm.ps1'              = @('wrap=1', $S)
+        'tools/framework/tests/test-a12-verify-origin-arm.ps1'              = @('wrap=1', $S)
+        'tools/framework/tests/test-a13-verify-manifest-plane-arms.ps1'     = @('wrap=1', $S)
+        'tools/framework/tests/test-a14-stream-integrity-variant-branching.ps1' = @('other=1 var=4 wrap=2', $S)
+        'tools/framework/tests/test-a15-placement-path.ps1'                 = @('bind=1 other=2 var=2 wrap=4', $S)
+        'tools/framework/tests/test-a6-stream-identity.ps1'                 = @('amp=4 sp=2', $S)
+        'tools/framework/tests/test-a7-dispatch-lifecycle.ps1'              = @('amp=1', $S)
+        'tools/framework/tests/test-a8-failure-denial-capture.ps1'          = @('amp=1', $S)
+        'tools/lam/build-smoke-mission.ps1'                                 = @('amp=10 bind=1 other=2', "$A (& `$winPs, the full path, included: measured below); the others: $T")
+        'tools/lam/commit_ledger.py'                                        = @('py=4', 'CURED (register row 522): its Windows PowerShell child gets the environment with PSModulePath taken out')
+        'tools/lam/lam-instrument-run.ps1'                                  = @('amp=1', "the acceptance runner: $A -- it pins Windows PowerShell for every instrument (row 538)")
+        'tools/lam/mission-dispatch.ps1'                                    = @('amp=4 other=1 psi=4',"$A; the psi child is Join-Path `$PSHOME 'powershell.exe', which stands only beside Windows PowerShell 5.1 (the parent is 5.1 and the child inherits its path); the other: $T")
+        'tools/lam/mission-gate.ps1'                                        = @('other=1', $T)
+        'tools/lam/mission-goal-check.ps1'                                  = @('amp=3 psi=2', "$A; the two psi children are fault injections (-Command `"exit 1`" and `"Start-Sleep`") that reach no module command")
+        'tools/lam/smoke-mission/dot-claude/settings.local.json'            = @('hook=6', $H)
+        'tools/lam/smoke-mission/templates/work/test-smoke.ps1.src'         = @('amp=1', $A)
+        'tools/tests/cli/conftest.py'                                       = @('py=2', 'CURED: the folder''s conftest takes PSModulePath out of the process environment at import, so every PowerShell child its tests start builds its own path')
+        'tools/tests/cli/test_a126_admitted_porcelain.py'                   = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
+        'tools/tests/cli/test_close_milestone_lam_roster.py'                = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
+        'tools/tests/cli/test_mission_reclose_crlf.py'                      = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
+        # This file's name carries the verify verdict's origin field, and WP-3 C-1v refuses any non-comment spelling of that
+        # field outside its library and C-1v itself (RELEASE-5 group A amendment 2, RA-21): the key is assembled at run time.
+        ('tools/tests/cli/test_origin_' + 'attestation_anchor.py')          = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
+        'tools/tests/cli/test_prune_worktrees.py'                           = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
+        'tools/tests/cli/test_validator_result_transcription.py'            = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
+        'tools/tests/cli/test_witnessed_substrate_generalization.py'        = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
+    }
+    function Get-Ra10Verdict { param([string]$Root, [string]$Label)
+        $paths = [string[]]@($owned.Keys)
+        $per = Get-Ra10Forms $Root $paths
+        $bad = @()
+        foreach ($p in (Sorted @($per.Keys))) {
+            if (-not $ra10.Contains($p)) { $bad += "$p (not in the table: $($per[$p]))"; continue }
+            if ($per[$p] -cne $ra10[$p][0]) { $bad += "$p (read $($per[$p]), the table says $($ra10[$p][0]))"; continue }
+            $why = $ra10[$p][1]
+            if ($why.StartsWith('CURED') -and -not (Test-Ra10Cure $Root $p)) { $bad += "$p (the table says CURED; its code hands the child PSModulePath)" }
+            if ($why.StartsWith('THROUGH') -and -not (Test-Ra10Cure $Root 'tools/tests/cli/conftest.py')) { $bad += "$p (through tools/tests/cli/conftest.py, whose code does not take PSModulePath out)" }
+            if ($why.Contains('PROXY:') -and -not ((Get-Ra10Code (Join-Path $Root ($p -replace '/', '\'))) -match '(?s)function\s+Start-Process\b.{0,900}?\$env:PSModulePath\s*=')) { $bad += "$p (the table says its Start-Process children go through its own proxy; its code defines none that sets PSModulePath)" }
+        }
+        foreach ($p in $ra10.Keys) { if (-not $per.ContainsKey($p)) { $bad += "$p (in the table, and no launch line read in it)" } }
+        L "($Label) installer-owned files starting a powershell/pwsh child (or naming it in code): $($per.Count); lines $((@($per.Values | ForEach-Object { [regex]::Matches($_, '=(\d+)') | ForEach-Object { [int]$_.Groups[1].Value } }) | Measure-Object -Sum).Sum)"
+        foreach ($p in (Sorted @($per.Keys))) { L "  ($Label) $p  $($per[$p])  -- $(if ($ra10.Contains($p)) { $ra10[$p][1] } else { 'UNLISTED' })" }
+        foreach ($b in $bad) { L "  ($Label) UNEXPLAINED $b" }
+        return , $bad
+    }
+    $bad = Get-Ra10Verdict $Tagged.root 'RA-10'
+    # Every line read, so each count above can be audited line by line.
+    L "(RA-10) the lines read, $($script:Ra10Lines.Count), each with its form:"
+    foreach ($x in $script:Ra10Lines) { L "  (RA-10 line) $x" }
+    $script:Ra10Lines.Clear()
+    Check "(RA-10) every installer-owned file that starts a powershell or pwsh child is enumerated, and each goes through the cured path or is listed with its reason (by file and form); unexplained: $($bad.Count)$(if ($bad.Count) { ' (' + ($bad -join '; ') + ')' })" ($bad.Count -eq 0)
+    # THE REASON THE & ROWS STAND ON, read on this host: PowerShell 7 -> & powershell -> Get-FileHash resolves, while
+    # Start-Process powershell from PowerShell 7 hands the child 7's path (why sp and psi rows carry reasons of their own).
+    $pw = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pw) {
+        $kf = Join-Path $Work 'known.txt'; [System.IO.File]::WriteAllText($kf, "known`n", $NoBom)
+        $pd = Join-Path $Work 'amp-probe.ps1'
+        [System.IO.File]::WriteAllText($pd, ("param([string]`$K, [string]`$O)`n`$ErrorActionPreference = 'Continue'`n" +
+            "`$a = @(& powershell -NoProfile -NonInteractive -Command `"(Get-FileHash -Algorithm SHA256 -LiteralPath '`$K').Hash`" 2>&1 | ForEach-Object { `"`$_`" })`n" +
+            "`$fp = Join-Path `$env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'`n" +
+            "`$af = @(& `$fp -NoProfile -NonInteractive -Command `"(Get-FileHash -Algorithm SHA256 -LiteralPath '`$K').Hash`" 2>&1 | ForEach-Object { `"`$_`" })`n" +
+            "`$so = Join-Path (Split-Path -Parent `$O) 'sp-out.txt'`n" +
+            "`$p = Start-Process -FilePath powershell -ArgumentList @('-NoProfile', '-NonInteractive', '-Command', `"(Get-FileHash -Algorithm SHA256 -LiteralPath '`$K').Hash`") -NoNewWindow -Wait -PassThru -RedirectStandardOutput `$so`n" +
+            "[System.IO.File]::WriteAllText(`$O, ((`"parent=`$((Get-FileHash -Algorithm SHA256 -LiteralPath `$K).Hash)`", `"amp=`$((`$a | Where-Object { `$_ -match '^[0-9A-F]{64}$' }) -join '')`", `"ampfull=`$((`$af | Where-Object { `$_ -match '^[0-9A-F]{64}$' }) -join '')`", `"sp=`$(([System.IO.File]::ReadAllText(`$so)).Trim())`") -join `"``n`"))`n"), $NoBom)
+        $po = Join-Path $Work 'amp-probe.txt'
+        $p = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        try { $null = & $pw.Source -NoProfile -ExecutionPolicy Bypass -File $pd -K $kf -O $po 2>&1 } finally { $ErrorActionPreference = $p }
+        $pl = if (Test-Path -LiteralPath $po) { @([System.IO.File]::ReadAllLines($po)) } else { @() }
+        $pv = @{}; foreach ($x in $pl) { $kv = $x -split '=', 2; if ($kv.Count -eq 2) { $pv[$kv[0]] = $kv[1] } }
+        L "(RA-10) measured under $($pw.Source): the parent's hash $($pv['parent']); & powershell's $(if ($pv['amp']) { $pv['amp'] } else { '(none: Get-FileHash did not resolve)' }); & <the full path>'s $(if ($pv['ampfull']) { $pv['ampfull'] } else { '(none: Get-FileHash did not resolve)' }); Start-Process powershell's $(if ($pv['sp']) { $pv['sp'] } else { '(none: Get-FileHash did not resolve)' })"
+        Check '(RA-10) the & rows'' reason holds on this host: under PowerShell 7, a Windows PowerShell child started with &, by name and by its full path, prints the known file''s hash, equal to the parent''s' ($pv['parent'] -and ($pv['amp'] -ceq $pv['parent']) -and ($pv['ampfull'] -ceq $pv['parent']))
+        L "(RA-10) (recorded, not a check) Start-Process from PowerShell 7 $(if ($pv['sp'] -ceq $pv['parent']) { 'also resolved Get-FileHash here' } else { 'did NOT resolve Get-FileHash: such a child needs the cured path or a parent that is 5.1' })"
+    } else { Skip 'SKIPPED BY NAME: (RA-10) no pwsh on PATH -- the & rows'' reason is not measured on this host' }
+    # THE PLANTED RED: a scratch copy of the release set's enumerated files, one launch line added to a file the table
+    # holds and one file's cure taken out; the same verdict over it must name both.
+    $pl = Join-Path $Work 'planted'
+    foreach ($k in $ra10.Keys) { $src = Join-Path $Tagged.root ($k -replace '/', '\'); if (Test-Path -LiteralPath $src) { WriteBytes (Join-Path $pl ($k -replace '/', '\')) ([System.IO.File]::ReadAllBytes($src)) } }
+    $wake = 'tools/lam/lam-wake.ps1'
+    # The launch planted is the form validator round 1 found passed over: the full path bound to a variable, started through it.
+    WriteBytes (Join-Path $pl ($wake -replace '/', '\')) ([byte[]]([System.IO.File]::ReadAllBytes((Join-Path $Tagged.root ($wake -replace '/', '\')))) + (Bytes "`n`$plantedPs = Join-Path `$env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'`n`$null = Start-Process -FilePath `$plantedPs -ArgumentList '-NoProfile' -Wait`n"))
+    $cf = Join-Path $pl 'tools\tests\cli\conftest.py'
+    if (Test-Path -LiteralPath $cf) { $cft = [System.IO.File]::ReadAllText($cf); [System.IO.File]::WriteAllText($cf, ([regex]::Replace($cft, '(?im)^.*psmodulepath.*$', '')), $NoBom) }
+    $w7 = Join-Path $pl 'tests\lam\instrument-WP-7.ps1'
+    if (Test-Path -LiteralPath $w7) { [System.IO.File]::WriteAllText($w7, ([System.IO.File]::ReadAllText($w7) -creplace 'function Start-Process \{', 'function Start-ProcessUnused {'), $NoBom) }
+    $pbad = Get-Ra10Verdict $pl 'RA-10 PLANTED'
+    $script:Ra10Lines.Clear()
+    Check "(RA-10) PLANTED RED: a full-path powershell bound to a variable and started through it by Start-Process, added to $wake; tools/tests/cli/conftest.py's lines naming PSModulePath taken out; WP-7's Start-Process proxy renamed away -- the verdict names all three" (
+        (@($pbad | Where-Object { $_ -like "$wake (not in the table*" }).Count -eq 1) -and (@($pbad | Where-Object { $_ -like 'tools/tests/cli/conftest.py (the table says CURED*' }).Count -eq 1) -and
+        (@($pbad | Where-Object { $_ -like 'tests/lam/instrument-WP-7.ps1 (the table says its Start-Process children go through its own proxy*' }).Count -eq 1))
+}
+'ra11' {
+    # RA-11, ROW 538: the 1.3.1 notes state what was measured about WP-1..WP-4 under a PowerShell 7 host, in the
+    # instrument's own figures, or state that the runner pins Windows PowerShell and that the reading under PowerShell 7
+    # was not taken; no sentence claims a reading that no capture holds. RE-CUT BY AMENDMENT 2: that judgement is made at
+    # packaging by a fresh-identity validator who reads every sentence of the 1.3.1 notes naming a shell or an acceptance
+    # instrument against the kept captures. THIS MEMBER IS A FIRST SCREEN, NOT THE JUDGE. No reading was taken, so the
+    # second form is the one there is, and it is PINNED: the paragraph below, its whitespace aside, must stand in the
+    # notes -- its heading and two sentences (the runner starts each instrument with `& powershell`; the reading under a
+    # PowerShell 7 host was not taken for 1.3.1 and the notes claim none), optionally followed by ONE sentence, word for
+    # word, carrying the one further claim the amendment allows (the 1.3.0 notes said WP-1 to WP-4 were measured under
+    # both shells, and no capture of them under a PowerShell 7 host is held), and nothing else. A claim cannot be found by
+    # its words (validator rounds 1-4 each wrote one past a word list), so the screen shuts it out by where it could
+    # stand: every OTHER paragraph that names WP-1..WP-4, the acceptance instruments or acceptance at all names no shell
+    # (PowerShell, pwsh, PS 7, Core, shell) anywhere in it, and no sentence of it naming one of them reports a verdict or
+    # a figure. If packaging takes a PowerShell 7 reading, this member and the pinned paragraph change with it.
+    # RELEASE-5 packaging of 1.3.2 (amendment 2): the notes read are the 1.3.2 notes, and the pinned paragraph names 1.3.2;
+    # the 1.3.1 notes ship unedited (PK-17) and were read by this member at v1.3.1.
+    $pinned = '**The acceptance instruments under PowerShell 7 (row 538).** The acceptance runner (`tools\lam\lam-instrument-run.ps1`) starts each instrument with `& powershell`, so WP-1, WP-2, WP-3 and WP-4 run under Windows PowerShell 5.1 whatever shell starts the runner. Their reading under a PowerShell 7 host was not taken for 1.3.2, and these notes claim none.'
+    $pinnedMay = 'The 1.3.0 notes said WP-1 to WP-4 were measured under both shells, and no capture of them under a PowerShell 7 host is held.'
+    function Get-Ra11Norm { param([string]$S) return (($S -replace '\s+', ' ').Trim()) }
+    function Test-Ra11Notes { param([string]$Text)
+        $paras = @(($Text -replace "`r`n", "`n") -split "`n[ \t]*`n" | ForEach-Object { Get-Ra11Norm $_ } | Where-Object { $_ })
+        $pins = @((Get-Ra11Norm $pinned), (Get-Ra11Norm ($pinned + ' ' + $pinnedMay)))
+        $states = @($paras | Where-Object { $pins -ccontains $_ }).Count
+        $claims = @()
+        foreach ($para in $paras) {
+            if ($pins -ccontains $para) { continue }
+            if ($para -notmatch '(?i)\bWP-[1-4]\b|\bacceptance\b|\binstruments?\b') { continue }
+            if ($para -match '(?i)powershell|\bpwsh\b|\bps\s?7\b|\bcore\b|\bshells?\b') { $claims += "names a shell beside the instruments: $para"; continue }
+            foreach ($sen in [regex]::Split($para, '(?<=[.!?][*_)"'']*)\s+(?=[A-Z`*(])|;\s+|\s+--\s+')) {
+                if ($sen -notmatch '(?i)\bWP-[1-4]\b|\bacceptance\b|\binstruments?\b') { continue }
+                if ($sen -match '(?i)\b(pass(es|ed|ing)?|green|red|fail(s|ed|ing|ures?)?|clean|succe\w*|work(s|ed)|fine|ok(ay)?|held|exit(s|ed)?|measured|reading|verdicts?)\b|\b\d+\s*(/|of)\s*\d+\b|\b\d+\s+(checks?|tests?|passed|failed|errors?|members?)\b') { $claims += "reports a verdict or a figure: $sen" }
+            }
+        }
+        return [pscustomobject]@{ states = $states; claims = @($claims) }
+    }
+    # THE MEMBER'S OWN RED AND GREEN, over texts written here (it runs whether or not the notes stand): the pinned paragraph
+    # alone passes, and with its one permitted sentence; the paragraph as pinned before the re-cut, the pinned paragraph
+    # with any other sentence, the paragraph taken out, and each claim validators wrote past the earlier rules, fail.
+    $p2 = "`n`n"
+    $preRecut = $pinned + ' The 1.3.0 notes'' sentence on WP-1 to WP-4 under both shells describes the shell of the acceptance wrapper, which runs them through that runner, so the instruments themselves ran under Windows PowerShell 5.1 both times and a reading of them under a PowerShell 7 host was not taken then either. INSTALL.md section 3 now says so.'
+    $cases = @(
+        @('the pinned paragraph alone', $pinned, $true),
+        @('the pinned paragraph with its one permitted sentence', ($pinned + "`n" + $pinnedMay), $true),
+        @('the pinned paragraph and a paragraph naming WP-2 and WP-3 with no shell and no verdict', ($pinned + $p2 + 'The acceptance instruments WP-2 and WP-3 take the host''s folder as one of the project''s own environments, to run a fixture''s pytest under it.'), $true),
+        @('the paragraph as pinned before the re-cut (its two inferred sentences kept)', $preRecut, $false),
+        @('the pinned paragraph with a sentence other than the permitted one', ($pinned + ' The 1.3.0 readings of WP-1 to WP-4 under PowerShell 7 passed.'), $false),
+        @('the pinned paragraph with the permitted sentence and one more', ($pinned + ' ' + $pinnedMay + ' INSTALL.md section 3 now says so.'), $false),
+        @('the pinned paragraph taken out', 'WP-1, WP-2, WP-3 and WP-4 run under Windows PowerShell 5.1.', $false),
+        @('a clause past round 2 (succeeded, and a not measured beside it)', ($pinned + $p2 + 'Under PowerShell 7 WP-1 to WP-4 succeeded and WP-5 was not measured.'), $false),
+        @('a claim across two sentences', ($pinned + $p2 + 'Under PowerShell Core the runner was used as well. WP-1 to WP-4 passed.'), $false),
+        @('a claim across two paragraphs', ($pinned + $p2 + 'The runner was used under pwsh too.' + $p2 + 'WP-1 to WP-4 were fine.'), $false),
+        @('a figure', ($pinned + $p2 + 'WP-1 to WP-4 read 48/48 on the second host.'), $false)
+    )
+    foreach ($c in $cases) {
+        $v = Test-Ra11Notes $c[1]
+        $ok = ($v.states -ge 1) -and ($v.claims.Count -eq 0)
+        L "(RA-11 in-member) $($c[0]): pinned paragraph $($v.states); claims $($v.claims.Count)$(if ($v.claims.Count) { ' -- ' + ($v.claims -join ' | ') })"
+        Check "(RA-11 in-member) $($c[0]) -- $(if ($c[2]) { 'passes' } else { 'fails' })" ($ok -eq $c[2])
+    }
+    $notes = Join-Path $Tagged.root 'docs\RELEASE-NOTES-v1.3.2.md'
+    if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) { Skip 'SKIPPED BY NAME: (RA-11) docs/RELEASE-NOTES-v1.3.2.md is not in the tree yet (packaging writes it); its paragraphs are not read (the rule above is shown RED and GREEN over texts of its own)' }
+    else {
+        $v = Test-Ra11Notes ([System.IO.File]::ReadAllText($notes))
+        L "(RA-11) docs/RELEASE-NOTES-v1.3.2.md: the pinned paragraph $($v.states) time(s); claims $($v.claims.Count)"
+        foreach ($c in $v.claims) { L "  (RA-11) CLAIMS A READING  $c" }
+        Check '(RA-11) the 1.3.2 notes carry the pinned paragraph: the runner pins Windows PowerShell for WP-1..WP-4 and the reading under PowerShell 7 was not taken' ($v.states -ge 1)
+        Check "(RA-11) no other paragraph of the 1.3.2 notes ties the instruments to a shell or reports their verdict or a figure; claiming: $($v.claims.Count)" ($v.claims.Count -eq 0)
+    }
 }
 'a' {
     $t = Join-Path $Work 't'
@@ -3289,6 +4279,306 @@ switch ($Case) {
         L "(rg1) the upgrade with the registry read-only: exit $($u3.code); $(if ($named.Count) { $named[0] } else { '(no line naming the registry)' })"
         Check "(rg1) PLANTED read-only registry: the row is unchanged ('1.2.1'), the registry's bytes unchanged, and the installer exits non-zero naming $reg" (
             ($u3.code -ne 0) -and ($named.Count -ge 1) -and ((& $rowOf $t3).version -ceq '1.2.1') -and ((Sha ([System.IO.File]::ReadAllBytes($reg))) -ceq (Sha $ro0)))
+    } finally { $env:VANGUARD_HOME = $vgPrev }
+}
+{ $_ -in 'ra12', 'ra13', 'ra17', 'ra18', 'ra19', 'ra20' } {
+    # RELEASE-5 PACKAGE REGISTRY (group A contract, rows 530 and 567; amendment 2, RA-17..RA-20): the host registry row's
+    # framework_version, written by the installer at a registered root, by the work-tree writer at spawn, and by mission
+    # init and register. A scratch VANGUARD_HOME, put back after.
+    $vgPrev = $env:VANGUARD_HOME
+    $vh = Join-Path $Work 'vghome'; $env:VANGUARD_HOME = $vh
+    $reg = Join-Path $vh 'projects.yaml'
+    # A second scratch home, for the runs that must leave the first one alone (an install that puts a root at this
+    # release without touching the registry the member then reads).
+    $aside = Join-Path $Work 'vghome-aside'
+    $runAside = { param([string]$Script, [string[]]$A) $e = $env:VANGUARD_HOME; $env:VANGUARD_HOME = $aside; try { return (Run $Script $A) } finally { $env:VANGUARD_HOME = $e } }
+    # A registry row written here, in the writers' own shape, for a root at a version: synthetic host-id, generic stamp.
+    $rowText = { param([string]$T, [string]$Mission, [string]$Ver)
+        "- host_id: 00000000-0000-4000-8000-0000000000c1`n  checkout_path: '" + ([System.IO.Path]::GetFullPath($T).TrimEnd('\') -replace "'", "''") + "'`n  mission_id: '" + ($Mission -replace "'", "''") + "'`n  registered_at: '2026-11-01T00:00:00.000Z'`n  framework_version: '$Ver'`n" }
+    $writeReg = { param([string[]]$Rows) $null = New-Item -ItemType Directory -Force -Path $vh; [System.IO.File]::WriteAllText($reg, ("# a host registry written by the installer falsifier`n" + ($Rows -join '')), $NoBom) }
+    $other = "- host_id: 00000000-0000-4000-8000-0000000000ab`n  checkout_path: 'C:\work\another-checkout'`n  mission_id: 'm-other'`n  registered_at: '2026-11-01T00:00:00.000Z'`n  framework_version: '1.1.0'`n"
+    $mkRoot = { param([string]$Name, [string]$IdLine)
+        $t = Join-Path $Work $Name
+        WriteBytes (Join-Path $t '.mission\mission.yaml') (Bytes "$IdLine`n")
+        $null = New-Item -ItemType Directory -Force -Path (Join-Path $t '.mission-runtime\telemetry')
+        return $t }
+    $rowOf = { param([string]$T)
+        # The row whose checkout_path is T: its text and its framework_version as written ($null where the field is absent).
+        if (-not (Test-Path -LiteralPath $reg)) { return $null }
+        $txt = [System.IO.File]::ReadAllText($reg)
+        $full = [System.IO.Path]::GetFullPath($T).TrimEnd('\')
+        foreach ($blk in ([regex]::Split($txt, '(?m)^(?=- )'))) {
+            $m = [regex]::Match($blk, "(?m)^\s*(?:-\s+)?checkout_path:\s*'((?:[^']|'')*)'\s*\r?$")
+            if ($m.Success -and [string]::Equals(($m.Groups[1].Value -replace "''", "'").TrimEnd('\'), $full, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $v = [regex]::Match($blk, "(?m)^\s+framework_version:[ \t]*([^\r\n]*?)[ \t]*\r?$")
+                return [pscustomobject]@{ block = $blk; raw = $(if ($v.Success) { $v.Groups[1].Value } else { $null }) } }
+        }
+        return $null }
+    $gitId = { param([string]$D) $null = RunGit $D @('config', 'core.autocrlf', 'false'); $null = RunGit $D @('config', 'user.name', 'falsifier-fixture'); $null = RunGit $D @('config', 'user.email', 'falsifier-fixture@localhost') }
+    try {
+    switch ($Case) {
+    'ra12' {
+        # RA-12, ROW 530: a registered project upgraded in a work tree and merged, then the installer run at the registered
+        # root (every file already identical): the root's registry row carries the lock's version, its other fields kept,
+        # and -WhatIf predicted exactly that. Two synthetic releases from this checkout's set and HEAD's installer (1.2.1,
+        # then 1.2.2); the project a git repository whose framework.lock is tracked, as a project commits it.
+        $srcA = New-Source -Dir (Join-Path $Work 'src-a') -Version '1.2.1' -From $Repo -Set $owned -Installer $installer
+        $srcB = New-Source -Dir (Join-Path $Work 'src-b') -Version '1.2.2' -From $Repo -Set $owned -Installer $installer
+        $root = Join-Path $Work 'rt'
+        WriteBytes (Join-Path $root '.mission\mission.yaml') (Bytes "id: m-ra12`n")
+        WriteBytes (Join-Path $root '.gitignore') (Bytes "/.mission-runtime/`n")
+        $null = New-Item -ItemType Directory -Force -Path (Join-Path $root '.mission-runtime\telemetry')
+        $r0 = Run $srcA.installer @('-Target', $root)
+        $row0 = & $rowOf $root
+        L "(RA-12) the registered project: 1.2.1 installed into $root, exit $($r0.code); its row framework_version $(if ($row0) { $row0.raw } else { '(no row)' })"
+        Check "(RA-12) a fresh 1.2.1 install into a root carrying a mission and the feed's folder registers it at '1.2.1'" (($r0.code -eq 0) -and $row0 -and ($row0.raw -ceq "'1.2.1'"))
+        [System.IO.File]::AppendAllText($reg, "- host_id: 00000000-0000-4000-8000-0000000000ab`n  checkout_path: 'C:\work\another-checkout'`n  mission_id: 'm-other'`n  registered_at: '2026-11-01T00:00:00.000Z'`n  framework_version: '1.1.0'`n", $NoBom)
+        $null = RunGit $root @('init', '-q'); & $gitId $root
+        $null = RunGit $root @('add', '-A'); $null = RunGit $root @('commit', '-q', '-m', 'the project at 1.2.1')
+        $wt = Join-Path $Work 'wt'
+        $g = RunGit $root @('worktree', 'add', '-q', '-b', 'upgrade-122', $wt)
+        $uw = Run $srcB.installer @('-Target', $wt)
+        L "(RA-12) work tree $wt (git worktree add exit $($g.code)); the upgrade to 1.2.2 there: exit $($uw.code); $(@($uw.out | Where-Object { $_ -match '^install\.ps1: (done:|host registration:)' }) -join ' | ')"
+        $null = RunGit $wt @('add', '-A'); $null = RunGit $wt @('commit', '-q', '-m', 'the framework upgraded to 1.2.2 in a work tree')
+        $mg = RunGit $root @('merge', '-q', '--ff-only', 'upgrade-122')
+        $lkM = ReadLock $root
+        $rowM = & $rowOf $root
+        L "(RA-12) merged at the root (exit $($mg.code)): the root's lock version '$($lkM.header.version)'; its registry row framework_version $(if ($rowM) { $rowM.raw } else { '(no row)' })"
+        Check "(RA-12) after the work tree's upgrade is merged, the root's framework.lock reads 1.2.2 and its registry row still '1.2.1' (row 530's face, before the installer runs at the root)" (
+            ($uw.code -eq 0) -and ($mg.code -eq 0) -and ($lkM.header.version -ceq '1.2.2') -and $rowM -and ($rowM.raw -ceq "'1.2.1'"))
+        $regM = [System.IO.File]::ReadAllBytes($reg)
+        $tb = TreeHashes $root
+        $w = Run $srcB.installer @('-Target', $root, '-WhatIf')
+        $wl = @($w.out | Where-Object { $_ -match '^install\.ps1: planned host registration: ' })
+        L "(RA-12) -WhatIf at the root: exit $($w.code); $(@($w.out | Where-Object { $_ -match 'already installed|planned' }) -join ' | ')"
+        $wantW = "the target's row in $reg would be rewritten: framework_version '1.2.1' -> '1.2.2' (its other fields kept)"
+        Check "(RA-12) -WhatIf at the root: exit 0, already installed, one planned host registration line ending `"$wantW`"; no registry byte and no root byte written" (
+            ($w.code -eq 0) -and ((Count $w.out '^install\.ps1: already installed: ') -ge 1) -and ($wl.Count -eq 1) -and $wl[0].EndsWith($wantW) -and
+            ((Sha ([System.IO.File]::ReadAllBytes($reg))) -ceq (Sha $regM)) -and ((TreeHashes $root).aggregate -ceq $tb.aggregate))
+        $u = Run $srcB.installer @('-Target', $root)
+        $ul = @($u.out | Where-Object { $_ -match '^install\.ps1: host registration: ' })
+        L "(RA-12) the installer at the root: exit $($u.code); $(@($u.out | Where-Object { $_ -match 'already installed|host registration' }) -join ' | ')"
+        $rowU = & $rowOf $root
+        $expect = $NoBom.GetString($regM).Replace($rowM.block, ($rowM.block -replace "(?m)^(\s+framework_version:[ \t]*)'1\.2\.1'", "`${1}'1.2.2'"))
+        Check '(RA-12) the run at the root finds every file already identical: exit 0, already installed, and nothing under the root written (its tree byte for byte, framework.lock among it)' (
+            ($u.code -eq 0) -and ((Count $u.out '^install\.ps1: already installed: ') -ge 1) -and ((TreeHashes $root).aggregate -ceq $tb.aggregate))
+        Check "(RA-12) the root's registry row now carries the lock's version, framework_version '1.2.2', and the run's host registration line names the rewrite" (
+            $rowU -and ($rowU.raw -ceq "'1.2.2'") -and ($rowU.raw -ceq ("'" + $lkM.header.version + "'")) -and ($ul.Count -eq 1) -and $ul[0].Contains("framework_version '1.2.1' rewritten to '1.2.2'"))
+        Check '(RA-12) its other fields and every other byte of the registry are kept: the file equals its prior bytes with that one value changed, the other checkout''s row included -- the row -WhatIf predicted' (
+            (Sha ([System.IO.File]::ReadAllBytes($reg))) -ceq (Sha ($NoBom.GetBytes($expect))))
+        $reg2 = Sha ([System.IO.File]::ReadAllBytes($reg))
+        $u2 = Run $srcB.installer @('-Target', $root)
+        Check '(RA-12) a second run at the root: exit 0 and no registry byte written (the row already carries the lock''s version)' (($u2.code -eq 0) -and ((Sha ([System.IO.File]::ReadAllBytes($reg))) -ceq $reg2))
+        # PLANTED: the row put back to '1.2.1' and the registry made read-only -- the run leaves the row and exits non-zero
+        # naming the registry, as the upgrade's rewrite does (exit 5).
+        [System.IO.File]::WriteAllBytes($reg, $regM)
+        (Get-Item -LiteralPath $reg).IsReadOnly = $true
+        try { $u3 = Run $srcB.installer @('-Target', $root) } finally { (Get-Item -LiteralPath $reg).IsReadOnly = $false }
+        $named = @($u3.out | Where-Object { $_.Contains($reg) -and $_ -match 'NOT (updated|rewritten)' })
+        L "(RA-12) PLANTED read-only registry at the root: exit $($u3.code); $(if ($named.Count) { $named[0] } else { '(no line naming the registry)' })"
+        Check "(RA-12) PLANTED read-only registry: the row stays '1.2.1', the registry's bytes unchanged, and the installer exits 5 naming $reg" (
+            ($u3.code -eq 5) -and ($named.Count -ge 1) -and ((& $rowOf $root).raw -ceq "'1.2.1'") -and ((Sha ([System.IO.File]::ReadAllBytes($reg))) -ceq (Sha $regM)))
+    }
+    'ra13' {
+        # RA-13, ROW 567: a work tree registered at spawn on an installed project (no VERSION file in the checkout) gets a
+        # row whose framework_version is the version its framework.lock records, never ''. The project: HEAD's installer
+        # (files and lock), mission init from the tagged clone (its own row and the feed's folder), a git repository. At
+        # spawn the dispatcher (tools/lam/mission-dispatch.ps1) dot-sources the PROJECT'S tools/lam/mission-telemetry.ps1 and
+        # calls Register-MissionWorktree -PrimaryRoot <root> -WorktreeRoot <work tree>: that call, from the installed file,
+        # in a Windows PowerShell child. Leg 1: framework.lock tracked, so the work tree has its own. Leg 2: framework.lock
+        # not tracked (excluded), so the work tree has none and its primary root's is the one there is.
+        $drv = Join-Path $Work 'spawn-register.ps1'
+        [System.IO.File]::WriteAllText($drv, ("param([string]`$Lib, [string]`$Primary, [string]`$Tree, [string]`$Res)`n" +
+            ". `$Lib`n`$r = Register-MissionWorktree -PrimaryRoot `$Primary -WorktreeRoot `$Tree`n" +
+            "[System.IO.File]::WriteAllText(`$Res, `$(if (`$null -eq `$r) { 'null' } else { `$r | ConvertTo-Json -Depth 3 }))`n"), $NoBom)
+        foreach ($leg in @(@('tracked', $false), @('untracked', $true))) {
+            $p = Join-Path $Work "p-$($leg[0])"
+            $ri = Run $installer @('-Target', $p)
+            $mi = Run (Join-Path $Tagged.root 'mission.ps1') @('init', '-Target', $p)
+            $null = RunGit $p @('init', '-q'); & $gitId $p
+            if ($leg[1]) { [System.IO.File]::AppendAllText((Join-Path $p '.git\info\exclude'), "/framework.lock`n", $NoBom) }
+            $null = RunGit $p @('add', '-A'); $null = RunGit $p @('commit', '-q', '-m', 'the installed project')
+            $lkV = (ReadLock $p).header.version
+            $w = Join-Path $Work "w-$($leg[0])"
+            $g = RunGit $p @('worktree', 'add', '-q', '-b', "worktree-$($leg[0])", $w)
+            $wLock = Test-Path -LiteralPath (Join-Path $w 'framework.lock') -PathType Leaf
+            # THE OWN LOCK APART FROM THE PRIMARY'S (REGISTRY validator round 1, finding 4): in the tracked leg the work
+            # tree's lock reads a version its primary's does not -- a work tree in the middle of an upgrade -- so the row
+            # can only carry it by reading the work tree's own lock.
+            if ($wLock) {
+                $wl = Join-Path $w 'framework.lock'
+                $wlt = [System.IO.File]::ReadAllText($wl)
+                $nl = $wlt.IndexOf("`n")
+                $hdr = [regex]::Replace($wlt.Substring(0, $nl), '"version":"[^"]*"', '"version":"1.3.1-wt"')
+                [System.IO.File]::WriteAllText($wl, $hdr + $wlt.Substring($nl), $NoBom)
+                $lkV = (ReadLock $w).header.version
+            }
+            $noVersion = (-not (Test-Path -LiteralPath (Join-Path $w 'VERSION'))) -and (-not (Test-Path -LiteralPath (Join-Path $p 'VERSION')))
+            L "(RA-13 $($leg[0])) install exit $($ri.code); mission init exit $($mi.code); the primary's lock version '$((ReadLock $p).header.version)', the version the row must carry '$lkV'; work tree $w (exit $($g.code)): framework.lock there $wLock; no VERSION in the project or the work tree: $noVersion"
+            Check "(RA-13 $($leg[0])) the fixture: an installed project with no VERSION file, mission init's row made; the work tree $(if ($leg[1]) { 'carries no framework.lock (not tracked): the primary''s reads ' + $lkV } else { 'carries its own framework.lock, reading ' + $lkV + ' where the primary''s reads ' + (ReadLock $p).header.version })" (
+                ($ri.code -eq 0) -and ($mi.code -eq 0) -and $lkV -and $noVersion -and ($g.code -eq 0) -and ($wLock -ne $leg[1]) -and ($null -ne (& $rowOf $p)) -and
+                ($leg[1] -or ($lkV -cne (ReadLock $p).header.version)))
+            $res = Join-Path $Work "spawn-$($leg[0]).json"
+            $pp = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try { $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $drv -Lib (Join-Path $p 'tools\lam\mission-telemetry.ps1') -Primary $p -Tree $w -Res $res 2>&1 } finally { $ErrorActionPreference = $pp }
+            $rw = & $rowOf $w
+            L "(RA-13 $($leg[0])) Register-MissionWorktree from the installed tools\lam\mission-telemetry.ps1: $(if (Test-Path -LiteralPath $res) { ([System.IO.File]::ReadAllText($res) -replace '\s+', ' ') } else { '(no result)' })"
+            L "(RA-13 $($leg[0])) the work tree's row: $(if ($rw) { ($rw.block -replace "`r?`n", ' | ').Trim() } else { '(none)' })"
+            Check "(RA-13 $($leg[0])) the work tree registered at spawn gets a row whose framework_version is '$lkV', the version $(if ($leg[1]) { 'its primary root''s' } else { 'its own' }) framework.lock records -- never ''" (
+                $rw -and ($rw.raw -cne "''") -and ($rw.raw -ceq "'$lkV'"))
+        }
+    }
+    'ra17' {
+        # RA-17 (amendment 2), THE ALREADY-INSTALLED RUN AND AN UNREADABLE REGISTRY: on a root already at this release's
+        # version, with a registry file the run cannot read, the run prints a NOTE naming the registry, exits 0 and writes
+        # nothing under the project or the registry. The root carries a mission and the feed's folder and is put at this
+        # release under the second scratch home; the home the member reads holds a row for it at '1.2.1' (so the run's
+        # registry step has a row to rewrite), another checkout's row and a host-id. The registry is made unreadable by a
+        # handle THIS process holds with FileShare.None while the installer's child runs (a share mode is per handle: the
+        # child's open is refused as a second open here is). RED: the branch's guard removed, the run ends with an
+        # uncaught error.
+        $root = & $mkRoot 'rt17' 'id: m-ra17'
+        $ri = & $runAside $installer @('-Target', $root)
+        & $writeReg @((& $rowText $root 'm-ra17' '1.2.1'), $other)
+        WriteBytes (Join-Path $vh 'host-id') (Bytes "00000000-0000-4000-8000-0000000000c1`n")
+        $tb = TreeHashes $root; $hb = TreeHashes $vh; $regB = FileSha $reg
+        # CONTROL: with the registry readable, -WhatIf at the root names the row's rewrite, so the step reaches the registry.
+        $wc = Run $installer @('-Target', $root, '-WhatIf')
+        $wcl = @($wc.out | Where-Object { $_ -match "^install\.ps1: planned host registration: .+; the target's row in .+ would be rewritten: framework_version '1\.2\.1' -> " })
+        L "(RA-17) the root put at this release (exit $($ri.code)); CONTROL -WhatIf with the registry readable: exit $($wc.code); $(if ($wcl.Count) { $wcl[0] } else { '(no planned rewrite line)' })"
+        Check "(RA-17) the fixture: the root is already at this release (-WhatIf reads already installed) and, with the registry readable, its -WhatIf names the row's rewrite -- the step reaches the registry" (
+            ($ri.code -eq 0) -and ($wc.code -eq 0) -and ((Count $wc.out '^install\.ps1: already installed: ') -ge 1) -and ($wcl.Count -eq 1))
+        $fs = [System.IO.File]::Open($reg, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::None)
+        try {
+            $second = $true; try { $null = [System.IO.File]::ReadAllBytes($reg) } catch { $second = $false; L "(RA-17) a second open of $reg while the handle is held: $($_.Exception.Message -replace '[\r\n]+', ' ')" }
+            $w = Run $installer @('-Target', $root, '-WhatIf')
+            $u = Run $installer @('-Target', $root)
+        } finally { $fs.Dispose() }
+        foreach ($x in @(@('-WhatIf', $w), @('the run', $u))) { L "(RA-17) $($x[0]) with the registry unreadable: exit $($x[1].code)"; $x[1].out | Where-Object { $_ -match 'NOTE|already installed|host registration|REGISTRY|Exception|error|at line' } | ForEach-Object { L "  | $_" } }
+        $noteRx = '^install\.ps1: NOTE: the host registration did not complete \(.*' + [regex]::Escape($reg)
+        Check "(RA-17) the fixture: the registry cannot be read while the handle is held (a second open is refused)" (-not $second)
+        Check "(RA-17) with the registry unreadable, the already-installed run prints a NOTE naming $reg, says already installed, and exits 0" (
+            ($u.code -eq 0) -and ((Count $u.out $noteRx) -eq 1) -and ((Count $u.out '^install\.ps1: already installed: \S+ in .+; nothing was written, and framework\.lock is untouched\.$') -eq 1))
+        Check "(RA-17) its -WhatIf the same: a NOTE naming the registry, exit 0" (($w.code -eq 0) -and ((Count $w.out $noteRx) -eq 1))
+        Check '(RA-17) nothing written under the project (its tree byte for byte, framework.lock among it) or the registry (its bytes, and every file of its home)' (
+            ((TreeHashes $root).aggregate -ceq $tb.aggregate) -and ((FileSha $reg) -ceq $regB) -and ((TreeHashes $vh).aggregate -ceq $hb.aggregate))
+    }
+    'ra18' {
+        # RA-18 (amendment 2), THE EMPTY MISSION ID: a project whose mission id is an empty quoted string (id: '') is
+        # treated as carrying no mission by the already-installed run exactly as by a run that writes: no row is rewritten
+        # or appended, and -WhatIf prints the same reading. The root (id: '', the feed's folder) installed at a synthetic
+        # 1.2.1 built from this checkout's set; the home holds a row for it at '1.2.1' and another checkout's. LEG 1, a run
+        # that writes: -WhatIf of the upgrade to this release, then the upgrade. LEG 2, the already-installed run: -WhatIf,
+        # then the run. CONTROL: the same root with a real id, whose already-installed -WhatIf names the row's rewrite -- the
+        # row is stale and leg 2 could have rewritten it. RED: the already-installed run's empty-quoted-id rule removed, the
+        # 1.3.0-era reading of the id ('' taken as an id) rewrites the row.
+        $srcA = New-Source -Dir (Join-Path $Work 'src-a') -Version '1.2.1' -From $Repo -Set $owned -Installer $installer
+        $root = & $mkRoot 'rt18' "id: ''"
+        $r0 = Run $srcA.installer @('-Target', $root)
+        & $writeReg @((& $rowText $root '' '1.2.1'), $other)
+        $regA = FileSha $reg
+        $noRow = "no registry row (the target carries no mission yet: mission init adds it)"
+        $rowWords = "would be rewritten|would be added|rewritten to|a row for the target added"
+        $w1 = Run $installer @('-Target', $root, '-WhatIf')
+        $w1l = @($w1.out | Where-Object { $_ -match '^install\.ps1: planned host registration: ' })
+        $u1 = Run $installer @('-Target', $root)
+        L "(RA-18 leg 1, a run that writes) 1.2.1 installed (exit $($r0.code)); -WhatIf of the upgrade: exit $($w1.code); $(if ($w1l.Count) { $w1l[0] } else { '(no planned host registration line)' }); the upgrade: exit $($u1.code); $(@($u1.out | Where-Object { $_ -match '^install\.ps1: (upgrade:|done:|host registration:)' }) -join ' | ')"
+        $regU1 = FileSha $reg
+        Check "(RA-18 leg 1) a run that writes reads id '' as no mission: its -WhatIf says '$noRow', and the upgrade (exit 0, the lock now $Version) rewrites and appends no row -- the registry's bytes unchanged" (
+            ($r0.code -eq 0) -and ($w1.code -eq 0) -and ($w1l.Count -eq 1) -and $w1l[0].EndsWith($noRow) -and ($u1.code -eq 0) -and ((ReadLock $root).header.version -ceq $Version) -and ($regU1 -ceq $regA))
+        # CONTROL (inverted), before leg 2 and writing nothing: a real id on the same root, and the already-installed
+        # -WhatIf names the row's rewrite -- the row is stale and leg 2 could rewrite it; the id is then put back to ''.
+        $mfP = Join-Path $root '.mission\mission.yaml'
+        WriteBytes $mfP (Bytes "id: m-ra18`n")
+        $wc = Run $installer @('-Target', $root, '-WhatIf')
+        $wcl = @($wc.out | Where-Object { $_ -match "^install\.ps1: planned host registration: .+would be rewritten: framework_version '1\.2\.1' -> '$([regex]::Escape($Version))'" })
+        WriteBytes $mfP (Bytes "id: ''`n")
+        L "(RA-18 CONTROL) id: m-ra18 on the same root, -WhatIf: exit $($wc.code); $(if ($wcl.Count) { $wcl[0] } else { '(no planned rewrite line)' }); the id then put back to ''"
+        Check "(RA-18 CONTROL) with a real id the same already-installed -WhatIf names the row's rewrite (and writes nothing): the row is stale, so leg 2 below could rewrite it" (($wc.code -eq 0) -and ($wcl.Count -eq 1) -and ((FileSha $reg) -ceq $regA))
+        $tb = TreeHashes $root
+        $w2 = Run $installer @('-Target', $root, '-WhatIf')
+        $w2Wrote = ((FileSha $reg) -cne $regA) -or ((TreeHashes $root).aggregate -cne $tb.aggregate)   # read before the run below
+        $u2 = Run $installer @('-Target', $root)
+        L "(RA-18 leg 2, already installed) -WhatIf: exit $($w2.code); $(@($w2.out | Where-Object { $_ -match 'already installed|host registration|NOTE' }) -join ' | ')"
+        L "(RA-18 leg 2, already installed) the run: exit $($u2.code); $(@($u2.out | Where-Object { $_ -match 'already installed|host registration|NOTE' }) -join ' | '); the row now $((& $rowOf $root).raw)"
+        Check "(RA-18 leg 2) the already-installed run reads id '' as no mission, as the run that writes did: exit 0, already installed, no host registration line, and no row rewritten or appended -- the registry's bytes unchanged, the row still '1.2.1'" (
+            ($u2.code -eq 0) -and ((Count $u2.out '^install\.ps1: already installed: ') -ge 1) -and ((Count $u2.out '^install\.ps1: host registration: ') -eq 0) -and ((FileSha $reg) -ceq $regA) -and ((& $rowOf $root).raw -ceq "'1.2.1'"))
+        Check "(RA-18 leg 2) its -WhatIf prints the same reading: exit 0, already installed, no line naming a row rewritten or added; nothing written" (
+            ($w2.code -eq 0) -and ((Count $w2.out '^install\.ps1: already installed: ') -ge 1) -and ((Count $w2.out $rowWords) -eq 0) -and (-not $w2Wrote))
+    }
+    'ra19' {
+        # RA-19 (amendment 2), THE DRY RUN SAYS WHAT THE RUN DOES: in the already-installed mode, with a registry row for
+        # the root and no host-id file, -WhatIf prints no line saying a host-id would be minted, and its registry line is
+        # the line the real run then prints -- read as done: "planned host registration: X; the target's row in R would
+        # be rewritten: framework_version 'A' -> 'B' (its other fields kept)" is, said of the act, "host registration: X;
+        # the target's row in R: framework_version 'A' rewritten to 'B', its other fields kept", and that must be the run's
+        # line, byte for byte (the host-id clause X included). The root is put at this release under the second scratch
+        # home; the home read holds a row for it at '1.2.1' and another checkout's. LEG 1: no host-id file (the amendment's
+        # case). LEG 2: a host-id file, the same rule. RED: at c4977b9 the two differ ("a host-id would be minted in <home>"
+        # where the run says "no host-id"; "host-id X in <home>, kept" where the run says "host-id X").
+        $asDone = { param([string]$P)
+            $m = [regex]::Match($P, "^install\.ps1: planned host registration: (.+?); the target's row in (.+) would be rewritten: framework_version (.+?) -> '([^']*)' \(its other fields kept\)$")
+            if (-not $m.Success) { return $null }
+            return "install.ps1: host registration: $($m.Groups[1].Value); the target's row in $($m.Groups[2].Value): framework_version $($m.Groups[3].Value) rewritten to '$($m.Groups[4].Value)', its other fields kept" }
+        foreach ($leg in @(@('no host-id', $false), @('a host-id', $true))) {
+            $root = & $mkRoot "rt19-$(if ($leg[1]) { 'h' } else { 'n' })" "id: m-ra19"
+            $ri = & $runAside $installer @('-Target', $root)
+            Remove-Tree $vh
+            & $writeReg @((& $rowText $root 'm-ra19' '1.2.1'), $other)
+            $hidP = Join-Path $vh 'host-id'
+            if ($leg[1]) { WriteBytes $hidP (Bytes "00000000-0000-4000-8000-0000000000c9`n") }
+            $tb = TreeHashes $root; $hb = TreeHashes $vh
+            $w = Run $installer @('-Target', $root, '-WhatIf')
+            $wl = @($w.out | Where-Object { $_ -match '^install\.ps1: planned host registration: ' })
+            $mint = Count $w.out 'host-id would be minted'
+            $wroteNothing = ((TreeHashes $root).aggregate -ceq $tb.aggregate) -and ((TreeHashes $vh).aggregate -ceq $hb.aggregate)
+            $u = Run $installer @('-Target', $root)
+            $ul = @($u.out | Where-Object { $_ -match '^install\.ps1: host registration: ' })
+            $done = if ($wl.Count -eq 1) { & $asDone $wl[0] } else { $null }
+            L "(RA-19 $($leg[0])) the root at this release (exit $($ri.code)); host-id file before: $(Test-Path -LiteralPath $hidP -PathType Leaf)"
+            L "(RA-19 $($leg[0])) -WhatIf: exit $($w.code); $(if ($wl.Count) { $wl -join ' | ' } else { '(no planned host registration line)' })"
+            L "(RA-19 $($leg[0])) the run: exit $($u.code); $(if ($ul.Count) { $ul -join ' | ' } else { '(no host registration line)' }); host-id file after: $(Test-Path -LiteralPath $hidP -PathType Leaf)"
+            L "(RA-19 $($leg[0])) the -WhatIf line read as done: $(if ($done) { $done } else { '(not of the planned-rewrite shape)' })"
+            Check "(RA-19 $($leg[0])) the fixture: both runs read already installed, the row for the root at '1.2.1', the host-id file $(if ($leg[1]) { 'present' } else { 'absent' })" (
+                ($ri.code -eq 0) -and ((Count $w.out '^install\.ps1: already installed: ') -ge 1) -and ((Count $u.out '^install\.ps1: already installed: ') -ge 1))
+            Check "(RA-19 $($leg[0])) -WhatIf (exit 0) prints no line saying a host-id would be minted, and writes nothing" (($w.code -eq 0) -and ($mint -eq 0) -and $wroteNothing)
+            Check "(RA-19 $($leg[0])) its registry line is the line the run then prints: the planned rewrite, read as done, equals the run's host registration line byte for byte (exit 0, the row now '$Version')" (
+                ($u.code -eq 0) -and ($wl.Count -eq 1) -and ($ul.Count -eq 1) -and $done -and ($done -ceq $ul[0]) -and ((& $rowOf $root).raw -ceq "'$Version'"))
+            Check "(RA-19 $($leg[0])) the run mints no host-id: the file is $(if ($leg[1]) { 'the one it found' } else { 'still absent' })" ($(if ($leg[1]) { (Test-Path -LiteralPath $hidP -PathType Leaf) -and (([System.IO.File]::ReadAllText($hidP)).Trim() -ceq '00000000-0000-4000-8000-0000000000c9') } else { -not (Test-Path -LiteralPath $hidP) }))
+        }
+    }
+    'ra20' {
+        # RA-20 (amendment 2), INIT AND REGISTER ROWS: a row written by mission init or by the register verb onto a target
+        # that carries a framework.lock holds that lock's version; onto a target with none, the release's VERSION. Both
+        # verbs from the tagged clone's mission.ps1 (the release tree, which carries VERSION). A target with a lock: this
+        # release installed under the second scratch home, its lock's header version then made '<VERSION>-lk', a version
+        # the release's VERSION is not. For register, the mission is made first by init under the second home, so the
+        # home read has no row for it until register adds one. RED: the lock read removed from the writer, the lock legs
+        # read the VERSION instead.
+        $mission = Join-Path $Tagged.root 'mission.ps1'
+        $lkWant = "$($Tagged.version)-lk"
+        $setLock = { param([string]$T, [string]$V)
+            $lf = Join-Path $T 'framework.lock'; $lt = [System.IO.File]::ReadAllText($lf); $nl = $lt.IndexOf("`n")
+            [System.IO.File]::WriteAllText($lf, ([regex]::Replace($lt.Substring(0, $nl), '"version":"[^"]*"', ('"version":"' + $V + '"')) + $lt.Substring($nl)), $NoBom) }
+        foreach ($leg in @(@('init', $true), @('init', $false), @('register', $true), @('register', $false))) {
+            $verb = $leg[0]; $withLock = $leg[1]
+            $lb = "$verb, $(if ($withLock) { 'a target with a framework.lock' } else { 'a target with none' })"
+            $t = Join-Path $Work "rt20-$verb-$(if ($withLock) { 'lock' } else { 'nolock' })"
+            $null = New-Item -ItemType Directory -Force -Path $t
+            $ri = $null
+            if ($withLock) { $ri = & $runAside $installer @('-Target', $t); & $setLock $t $lkWant }
+            if ($verb -eq 'register') { $pre = & $runAside $mission @('init', '-Target', $t) }
+            $before = & $rowOf $t
+            $v = Run $mission @($verb, '-Target', $t)
+            $row = & $rowOf $t
+            $want = if ($withLock) { $lkWant } else { $Tagged.version }
+            L "(RA-20 $lb) $(if ($withLock) { "install exit $($ri.code), the lock's version now '$((ReadLock $t).header.version)'; " })$(if ($verb -eq 'register') { "init under the second home exit $($pre.code); " })a row before: $([bool]$before); mission.ps1 $verb exit $($v.code); $(@($v.out | Where-Object { $_ -match 'registered on this host' }) -join ' | ')"
+            L "(RA-20 $lb) the row: $(if ($row) { ($row.block -replace "`r?`n", ' | ').Trim() } else { '(none)' })"
+            Check "(RA-20 $lb) mission.ps1 $verb (exit 0) adds the target's row, and its framework_version is '$want', $(if ($withLock) { 'the lock''s version (not the release''s VERSION ' + $Tagged.version + ')' } else { 'the release''s VERSION' })" (
+                ($v.code -eq 0) -and (-not $before) -and $row -and ($row.raw -ceq "'$want'") -and ((-not $withLock) -or (((ReadLock $t).header.version -ceq $lkWant) -and ($lkWant -cne $Tagged.version))))
+        }
+    }
+    }
     } finally { $env:VANGUARD_HOME = $vgPrev }
 }
 'kv1' {

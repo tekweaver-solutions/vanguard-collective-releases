@@ -22,7 +22,9 @@ class Model:
             rej = [{"line": r["line_no"], "seq": r["seq"], "reason": r["reason"], "detail": r["detail"]}
                    for r in conn.execute("SELECT line_no, seq, reason, detail FROM rejections WHERE stream_key = ? ORDER BY line_no", (row.key,))]
             path = os.path.normcase(row.checkout_path)
-            evs = [{"key": row.key, "path": path, "seq": r["seq"], "ts": r["ts"], "kind": r["kind"], "line": json.loads(r["line"])} for r in rows]
+            # amendment 3 (RB-28): each event carries its row's checkout folder as written (root), which names the folder in
+            # the command that writes a fresh snapshot; path stays the folder normcased, as every comparison reads it
+            evs = [{"key": row.key, "path": path, "root": row.checkout_path, "seq": r["seq"], "ts": r["ts"], "kind": r["kind"], "line": json.loads(r["line"])} for r in rows]
             last = rows[-1] if rows else None
             self.streams.append({
                 "row": row, "key": row.key, "identity": row.identity(), "events": evs, "rejections": rej,
@@ -60,7 +62,10 @@ class Model:
 def _stream_entry(s):
     row = s["row"]
     c = s["counts"]
+    # RELEASE-5 group B (RB-9, RB-10, ruling (n)): removed -- the row's checkout folder is gone. The registry's own word for
+    # it stays (stale: true, never pruned); the page counts such a row removed, never as a stale stream.
     return {"host_id": row.host_id, "checkout_path": row.checkout_path, "stream_key": row.key, "stale": row.stale,
+            "removed": row.stale,
             "feed_present": os.path.isfile(row.feed), "registered_mission_id": row.mission_id, "registry_line": row.line,
             "earliest_seq": c["earliest_seq"], "last_seq": c["last_seq"]}
 
@@ -98,6 +103,17 @@ def _summary(model, mid, streams):
         "feed": totals,
         "errors": {"count": len(errs), "classes": classes},
     }, evs, errs
+
+
+def _reading(streams, evs):
+    """RB-15: derive.snapshot_reading with the stream the snapshot came from named (a seq belongs to one stream) and how many
+    streams the mission reads (validator round 1)."""
+    # amendment 3 (RB-28): with no snapshot, the mission's one checkout names the command's folder
+    r = derive.snapshot_reading(evs, roots=[s["row"].checkout_path for s in streams])
+    ident = next((s["identity"] for s in streams if s["key"] == r.get("stream_key")), None)
+    r["stream"] = ident
+    r["streams"] = len(streams)
+    return r
 
 
 def model_identity(streams, e):
@@ -184,11 +200,29 @@ def mission(model, mid):
     bind = derive.assertion_features(evs)
     roll = metrics.feature_rollups(evs)
     verdict_of = {m["assertion_id"]: m for r in roll.values() for m in r["members"]}
+    # RELEASE-5 group B (RB-2, RB-4, RB-5): each assertion's every round, the reason it is not judged, and the record it was
+    # read from -- additively; the page renders exactly these
+    rec = derive.assertion_record(evs)
+    # RELEASE-5 group B (RB-16): a snapshot an earlier writer wrote carries no reason -- it is said, with the command
+    no_reason = derive.not_in_snapshot(evs) if derive.snapshot_lacks(evs, "assertion_reading") else None
+    # amendment 3 (RB-25, RB-26): each assertion's evidence, in the snapshot's own word, the path read for an archive copy or a
+    # working copy, and the snapshot's own account of a judgement on kept evidence; over a snapshot the 1.3.1 or 1.3.0 writer
+    # wrote, the reading is said to be not in it, with the command
+    ev_note = derive.not_in_snapshot(evs, derive.EVIDENCE_SINCE) if derive.snapshot_lacks_entry(evs, "assertion_detail.evidence") else None
+    kept_words = ("archive copy", "record alone")
     fids = sorted(set(feats) | {f for f in bind.values() if f is not None})
     features = []
     for fid in fids + [None]:
         members = [{"assertion_id": aid, "status": a["status"], "source": a["event"]["line"]["source_path"] + "@" + a["event"]["line"]["sha256"],
-                    "verdict": (verdict_of.get(aid) or {}).get("verdict"), "round": (verdict_of.get(aid) or {}).get("round")}
+                    "verdict": (verdict_of.get(aid) or {}).get("verdict"), "round": (verdict_of.get(aid) or {}).get("round"),
+                    "rounds": (rec.get(aid) or {}).get("rounds") or [],
+                    "reason": ((rec.get(aid) or {}).get("reason") or no_reason) if (verdict_of.get(aid) or {}).get("verdict") is None else None,
+                    "record": (rec.get(aid) or {}).get("source"),
+                    "evidence": (rec.get(aid) or {}).get("evidence") if (verdict_of.get(aid) or {}).get("verdict") is not None else None,
+                    "evidence_path": (rec.get(aid) or {}).get("evidence_path") if (verdict_of.get(aid) or {}).get("verdict") is not None else None,
+                    "evidence_reason": (rec.get(aid) or {}).get("reason") if ((verdict_of.get(aid) or {}).get("verdict") is not None
+                                                                              and (rec.get(aid) or {}).get("evidence") in kept_words) else None,
+                    "evidence_note": ev_note}
                    for aid, a in sorted(st.items()) if bind.get(aid) == fid]
         if fid is None and not members:
             continue
@@ -234,6 +268,8 @@ def mission(model, mid):
             "subagent_calls": dict(sorted(derive.subagent_calls(evs).items())),
             "open_dispatches": {"count": len(open_d), "ids": open_d,
                                 "snapshot_count": (summary["counts"] or {}).get("open_dispatches")},
+            # RELEASE-5 group B (RB-13): each sealed manifest on the session it belongs to, in its own terms
+            "manifests": derive.manifests(evs),
             "last_verify": last_verify,
         },
         "last_activity_ts": summary["last_activity_ts"],
@@ -243,6 +279,8 @@ def mission(model, mid):
         "errors": errs,
         "ingest": ingest,
         "unknown_kinds": [{"stream": s["identity"], "kinds": s["counts"]["unknown_kinds"]} for s in streams if s["counts"]["unknown_kinds"]],
+        # RELEASE-5 group B (RB-15, RB-16): which snapshot the readings come from, how many lines follow it, the command
+        "snapshot_reading": _reading(streams, evs),
         "as_of": model.as_of(streams),
     }
     try:  # the added fields never take the existing ones down
@@ -266,6 +304,21 @@ def _project(model, mid, streams, evs, errs):
         "milestone_progress": ms["progress"],
         "milestones_reason": ms["reason"],
         "milestones_basis": ms["basis"],
+        # RELEASE-5 group B (RB-4): each milestone's tally of its judged assertions, from the same snapshot; RB-16 (validator
+        # round 1): a snapshot an earlier writer wrote carries no such tally -- said, with the command
+        "milestone_tally": metrics.milestone_tally(evs),
+        "milestone_tally_note": ("each milestone's judged tally is " + derive.not_in_snapshot(evs)) if derive.snapshot_lacks(evs, "milestone_tally") else None,
+        # amendment 3 (RB-25, RB-26): each milestone's count of assertions held on the record alone, counted apart -- said to be
+        # not in a snapshot an earlier writer wrote, with the command
+        "record_alone_note": (("each milestone's count of assertions held on the record alone is " + derive.not_in_snapshot(evs, derive.EVIDENCE_SINCE))
+                              if (derive.snapshot_map(derive.latest_snapshot(evs), "milestones") and derive.snapshot_lacks_entry(evs, "milestone_tally.assertions_record_alone")) else None),
+        "evidence_words": derive.EVIDENCE_WORDS,
+        # validator round 3 (RB-16): each assertion's verdict and rounds as the record the close tool trusts holds them (the
+        # spawn ledger, read by its own reader) are a reading this contract adds; over an earlier writer's snapshot the
+        # verdicts shown are that writer's, from the old results folder -- said once, for the panel, with the command
+        "features_note": ("each assertion's verdict and rounds from the record the close tool trusts (the spawn ledger, read by "
+                          "its own reader) are " + derive.not_in_snapshot(evs) + "; the verdicts shown are the earlier writer's, from "
+                          ".mission/validator-results") if derive.snapshot_lacks(evs, "assertion_reading") else None,
         "live": metrics.live(evs, clock, w),
         "error_ages": metrics.error_ages(errs, clock, w),
         # UI-2 S2 (group B): the validator rounds (B-4), the HALT card (B-6), elapsed per milestone (B-8), the verify card (B-10)
@@ -298,7 +351,7 @@ def mission_stats(model, mid):
     evs = model.events(mid)
     w = _window(streams)
     stats = metrics.mission_stats(evs, w)
-    body = {"mission_id": mid, "stats": stats, "as_of": model.as_of(streams)}
+    body = {"mission_id": mid, "stats": stats, "snapshot_reading": _reading(streams, evs), "as_of": model.as_of(streams)}
     try:  # the added fields never take the existing ones down
         body.update({"series": metrics.series([evs], metrics.mission_clock(evs), w), "kpis": metrics.mission_kpis(evs, stats, w)})
     except Exception as e:
@@ -307,16 +360,32 @@ def mission_stats(model, mid):
         clock = metrics.mission_clock(evs)
         snap = derive.latest_snapshot(evs)
         lockv = (snap["line"].get("payload") or {}).get("framework_lock_version") if snap else None
-        rows = [{"checkout_path": s["row"].checkout_path, "framework_version": s["row"].framework_version} for s in streams]
+        lock = lockv if isinstance(lockv, str) else None
+        # RELEASE-5 group B (RB-9, ruling (n)): each row read against the lock -- equal, unequal, "version not recorded" (null
+        # or '' with its folder present: never equal), or removed (its folder is gone: listed, compared with nothing). The
+        # card reads equal only when every row whose folder exists equals the lock. The registry is read, never written.
+        rows = []
+        for s in streams:
+            r_, v = s["row"], s["row"].framework_version
+            reading = ("removed" if r_.stale else "version not recorded" if not isinstance(v, str) or v == "" else
+                       "no lock to compare" if lock is None else "equal" if v == lock else "unequal")
+            rows.append({"checkout_path": r_.checkout_path, "framework_version": v, "present": not r_.stale, "reading": reading})
+        compared = [r for r in rows if r["present"]]
         body["face"] = {
             "sessions": metrics.sessions_card(evs, w), "dispatches": metrics.dispatches_card(evs, w),
             "validator_rounds": metrics.validator_rounds(evs, w), "halt_card": metrics.halt_card(evs, clock, w),
             "milestone_timing": metrics.milestone_timing(evs, clock, w), "verify_card": metrics.verify_card(evs, w),
             "tail_window_bytes": model.settings.tail_window_bytes,
-            "framework": {"lock_version": lockv if isinstance(lockv, str) else None, "registry": rows,
-                          "unequal": [r["checkout_path"] for r in rows if isinstance(lockv, str) and r["framework_version"] != lockv],
-                          "formula": "the registry row's framework_version beside the version the project's framework.lock records (the "
-                                     "snapshot's framework_lock_version); unequal is marked (register row 526)"},
+            "framework": {"lock_version": lock, "registry": rows,
+                          "unequal": [r["checkout_path"] for r in compared if lock is not None and r["reading"] in ("unequal", "version not recorded")],
+                          # validator round 1: with no row's folder present nothing is compared -- neither equal nor unequal
+                          "equal": None if lock is None or not compared else all(r["reading"] == "equal" for r in compared),
+                          "not_recorded": [r["checkout_path"] for r in compared if r["reading"] == "version not recorded"],
+                          "removed": [r["checkout_path"] for r in rows if not r["present"]],
+                          "formula": "each registry row's framework_version beside the version the project's framework.lock records (the "
+                                     "snapshot's framework_lock_version), over the rows whose checkout folder exists: equal only when every "
+                                     "one of them equals the lock; null or '' reads version not recorded, never equal; a row whose folder is "
+                                     "gone is listed as removed and compared with nothing (register rows 526, 564; ruling (n))"},
         }
     except Exception as e:
         body["face_fault"] = _fault(e)

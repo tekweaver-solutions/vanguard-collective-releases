@@ -32,13 +32,13 @@ from hook_config import (
 # pydantic live in user-site, which the round-trip test's deliberate env
 # scrub ({PATH,SYSTEMROOT,TEMP,TMP}; APPDATA dropped) makes invisible —
 # and the scrub is correct per the hook's argv-only contract, so the fix
-# is the interpreter, not the env. tools/.venv carries yaml + pydantic
+# is the interpreter, not the env. tools/ui/.venv carries yaml + pydantic
 # by lock, so the venv interpreter resolves them without user-site
 # anchors. Only the round-trip test (below) spawns the hook; the rest of
 # this file exercises hook_config shape and does not need the venv, so
 # the skipif is per-test rather than module-level.
 _VENV_PYTHON = (
-    Path(__file__).resolve().parent.parent / ".venv" / "Scripts" / "python.exe"
+    Path(__file__).resolve().parent.parent / "ui" / ".venv" / "Scripts" / "python.exe"
 )
 
 
@@ -498,8 +498,8 @@ def test_bounds_path_in_argv_is_posix_form(tmp_path: Path) -> None:
 @pytest.mark.skipif(
     not _VENV_PYTHON.exists(),
     reason=(
-        "framework venv absent at tools/.venv/Scripts/python.exe; run "
-        "`uv sync` in tools/ — hook tests target the venv interpreter"
+        "framework venv absent at tools/ui/.venv/Scripts/python.exe; run "
+        "install.ps1's Python set (INSTALL.md section 5) — hook tests target the venv interpreter"
     ),
 )
 def test_round_trip_with_gateway_hook_allowed(tmp_path: Path) -> None:

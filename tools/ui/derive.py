@@ -8,6 +8,8 @@ that does not parse gives None, so no line of any one feed can make an answer fa
 """
 import heapq
 import json
+import os
+import re
 from datetime import datetime
 
 
@@ -70,6 +72,105 @@ def mission_name(events):
 def latest_snapshot(events):
     snaps = of_kind(events, "mission_snapshot")
     return snaps[-1] if snaps else None
+
+
+# RELEASE-5 group B, FRESHNESS (RB-15, RB-16): THE ONE DOCUMENTED COMMAND THAT WRITES A FRESH SNAPSHOT, and how a reading the
+# newest snapshot does not carry is said. Every writer of a mission_snapshot line goes through
+# tools/lam/mission-telemetry.ps1's Write-MissionSnapshot, which appends only when the derived state moved: mission.ps1 init
+# and register; every stage verb that commits through mission-lib's Invoke-AtomicCommit (close-milestone, green-gate-seed,
+# reopen, reclose, reclaim, prune-objects, promote-contract, ledger-append, spec-bump, spec-accept); spec-accept's own
+# commit; design-start; the dispatch entry and the LAM runner's open, close and rejection close; mission-gate revoke,
+# settle and approve / reapprove; transcribe-validator-results -Write. mission verify and the hooks write none. The command
+# an operator runs to write one now is mission.ps1 register (INSTALL.md section 7, the user guide section 12).
+# RELEASE-5 group B, amendment 3 (RB-28, ruling (bj)): THE COMMAND NAMES THE PROJECT. Where the dashboard knows the folder the
+# reading comes from -- the registry row's checkout_path of the stream that wrote the snapshot read (every event carries its
+# row's folder as "root"), or the mission's one checkout where no snapshot is read -- the command carries that folder in the
+# placeholder's place, quoted as PowerShell reads a literal (single quotes, a quote inside doubled), so a folder holding a
+# space pastes as printed. Where it does not know the folder, it says so in words; no angle-bracket placeholder is printed.
+# Validator round 1: every character PowerShell reads as a single quote -- the ASCII one and U+2018, U+2019, U+201A, U+201B --
+# is doubled; and the head is .\mission.ps1, as PowerShell runs a script from the release folder (the user guide writes it so).
+COMMAND_HEAD = ".\\mission.ps1 register -Target"
+PS_SINGLE_QUOTES = "'\u2018\u2019\u201a\u201b"
+FRESH_SNAPSHOT_COMMAND = (COMMAND_HEAD + " followed by the project folder in single quotes -- the dashboard does not know which "
+                          "folder this reading comes from")
+# the payload keys the group B contract adds (each 1.3.1 snapshot carries them, null or empty where nothing is read)
+ADDED_SNAPSHOT_KEYS = ("assertion_reading", "goal_verdicts", "halt_reading", "milestone_tally", "spec_version")
+# amendment 3 (RB-26): the readings it adds inside a snapshot's entries -- each assertion's evidence, each milestone's count of
+# assertions held on the record alone; a snapshot an earlier writer wrote (1.3.1 or 1.3.0) carries neither
+ADDED_ENTRY_READINGS = ("assertion_detail.evidence", "milestone_tally.assertions_record_alone")
+EVIDENCE_SINCE = "1.3.2"
+
+
+def quote_ps(path):
+    """A folder as PowerShell reads a literal argument: in single quotes, each character PowerShell reads as a single quote
+    doubled."""
+    return "'" + "".join(c + c if c in PS_SINGLE_QUOTES else c for c in str(path)) + "'"
+
+
+def reading_root(events, roots=None):
+    """RB-28: the folder of the checkout the reading comes from -- the latest snapshot's stream's checkout_path; with no
+    snapshot, the mission's one checkout (roots: the checkout paths of the mission's streams, else those its events carry);
+    None where it is not known (no snapshot and several checkouts, or none)."""
+    snap = latest_snapshot(events)
+    if snap is not None:
+        r = snap.get("root")
+        return r if isinstance(r, str) and r else None
+    rs = sorted({r for r in (roots if roots is not None else [e.get("root") for e in events]) if isinstance(r, str) and r})
+    return rs[0] if len(rs) == 1 else None
+
+
+def fresh_command(root):
+    """RB-28: the documented command that writes a fresh snapshot, naming the checkout's folder where it is known."""
+    return COMMAND_HEAD + " " + quote_ps(root) if root else FRESH_SNAPSHOT_COMMAND
+
+
+def not_in_snapshot(events, since="1.3.1", root=None):
+    """RB-16, RB-26: how a reading the newest snapshot does not carry is said -- with the command that writes a fresh one, for
+    the checkout the reading comes from (root, else the reading's own)."""
+    cmd = fresh_command(root if root else reading_root(events))
+    return "not in this snapshot: its writer predates %s -- write a fresh one with %s" % (since, cmd)
+
+
+def snapshot_lacks(events, key):
+    """True when there IS a latest snapshot and it does not carry the 1.3.1 key (a snapshot an earlier writer wrote)."""
+    snap = latest_snapshot(events)
+    return snap is not None and key not in (snap["line"].get("payload") or {})
+
+
+def snapshot_lacks_entry(events, reading):
+    """amendment 3 (RB-26): True when there IS a latest snapshot and it does not carry the reading "<map>.<key>" -- the map
+    absent, or any of its entries without the key (a snapshot the 1.3.1 or the 1.3.0 writer wrote). A map with no entries
+    lacks nothing."""
+    snap = latest_snapshot(events)
+    if snap is None:
+        return False
+    m, k = reading.split(".", 1)
+    v = (snap["line"].get("payload") or {}).get(m)
+    if not isinstance(v, dict):
+        return True
+    return any(not (isinstance(e, dict) and k in e) for e in v.values())
+
+
+def snapshot_reading(events, roots=None):
+    """RB-15: the snapshot the readings come from -- its stream, seq and ts -- the number of the mission's feed lines after it
+    in feed order, the command that writes a fresh one (RB-28: naming the checkout's folder where it is known), and the 1.3.1
+    keys it does not carry (RB-16) and the readings of amendment 3 it does not carry (RB-26)."""
+    snap = latest_snapshot(events)
+    f = ("the mission's latest mission_snapshot in feed order (derive.ordered); lines_after = the mission's lines after it in that "
+         "order; missing = the keys the 1.3.1 writer adds that it does not carry; missing_since_132 = the readings the 1.3.2 writer "
+         "adds that it does not carry; command = the one documented command that writes a fresh one (it appends only when the "
+         "derived state moved), naming the folder of the checkout the snapshot came from")
+    root = reading_root(events, roots)
+    cmd = fresh_command(root)
+    if snap is None:
+        return {"stream_key": None, "seq": None, "ts": None, "lines_after": len(events), "command": cmd, "root": root, "missing": None,
+                "missing_since_132": None, "not_in_snapshot": not_in_snapshot(events, root=root), "formula": f}
+    at = next(i for i, e in enumerate(events) if e is snap)
+    p = snap["line"].get("payload") or {}
+    return {"stream_key": snap["key"], "seq": snap["seq"], "ts": snap["ts"], "lines_after": len(events) - at - 1, "command": cmd, "root": root,
+            "missing": sorted(k for k in ADDED_SNAPSHOT_KEYS if k not in p),
+            "missing_since_132": [r for r in ADDED_ENTRY_READINGS if snapshot_lacks_entry(events, r)],
+            "not_in_snapshot": not_in_snapshot(events, root=root), "formula": f}
 
 
 def assertions(events):
@@ -191,12 +292,52 @@ def stopped_early(events):
     return [out[k] for k in sorted(out)]
 
 
+def _session_join(events):
+    """RELEASE-5 group B (RB-12): session id -> dispatch id, from the dispatch_opened lines that carry a session_id. The LAM
+    runner's opened line names the dispatch (D-x) and its session (session-D-x); its finalized line, written by the hooks,
+    names the session as its dispatch_id. A dispatch_id that is itself an opened line's dispatch_id is never re-read."""
+    opened, join = set(), {}
+    for e in of_kind(events, "dispatch_opened"):
+        p = e["line"]["payload"]
+        opened.add(_id(p["dispatch_id"]))
+        if p.get("session_id") is not None:
+            join[_id(p["session_id"])] = _id(p["dispatch_id"])
+    return {s: d for s, d in join.items() if s not in opened}
+
+
 def dispatches(events):
-    """dispatch id -> {opened, finalized (the latest)}."""
-    out = {}
+    """dispatch id -> {opened, finalized (the latest)}. RELEASE-5 group B (RB-12): a dispatch_finalized whose dispatch_id is
+    an opened line's session_id belongs to that opened line's dispatch; a finalized line no opened line names stays its
+    own entry, with no opened line -- never an open dispatch."""
+    out, join = {}, _session_join(events)
     for e in of_kind(events, "dispatch_opened", "dispatch_finalized"):
-        d = out.setdefault(_id(e["line"]["payload"]["dispatch_id"]), {"opened": None, "finalized": None})
+        did = _id(e["line"]["payload"]["dispatch_id"])
+        if e["kind"] == "dispatch_finalized":
+            did = join.get(did, did)
+        d = out.setdefault(did, {"opened": None, "finalized": None})
         d["opened" if e["kind"] == "dispatch_opened" else "finalized"] = e
+    return out
+
+
+def manifests(events):
+    """RELEASE-5 group B (RB-13): the sealed manifests, in their own terms, on the session they belong to -- the latest
+    dispatch_finalized line of each session (its payload's dispatch_id is the session the hooks finalized):
+    [{session, dispatch_id (the joined opened line's, else None), manifest_state, partial, capture_gaps_count, seq, ts}], by
+    session. capture_gaps_count is the number of gap RECORDS the hooks' Get-EvidenceCaptureGaps wrote for the session's
+    manifest (its capture-gaps.yaml sidecar), each a place where the evidence store and the session's own record of its calls
+    disagree: a call slot allocated with no log entry, the session's failed tool calls (the post-tool hook is not called for a
+    failed call; one record covers them all), a count surplus or a denial mismatch, or a transcript that could not be compared
+    at all (validator round 1). partial is true when the manifest is not FINALIZED or has a capture gap."""
+    join, latest = _session_join(events), {}
+    opened = {_id(e["line"]["payload"]["dispatch_id"]) for e in of_kind(events, "dispatch_opened")}
+    for e in of_kind(events, "dispatch_finalized"):
+        latest[_id(e["line"]["payload"]["dispatch_id"])] = e
+    out = []
+    for sid, e in sorted(latest.items()):
+        p = e["line"]["payload"]
+        gaps = as_int(p.get("capture_gaps_count"))
+        out.append({"session": sid, "dispatch_id": join.get(sid, sid if sid in opened else None), "manifest_state": p.get("manifest_state"),
+                    "partial": p.get("partial") is True, "capture_gaps_count": gaps, "seq": e["seq"], "ts": e["ts"]})
     return out
 
 
@@ -228,6 +369,96 @@ def gates(events):
 def latest_verify(events):
     v = of_kind(events, "verify_result")
     return v[-1] if v else None
+
+
+# RELEASE-5 group B (RB-7): THE STOP EVALUATOR'S READING OF A VERIFY RUN. Its verify_pass_or_dib detector runs mission verify
+# and writes "mission verify exited <n> -> <PASS | PASS-DIB | REFUSE>. admitted: <subject>, ... <the boundary it disclosed>"
+# into the goal verdict on disk, which the 1.3.1 snapshot carries (goal_verdicts). The verdict file names no verify run id,
+# so a reading is joined to a verify_result by what both state.
+VERIFY_READING_RULE = (
+    "a goal verdict's verify_pass_or_dib reading read the newest verify_result V when: its evaluated_at is at or after V's ts "
+    "and no other verify_result falls between them; it names verify's exit for V's verdict (0 for PASS, 1 for REFUSE); and, "
+    "where it admitted V as PASS-DIB, the subjects it admitted are exactly V's refused_by; and, where the goal file's "
+    "verify_pass_or_dib detector declares the artifact it runs verify against, V's against is that artifact (validator round 1: "
+    "a newer run against another artifact is not the run the evaluator read). A reading admits the run when its "
+    "detector passed with PASS or PASS-DIB; an admitted refusal is shown beside the evaluator's word and boundary, not as "
+    "blocking. Of several such readings the latest evaluated_at is shown. Validator round 2: the goal verdicts read are those "
+    "of the newest snapshot of V's OWN stream -- a checkout's evaluator runs verify in that checkout, so a run made in another "
+    "of the mission's checkouts is never joined to it -- and the other runs that may not fall between are that stream's; of a "
+    "goal's several verify_pass_or_dib detectors (in the order the goal declares them, one verdict entry each) the one read is "
+    "the one whose declared artifact is V's. THE LIMITS the record leaves (the verdict names no run): a run of the same "
+    "checkout against the same artifact falling between the run the evaluator read and its evaluated_at is joined -- for "
+    "PASS-DIB only where its refused subjects equal the ones admitted; for PASS or REFUSE on the verdict word alone, so a "
+    "REFUSE reading may be shown beside another refused run, which it never admits; where the evaluator's own verify run "
+    "wrote no verify_result line, its reading is joined to the run before it on the same terms; and the detectors are "
+    "paired with the goal file as it stands when the snapshot is written, so a goal file edited after the evaluation shifts "
+    "the pairing. An admitting reading of a run outside these is never joined (validator round 3).")
+def _norm_rel(p):
+    """A relative path as both writers spell it, for comparison: forward slashes, no leading ./, case folded."""
+    s = str(p or "").strip().replace("\\", "/")
+    while s.startswith("./"):
+        s = s[2:]
+    return s.lower()
+
+
+_VERIFY_DETAIL = re.compile(r"^mission verify exited (-?\d+) -> (PASS-DIB|PASS|REFUSE)\.(?: admitted: ((?:\S+, )*\S+))?\s*(.*)$", re.S)
+
+
+def verify_reading(events):
+    """The evaluator's reading of the newest verify_result (VERIFY_READING_RULE): {goal, word, ok, admits, admitted,
+    boundary, evaluated_at, goal_verdict, file}, or None when no goal verdict the latest snapshot carries read that run."""
+    v = latest_verify(events)
+    if v is None:
+        return None
+    p, vt = v["line"].get("payload") or {}, parse_ts(v["ts"])
+    if vt is None:
+        return None
+    # validator round 2: the run's own stream -- its newest snapshot's goal verdicts, its other runs
+    own = [e for e in events if e["key"] == v["key"]]
+    others = [parse_ts(e["ts"]) for e in of_kind(own, "verify_result") if e is not v]
+    best = None
+    for goal, g in sorted(snapshot_map(latest_snapshot(own), "goal_verdicts").items()):
+        if not isinstance(g, dict):
+            continue
+        at = parse_ts(g.get("evaluated_at")) if isinstance(g.get("evaluated_at"), str) else None
+        if at is None or at < vt or any(t is not None and vt < t <= at for t in others):
+            continue
+        dets = g.get("verify_detectors") if isinstance(g.get("verify_detectors"), list) and g.get("verify_detectors") else [g.get("verify")]
+        for r in dets:
+            x = _detector_reading(goal, g, r, p)
+            if x is not None:
+                if best is None or at > parse_ts(best["evaluated_at"]):
+                    best = x
+                break
+    return best
+
+
+def _detector_reading(goal, g, r, p):
+    """One verify_pass_or_dib detector's reading of the run p, or None when it did not read that run (VERIFY_READING_RULE)."""
+    det = r.get("detail") if isinstance(r, dict) else None
+    m = _VERIFY_DETAIL.match(det) if isinstance(det, str) else None
+    if m is None:
+        return None
+    # validator round 1: and the artifact -- the goal file's verify_pass_or_dib detector declares the `against` it runs
+    # verify with; a run against another artifact is not the run that detector read
+    decl = r.get("against") if isinstance(r.get("against"), str) and r.get("against").strip() else None
+    if decl is not None and _norm_rel(decl) != _norm_rel(p.get("against")):
+        return None
+    code, word = int(m.group(1)), m.group(2)
+    admitted = [x.strip() for x in m.group(3).split(",")] if m.group(3) else []
+    rb = p.get("refused_by") if isinstance(p.get("refused_by"), list) else None
+    if p.get("verdict") == "PASS":
+        same = code == 0 and word == "PASS"
+    elif p.get("verdict") == "REFUSE":
+        same = code == 1 and (word == "REFUSE" or (word == "PASS-DIB" and rb is not None and sorted(str(x) for x in rb) == sorted(admitted)))
+    else:
+        same = False
+    if not same:
+        return None
+    ok = r.get("ok") is True
+    return {"goal": goal, "word": word, "ok": ok, "admits": ok and word in ("PASS", "PASS-DIB"), "admitted": admitted,
+            "boundary": m.group(4).strip() or None, "evaluated_at": g.get("evaluated_at"), "goal_verdict": g.get("verdict"), "file": g.get("file"),
+            "against": decl, "against_checked": decl is not None}
 
 
 def main_tip_run(stream_events):
@@ -295,6 +526,42 @@ def assertion_rounds(events):
     return out
 
 
+def assertion_record(events):
+    """RELEASE-5 group B (RB-1..RB-5): assertion id -> {rounds, reason, source} for the Project page and the API.
+    rounds = [{round, verdict}] in round order, verdict confirmed / refuted (None for a word that is neither), from
+    assertion_rounds (the assertion_result lines and the latest snapshot's assertion_detail, which the 1.3.1 writer reads
+    from the spawn ledger's bound results by the close tool's own reader); reason and source = the latest snapshot's
+    assertion_detail entry's, None where it carries none."""
+    det = snapshot_map(latest_snapshot(events), "assertion_detail")
+    out = {}
+    for aid, rs in assertion_rounds(events).items():
+        out.setdefault(aid, {})["rounds"] = [{"round": r, "verdict": judged(rs[r])} for r in sorted(rs)]
+    for aid, d in det.items():
+        x = out.setdefault(aid, {})
+        x.setdefault("rounds", [])
+        if isinstance(d, dict):
+            x["reason"] = d.get("reason") if isinstance(d.get("reason"), str) else None
+            x["source"] = d.get("source") if isinstance(d.get("source"), str) else None
+            # amendment 3 (RB-25, RB-26): the evidence the assertion stands on, in the snapshot's own word, and the path read
+            # for it -- and whether the snapshot carries the reading at all (a 1.3.1 or 1.3.0 writer's does not)
+            # (validator round 2: a value that is not a string -- a malformed snapshot -- reads as no word, never a fault)
+            x["evidence"] = d.get("evidence") if isinstance(d.get("evidence"), str) and d.get("evidence") in EVIDENCE_WORDS else None
+            x["evidence_path"] = d.get("evidence_path") if isinstance(d.get("evidence_path"), str) else None
+            x["evidence_read"] = "evidence" in d
+    return out
+
+
+# amendment 3 (RB-24): the four words an assertion's evidence is said in, each with what it proves
+EVIDENCE_WORDS = {
+    "working copy": "the result file the complete line binds, where it binds it, re-hashed equal to the bound sha256",
+    "archive copy": "a file of the result's own name under the validators archive (.mission-runtime/lam/validators), re-hashed "
+                    "equal to the bound sha256 -- the working copy is gone and the milestone is closed",
+    "record alone": "the spawn ledger's complete line and the verdict it states, with no copy of the bound bytes found where they "
+                    "were read -- the working copy is gone and the milestone is closed; the bytes are not verified",
+    "old results folder": "a result in .mission/validator-results, for an assertion the spawn ledger does not bind",
+}
+
+
 def assertion_features(events):
     """assertion id -> feature id: the contract's own feature_id (the latest snapshot's assertion_detail) where it names one,
     else derive.assertions' binding (assertion_result.feature, else a dispatch_opened that targeted it)."""
@@ -309,10 +576,19 @@ def feature_members(events):
     """feature id (None for unbound) -> [{assertion_id, verdict, round}]: each assertion's latest verdict -- its latest
     round's, else its latest status (the snapshot's or an assertion_result's) -- in assertion id order."""
     st, rounds, feat = assertions(events), assertion_rounds(events), assertion_features(events)
+    # RELEASE-5 group B (validator round 1): over a 1.3.1 snapshot -- which reads each status by the close tool's own rule --
+    # an assertion's verdict IS its status (green confirmed, red refuted, anything else not judged); its rounds are its
+    # history, never its verdict. An assertion held not judged is never served "confirmed" from an earlier round.
+    # Validator round 3: over ANY snapshot -- one page's figures (the feature roll-up, the Assertions tile, the milestones) read
+    # one verdict per assertion, its status; over a 1.3.0 snapshot the features panel says the trusted record's reading is
+    # not in it (views.features_note)
+    by_status = latest_snapshot(events) is not None
     out = {}
     for aid in sorted(set(st) | set(rounds)):
         rs = rounds.get(aid) or {}
-        if rs:
+        if by_status and aid in st:
+            verdict, rnd = judged(st[aid]["status"]), (max(rs) if rs else None)
+        elif rs:
             last = max(rs)
             verdict, rnd = judged(rs[last]), last
         else:
@@ -407,13 +683,112 @@ def milestone_times(events):
 HALT_PRECEDENCE = ("raised_at: the HALT's own Raised stamp, else the halt_raised line's ts, else the HALT file's last write time "
                    "(a HALT under .mission-runtime is never committed); answered_at: the HALT's own Answered/Resolved stamp, else the "
                    "halt_resolved line's ts (ANSWERED or RESOLVED), else the ruling-citation's cited_at. A HALT is answered when a "
-                   "halt_resolved (ANSWERED or RESOLVED) follows its halt_raised or the snapshot reads an unrevoked halt-ruling gate for it.")
+                   "halt_resolved (ANSWERED or RESOLVED) follows its halt_raised or the snapshot reads an unrevoked halt-ruling gate for it. "
+                   "RELEASE-5 (ruling (m)): a HALT the snapshot reads as set_aside -- the stop evaluator's own detector does not count it "
+                   "and no ruling record answers it -- is counted apart, never as open. A HALT raised after that snapshot is decided "
+                   "by its place, as the evaluator's rule decides it: under a place the snapshot's scan set aside (scratch-copies, a "
+                   "nested mission root) or outside the homes it scans, apart; in a home it scans, open. Amendment 1: each HALT is "
+                   "decided by the newest snapshot of the checkout that holds it, and that snapshot's reading is the evaluator's for "
+                   "the governing goal -- the one goal the mission's Stop hook runs: a HALT that goal's legacy allowlist answers is "
+                   "answered by the allowlist, counted apart from the HALTs a gate answers, never open.")
+
+
+def set_aside_halts(events):
+    """RELEASE-5 group B (RB-8): the HALT ids read as set_aside -- HALT files the stop evaluator's own detector does not count
+    and no ruling record answers (ruling (m): shown apart, never as open) -- each by its own checkout's newest snapshot."""
+    return {k for k, v in halt_times(events).items() if v["state"] == "set_aside"}
+
+
+# amendment 1 (RB-8): of one HALT id read in two checkouts, the state shown -- open where any checkout's evaluator counts it
+HALT_STATE_RANK = {"open": 5, "answered": 4, "answered_allowlist": 3, "withdrawn": 2, "set_aside": 1}
+# amendment 1 (RB-17): the states a 1.3.1 snapshot's halts map may carry, each the stop evaluator's reading
+SNAPSHOT_HALT_STATES = ("open", "answered", "answered_allowlist", "set_aside")
+
+
+def checkout_snapshots(events):
+    """amendment 1: stream key -> the newest mission_snapshot of that stream (one checkout of the mission), for each stream
+    that has one, in key order."""
+    out = {}
+    for e in of_kind(events, "mission_snapshot"):
+        out[e["key"]] = e
+    return {k: out[k] for k in sorted(out)}
+
+
+def goal_readings(events):
+    """amendment 1 (RB-17): per checkout, the governing goal its newest snapshot read -- [{checkout (the folder's name),
+    goal (the snapshot's halt_reading.goal: read, goal, goal_file, named_in, why, ...) or None, note}]; note says the reading
+    is not in a snapshot an earlier writer wrote (RB-16), with the command that writes a fresh one."""
+    out = []
+    snaps = checkout_snapshots(events)
+    for key, snap in snaps.items():
+        hr = (snap["line"].get("payload") or {}).get("halt_reading")
+        g = hr.get("goal") if isinstance(hr, dict) else None
+        out.append({"checkout": os.path.basename(str(snap.get("path") or "").rstrip("\\/")) or None, "goal": g if isinstance(g, dict) else None,
+                    "note": None if isinstance(g, dict) else "the governing goal the HALT rule was read for is " + not_in_snapshot(events, root=snap.get("root"))})
+    # validator round 1 (RB-16 over RB-8): a checkout with HALT lines and NO snapshot of its own (a work tree the LAM runner
+    # registered and no verb has snapshotted) is said too -- its HALTs are decided by place, by the evaluator's default rule
+    by_key = {}
+    for e in of_kind(events, "halt_raised", "halt_resolved"):
+        if e["key"] not in snaps:
+            by_key.setdefault(e["key"], e)
+    for key in sorted(by_key):
+        name = os.path.basename(str(by_key[key].get("path") or "").rstrip("\\/")) or None
+        out.append({"checkout": name, "goal": None,
+                    "note": ("checkout %s has no snapshot of its own: its HALTs are decided by their place, by the stop evaluator's "
+                             "default rule (.mission-runtime/halts and .mission-runtime/lam, scratch copies and nested mission roots set "
+                             "apart), and no governing goal is read for it -- write one with %s" % (name, fresh_command(by_key[key].get("root"))))})
+    return out
+
+
+# validator round 1 (RB-8): the stop evaluator's default scan, as a reader for a checkout no snapshot of its own has read:
+# its two homes, and the scratch-copies tree its rule always sets apart (a nested mission root is read from the checkout's disk)
+DEFAULT_SCAN_READER = {"line": {"payload": {"halt_reading": {"scan_homes": [".mission-runtime/halts", ".mission-runtime/lam"],
+                                                             "excluded_roots": [".mission-runtime/scratch-copies"]}}}}
+
+
+def halt_holders(events):
+    """validator round 1 (RB-8): halt id -> the stream key (the checkout) whose reading halt_times shows for it."""
+    return _halt_times_by_checkout(events)[1]
 
 
 def halt_times(events):
-    """halt id -> {state (open / answered / withdrawn), raised_at, raised_basis, answered_at, answered_basis}: the feed's
-    halt_raised / halt_resolved lines and the latest snapshot's halts map (the artifacts), by HALT_PRECEDENCE."""
+    """halt id -> {state (open / answered / withdrawn / set_aside), raised_at, raised_basis, answered_at, answered_basis}: the
+    feed's halt_raised / halt_resolved lines and the newest snapshot's halts map (the artifacts), by HALT_PRECEDENCE.
+    RELEASE-5 group B, amendment 1 (RB-8): EACH CHECKOUT ITS OWN SNAPSHOT. A HALT lives in one checkout's .mission-runtime
+    (never committed), and that checkout's stop evaluator is the one that counts it; so each stream -- one checkout of the
+    mission -- is read alone: its own lines and its own newest snapshot, as verify_reading reads a run's own stream. A
+    snapshot another checkout of the mission wrote moves no HALT of this one. A HALT id read in more than one checkout takes
+    the strongest state among them (HALT_STATE_RANK: open, then answered, withdrawn, set aside). Validator round 1: a
+    checkout with no snapshot of its own -- a work tree the LAM runner registers at spawn writes none -- is read by its own
+    lines, each HALT decided by its place under the stop evaluator's default rule (DEFAULT_SCAN_READER), wherever another
+    checkout of the mission carries a 1.3.1 snapshot (the dashboard then reads the evaluator's rule); a mission no 1.3.1
+    writer has snapshotted reads as 1.3.0 did."""
+    return _halt_times_by_checkout(events)[0]
+
+
+def _halt_times_by_checkout(events):
+    """(halt_times, halt_holders) -- see halt_times."""
+    streams = {}
+    for e in events:
+        streams.setdefault(e["key"], []).append(e)
+    by_place = any("halt_reading" in (s["line"].get("payload") or {}) for s in checkout_snapshots(events).values())
+    out, holder = {}, {}
+    for key in sorted(streams):
+        for hid, v in _halt_times_of_checkout(streams[key], by_place).items():
+            if hid not in out or HALT_STATE_RANK.get(v["state"], 0) > HALT_STATE_RANK.get(out[hid]["state"], 0):
+                out[hid], holder[hid] = v, key
+    return out, holder
+
+
+def _halt_times_of_checkout(events, by_place=False):
+    """halt_times over ONE stream's events (one checkout): its lines and its own newest snapshot; with no snapshot of its own
+    and by_place, its raised lines decided by place under the stop evaluator's default rule."""
     hs, art = halts(events), snapshot_map(latest_snapshot(events), "halts")
+    snap = latest_snapshot(events)
+    reader = None if snap is None or snapshot_lacks(events, "halt_reading") else snap
+    placer = DEFAULT_SCAN_READER if (snap is None and by_place) else None
+    pos = {id(e): i for i, e in enumerate(events)} if reader is not None else {}
+    snap_at = pos.get(id(snap), -1) if reader is not None else -1
     out = {}
     for hid in sorted(set(hs) | set(art)):
         f = hs.get(hid) or {"raised": None, "resolved": None}
@@ -437,9 +812,89 @@ def halt_times(events):
                 ans, ab = res["ts"], "the halt_resolved line's ts (%s)" % word
             elif isinstance(a.get("answered_at"), str):
                 ans, ab = a["answered_at"], "the ruling-citation's cited_at"
-        state = "answered" if answered else "withdrawn" if (res is not None and word == "WITHDRAWN") else "open"
+        state = "answered" if answered else "withdrawn" if (res is not None and word == "WITHDRAWN") else \
+            "set_aside" if a.get("state") == "set_aside" else "answered_allowlist" if a.get("state") == "answered_allowlist" else "open"
+        reason = a.get("reason") if isinstance(a.get("reason"), str) else None
+        # RELEASE-5 group B (validator round 1, ruling (m)): over a 1.3.1 snapshot -- whose HALT states are the stop
+        # evaluator's own reading -- the snapshot decides every HALT whose feed lines it already saw: a halt_resolved line
+        # before it does not outrank the evaluator (a gate revoked after its ANSWERED line reads open again), and a HALT the
+        # feed raised before it that its scan does not hold (under scratch-copies, say) is set apart, never open. A feed
+        # line AFTER the snapshot is newer than it and decides as before.
+        if reader is not None:
+            fe = res if res is not None else f["raised"]
+            newer = fe is not None and pos.get(id(fe), -1) > snap_at
+            if not newer:
+                if hid in art:
+                    state = a.get("state") if a.get("state") in SNAPSHOT_HALT_STATES else state
+                elif f["raised"] is not None and state == "open":
+                    state, reason = "set_aside", ("set aside: the stop evaluator's scan in the newest snapshot does not hold this HALT "
+                                                  "(it lies outside the places that scan reads, or is gone); never shown as open")
+                if state != "answered":
+                    ans, ab = None, None
+            elif state == "open" and f["raised"] is not None:
+                # validator round 2: a HALT raised AFTER the snapshot is decided by its place, as the evaluator's rule decides it
+                # -- on the PATH: a place that rule set aside in the snapshot's scan (its scratch-copies tree, a nested mission
+                # root it named) or outside the homes it scans is never open; in a home it scans, open until a fresh snapshot
+                # reads it (a new HALT file there moves the derived state, so the documented command writes one)
+                why = _halt_place(f["raised"]["line"].get("source_path"), reader, f["raised"].get("path"))
+                if why is not None:
+                    state, reason = "set_aside", ("set aside: raised after the newest snapshot, where the stop evaluator does not "
+                                                  "count it -- " + why + "; never shown as open")
+        elif placer is not None and state == "open" and f["raised"] is not None:
+            # validator round 1: a checkout no snapshot of its own has read -- each raised HALT by its place, under the stop
+            # evaluator's default rule, on the checkout's disk as it stands
+            why = _halt_place(f["raised"]["line"].get("source_path"), placer, f["raised"].get("path"))
+            if why is not None:
+                state, reason = "set_aside", ("set aside: no snapshot of this checkout reads it, and the stop evaluator's default rule "
+                                              "does not count it -- " + why.replace(" in the newest snapshot", "") + "; never shown as open")
         out[hid] = {"state": state, "raised_at": raised, "raised_basis": rb, "answered_at": ans, "answered_basis": ab}
+        if state in ("set_aside", "answered_allowlist"):
+            out[hid]["reason"] = reason
     return out
+
+
+HALT_SCAN_HOMES = (".mission-runtime/halts", ".mission-runtime/lam")
+
+
+def _halt_place(path, snap, checkout=None):
+    """Validator rounds 2, 3: why a HALT at <path> (relative to its checkout) is not counted by the stop evaluator -- None when
+    it is. By the places its scan in <snap> (a 1.3.1 mission_snapshot) recorded: a place it set aside, or outside the homes it
+    scans. Then, where the checkout folder is on this host, by the checkout's disk as it stands now, read only: a HALT no
+    longer at its path is not counted (moved out of the scanned planes, or gone), and one under a directory strictly below
+    its scan home that carries its own .mission\\ lies under a nested mission root. The rule is the evaluator's
+    (tools/lam/mission-goal-check.ps1 Get-HaltScanExclusion, decided on the path and on nothing a file says; its scan of the
+    homes, Get-OpenHalts); the evaluator cannot be called from this service, so its rule is applied here to its own
+    recorded places and to the disk it reads."""
+    if not isinstance(path, str) or not path.strip():
+        return None
+    hr = ((snap["line"].get("payload") or {}).get("halt_reading") or {}) if snap is not None else {}
+    homes = [h.replace("\\", "/").strip("/") for h in (hr.get("scan_homes") or HALT_SCAN_HOMES) if isinstance(h, str)]
+    p = _norm_rel(path)
+    for x in [_norm_rel(e) for e in (hr.get("excluded_roots") or []) if isinstance(e, str)]:
+        if x and (p == x or p.startswith(x + "/")):
+            return "it lies under %s, a place the evaluator's scan in the newest snapshot set aside" % x
+    home = next((h for h in homes if p.startswith(_norm_rel(h) + "/")), None)
+    if home is None:
+        return "it lies outside the homes the evaluator scans (%s)" % ", ".join(homes)
+    if isinstance(checkout, str) and checkout and os.path.isdir(checkout):
+        parts = [s for s in path.replace("\\", "/").split("/") if s and s != "."]
+        if not os.path.isfile(os.path.join(checkout, *parts)):
+            return "it is no longer at %s (moved out of the scanned planes, or gone)" % "/".join(parts)
+        below = parts[len(home.split("/")):]
+        d = os.path.join(checkout, *home.split("/"))
+        for seg in below[:-1]:
+            d = os.path.join(d, seg)
+            if os.path.isdir(os.path.join(d, ".mission")):
+                return "it lies under a nested mission root (it carries its own .mission\\) at %s" % os.path.relpath(d, checkout).replace("\\", "/")
+    return None
+
+
+def open_halt_ids(events):
+    """RELEASE-5 group B (validator rounds 1, 2): the HALTs every open figure counts -- the HALT card's, the HALTs-open KPI's,
+    the fleet's and the errors' -- one set: the halt_times states. Over a 1.3.1 snapshot those are the stop evaluator's own
+    reading, and newer feed lines decided by place; over an earlier snapshot, the 1.3.0 reading (which cannot tell the HALTs
+    the evaluator does not count apart, and the card says so) -- the card and the figures read the same set either way."""
+    return {k for k, v in halt_times(events).items() if v["state"] == "open"}
 
 
 # B-10 (register row 498): the kinds a verify_result's additive divergence_list entry may name. kept-equal (a kept file now

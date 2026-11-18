@@ -1,4 +1,4 @@
-# Vanguard Collective 1.3.0 -- Quickstart
+# Vanguard Collective 1.3.2 -- Quickstart
 
 The shortest correct path from nothing to an installed project, an initialised mission, a built
 smoke mission and a first acceptance reading. Every step is a command you run in **your own
@@ -42,7 +42,7 @@ Releases page, https://github.com/tekweaver-solutions/vanguard-collective-releas
 assets: `vanguard-collective-v<VERSION>.zip` (the versioned name; `<VERSION>` is the text of the
 release's `VERSION` file), the same archive as `vanguard-collective.zip` (the fixed name, so
 `.../releases/latest/download/vanguard-collective.zip` is always the latest), `SHA256SUMS` and
-`MEMBERS.sha256`. Download `vanguard-collective-v1.3.0.zip`, `SHA256SUMS` and `MEMBERS.sha256` from the
+`MEMBERS.sha256`. Download `vanguard-collective-v1.3.2.zip`, `SHA256SUMS` and `MEMBERS.sha256` from the
 release into `C:\dl`, from the page or with the GitHub CLI:
 
 ```powershell
@@ -54,7 +54,7 @@ Check the ZIP against `SHA256SUMS`, whose first line names the ZIP and whose sec
 
 ```powershell
 $want = ((Get-Content C:\dl\SHA256SUMS)[0] -split '  ')[0]
-(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.3.0.zip).Hash.ToLower() -eq $want
+(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.3.2.zip).Hash.ToLower() -eq $want
 ```
 
 It must print `True`; if not, stop -- the archive is not the one that was released. Check
@@ -62,8 +62,8 @@ It must print `True`; if not, stop -- the archive is not the one that was releas
 expand:
 
 ```powershell
-Unblock-File C:\dl\vanguard-collective-v1.3.0.zip
-Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.3.0.zip -DestinationPath C:\dl\vanguard-collective-v1.3.0
+Unblock-File C:\dl\vanguard-collective-v1.3.2.zip
+Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.3.2.zip -DestinationPath C:\dl\vanguard-collective-v1.3.2
 ```
 
 Optionally check every expanded file against `MEMBERS.sha256` (one line per member,
@@ -71,8 +71,8 @@ Optionally check every expanded file against `MEMBERS.sha256` (one line per memb
 same number twice:
 
 ```powershell
-Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.3.0 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
-(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.3.0 -Recurse -File -Force).Count
+Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.3.2 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
+(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.3.2 -Recurse -File -Force).Count
 ```
 
 **B. A clone at the tag.** Clone outside the project folder and check out the release tag:
@@ -80,10 +80,10 @@ Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; 
 ```powershell
 git clone https://github.com/tekweaver-solutions/vanguard-collective-releases.git C:\src\vanguard-collective
 cd C:\src\vanguard-collective
-git checkout v1.3.0
+git checkout v1.3.2
 ```
 
-The installer accepts a clone only when HEAD is exactly the commit tag `v1.3.0` names and
+The installer accepts a clone only when HEAD is exactly the commit tag `v1.3.2` names and
 `git status --porcelain` prints nothing. Anything else -- a branch whose tip is not the tagged commit, commits on top of the tag, a
 local change, an untracked file -- is refused before anything is written, with exit 1 and a last
 line beginning `install.ps1: REFUSED:`. A local change or an untracked file is listed first: up to
@@ -93,7 +93,7 @@ local changes (git status --porcelain is not empty) -- install from a clean clon
 tag. Nothing was written.` Every other refusal of the source is that one `REFUSED:` line alone.
 Clone again, or put the clone back at the tag with nothing changed.
 
-Below, `<release>` is `C:\dl\vanguard-collective-v1.3.0` (A) or `C:\src\vanguard-collective` (B).
+Below, `<release>` is `C:\dl\vanguard-collective-v1.3.2` (A) or `C:\src\vanguard-collective` (B).
 
 ## 3. Install
 
@@ -108,7 +108,7 @@ Then install. From the ZIP, name it so `framework.lock` records its sha256; from
 `-ReleaseZip` out (the installer refuses it with a clone):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.0\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.3.0.zip
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.2\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.3.2.zip
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\src\vanguard-collective\install.ps1 -Target C:\work\my-project
 ```
 
@@ -121,10 +121,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File <release>\install.ps1 -Targe
 Exit codes: **0** done (or already installed and verified); **2** refused, nothing written -- every
 refused path is named with its reason; **3** `-Verify` found a difference; **1** the source or target
 could not be used; **4** every file and the lock are installed, but the dashboard's Python set is not
-(the reason and the `pip` command to run are printed). The installer never touches `.mission\` or
+(the reason is printed, and the two commands that build it: the one that makes `tools\ui\.venv` and the `pip` command
+that installs the set into it, each with the project's folder written in -- run both, in that order, from PowerShell; INSTALL.md section 5, "When
+`tools\ui\.venv` is missing", gives them too, and the release notes' known limits say when to use INSTALL.md's). The installer never touches `.mission\` or
 `.mission-runtime\`, and never overwrites a file it did not put there.
 
-The install ends by putting the dashboard's pinned Python packages into the project's `tools\.venv`
+The install ends by putting the dashboard's pinned Python packages into `tools\ui\.venv`, the framework's own folder,
 with `pip --require-hashes`, from PyPI: it needs CPython 3.14 for 64-bit Windows (`py -3.14`) and the
 network. Then `C:\work\my-project\tools\ui\vanguard.cmd ui` starts the dashboard on
 `http://127.0.0.1:8765/` (INSTALL.md section 5; the user guide's Dashboard section).
@@ -251,17 +253,34 @@ CHECKS instrument=WP-5 result=passed checks=<n> passed=<n> failed=0 skipped=0 li
 - `exit_code_agrees=True` -- the exit code is the one the count line implies.
 
 On a freshly installed project some named skips are expected, because what they need does not
-exist there. A reading of a fresh install of this release (a new git project with a bare origin,
-the install from the ZIP, `mission init`, the smoke mission built, the container engine up)
-failed nothing; with the Python set installed (`-Python`) it showed 67 named skips, without it
-(`-SkipPythonSet`) 70:
+exist there.
+A full reading of a fresh install of this release -- a new git project with a bare origin, the install from the ZIP
+with the Python set, `mission init`, `mission smoke` (MET), `mission register`, the smoke mission built, the container
+engine up -- failed nothing, and read:
+
+| instrument | passed | skipped (by name) |
+|---|---|---|
+| WP-1 | 42 of 43 | H-12 |
+| WP-2 | 75 of 78 | R-16, R-B, R-57 |
+| WP-3 | 69 of 77 | C-1k, C-1v, C-1w, C-1bd, C-1be, C-2c, C-2d, C-3e |
+| WP-4 | 67 of 70 | T-42, T-53, T-54 |
+| WP-5 | 10 of 10 | none |
+| WP-6 | 13 of 13 | none |
+| WP-7 | 25 of 89 | V-1 to V-20, L-1 to L-16, F-0, U-4, U-5, U-10, U-13 to U-16, U-20, U-21, U-24 to U-29, U-32, U-35, U-38, U-41, U-43, U-45, U-47 to U-52 |
+
+With the container engine down -- read at 1.3.1, on a fresh install of 1.3.1, and not taken again for 1.3.2, since no
+file 1.3.2 changed reads the engine -- WP-3 read 69 of 77 with 8 named skips -- **C-1aw** skipped in
+place of C-1bd, which it then measured -- and WP-5, WP-6 and WP-7's F-0 and U-1 to U-52 as with the engine up (10 of
+10, 13 of 13, and 25 passed with 28 skipped). Without the Python set (WP-5, WP-6 and WP-7's F-0 and U-1 to U-52 read),
+WP-5 and WP-6 read the same, and WP-7 skips eleven members more -- the members that need the Python set: U-19, U-22,
+U-30, U-31, U-33, U-34, U-39, U-40, U-42, U-44 and U-46. The skips, by reason:
 
 - **WP-1 H-12; WP-2 R-16, R-B; WP-3 C-1v, C-1w, C-2d** -- the project acceptance record they
   measure against (`docs/framework/LAM-ACCEPT.md`) is not in the checkout; no release after 0.2.0
   ships it.
-- **WP-2 R-57; WP-3 C-1k, C-1be** -- no venv with pytest to run the fixture's tests under: the
-  install's `tools\.venv` holds the dashboard's packages and no pytest (install pytest into it, or make
-  `src\.venv`, and they are measured).
+- **WP-2 R-57; WP-3 C-1k, C-1be** -- no `src\.venv` or `tools\.venv` with a `Scripts\python.exe`: each runs a
+  fixture's pytest under the first of the project's own environments that has one, and the install makes neither
+  (make one whose interpreter holds pytest and they are measured).
 - **WP-3 C-2c** -- no `.claude\settings.local.json` in the checkout (nor in the primary checkout).
 - **WP-3 C-3e** -- the runtime plane holds no `HALT-*` file, so there is nothing live to drive.
 - **WP-3 C-1bd** -- the container engine is up, so what a goal reads with it really down cannot be
@@ -270,15 +289,19 @@ failed nothing; with the Python set installed (`-Python`) it showed 67 named ski
   the release notes' known limits say why.
 - **WP-4 T-53, T-54** -- each re-read records of the project the framework was extracted from,
   which are not part of this distribution.
-- **WP-7 V-1 to V-20 and L-1 to L-16, U-20, U-24 and U-26** -- the dashboard service's tests and the dashboard's
-  source stay in the framework's development repository; the release carries the service and the built
-  dashboard only.
+- **WP-7 V-1 to V-20 and L-1 to L-16, U-20, U-24 and U-26, and the browser halves of U-35, U-41, U-43, U-45,
+  U-47, U-48, U-49 and U-50** -- the dashboard service's tests and the dashboard's source stay in the
+  framework's development repository; the release carries the service and the built dashboard only.
 - **WP-7 F-0, U-4, U-5, U-10, U-13 to U-16 and U-25** -- their fixtures are fresh checkouts made by
   `mission.ps1 init` and read `VERSION`, which stay in the release tree and are not installed.
-- **WP-7 U-28 and U-29** -- each runs the release tree's `mission.ps1`, which is not installed.
+- **WP-7 U-28, U-29 and U-52** -- each runs the release tree's `mission.ps1`, which is not installed.
 - **WP-7 U-27** -- it reads the release tree's `.gitignore`; an installed project's is its own.
-- **WP-7 U-21** -- it holds the settings template to its manifest row, and `provenance/` is not installed.
-- **WP-7 U-19, U-22 and U-30**, without the Python set only -- no `tools\.venv` interpreter to run the service on.
+- **WP-7 U-21 and U-51** -- each holds the settings template to its manifest row, and `provenance/` is not
+  installed.
+- **WP-7 U-32** -- no `-HardPatternFile`: the operator's HARD pattern file is never tracked.
+- **WP-7 U-38** -- an installed project holds `framework.lock` and not the user guide.
+- **WP-7 U-19, U-22, U-30, U-31, U-33, U-34, U-39, U-40, U-42, U-44 and U-46**, without the Python set only -- no
+  `tools\ui\.venv` interpreter to run the service on.
 
 Three members that failed on a fresh install of a build before 1.0.0 were cured in 1.0.0: WP-1
 H-26 (`mission init`

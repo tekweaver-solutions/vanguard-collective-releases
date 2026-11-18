@@ -2835,6 +2835,335 @@ function Add-HandoffAdmission {
     return $haOut
 }
 
+# =================================================================================================
+# THE OPERATOR-WAIT ARM: detector type `operator_wait_present` (ADR-046, Accepted -- the operator's
+# ratification adr-046-ratification.md, sha256 caa7aee8aa52a300007a8fbe79a3be1f6e35b4010262964f508fc724a3552c07;
+# tools/mission-cli/config/adr-046-operator-wait-stop-bound-to-a-gate.md is the rule, and this block builds it)
+# =================================================================================================
+# A seat that has done its part and waits on ONE operator act stops on a line, not on a placed file and not on
+# a HALT. THE HEAD: the FIRST line of <MissionRoot>\.mission-runtime\lam\STATUS.md, read as the handoff arm
+# reads it, beginning `OPERATOR WAIT` (ordinally), and reading whole
+#     OPERATOR WAIT gate <kind> <id> <minted|settled>
+#   <kind>   push, amendment-material, dispatch, supersession, completion-acceptance or reclose (ordinal);
+#            halt-ruling (a ruling is asked by a HALT) and witness-attested (ruling (w)) are refused
+#   <id>     one token of the dispatch runner's gate-id rule, 1 to 200 characters (the placement arm's bound)
+#   <state>  minted; or settled, for push only (ADR-046 Amendment 2, ruling (y): D8 (a) -- a settle of an
+#            amendment-material or reclose gate is not in the grammar and stays a HALT)
+# THE GATE: <MissionRoot>\.mission\gates\<kind>-<id>.yaml, read as ABSENT only when that is ESTABLISHED (a real
+# .mission folder that enumerates holding no `gates`, or a real `gates` folder that enumerates holding no entry
+# whose name folds to the leaf), as STANDING only when it is one UTF-8 file with one kind:, id: and binds_sha256:
+# that say this kind and this id, and as NOT ESTABLISHED otherwise -- which refuses.
+#   minted   met when the gate STANDS, in any state
+#   settled  (push) met when it stands consumed by the console's settle (consumed_basis `post-push witness by
+#            console`); REFUSED when consumed on another basis, revoked or disqualified; unmet while absent or open.
+#            The arm reads files under the mission root and calls nothing: no process, no compile, no temporary file.
+# THE RECORD: <MissionRoot>\.mission-runtime\lam\operator-wait-releases.jsonl (no HALT-* name), JSON lines this
+# arm alone writes, under ONE exclusive handle per evaluation: `operator_wait_released` whenever ANY evaluation
+# reads a triple met (the head's, or an earlier admitted one's), and `operator_wait_admitted` when a STOP HOOK
+# admits a triple not admitted before. A released triple (kind and state ordinal, id ASCII-folded) never admits
+# again; a line that does not parse refuses every head whose id it spells; a record that cannot be read refuses
+# every head; and while an admitted triple is unreleased no other triple admits (ruling (x), one at a time).
+# FAIL CLOSED, as the handoff arm: the seat writes the claim. A refused or released head fails no detector.
+# AS CURED AFTER THE BUILD'S VALIDATOR ROUND 1 (ADR-046 amended): ids by a case-sensitive match only; a settled
+# gate consumed on another basis, or carrying part of a consume block, is VOID -- refused, and where admitted recorded
+# `operator_wait_voided`, which frees the one-wait slot and never admits again; and an admission is re-decided under
+# the record's handle.
+$script:WaitArmType = 'operator_wait_present'
+$script:WaitAdmittedPrefix = 'OPERATOR WAIT'
+$script:WaitKinds = @('push', 'amendment-material', 'dispatch', 'supersession', 'completion-acceptance', 'reclose')
+$script:WaitSettleKinds = @('push')
+$script:WaitSettleWhy = 'settled is a condition of push gates only, the one kind whose settle the seat cannot withhold (ADR-046 D8 (a)); a settle of any other gate is asked by a HALT'
+$script:WaitIdPattern = '\A[A-Za-z0-9][A-Za-z0-9._-]*\z'
+$script:WaitIdMax = 200
+$script:WaitRecordRel = '.mission-runtime/lam/operator-wait-releases.jsonl'
+
+function Get-OperatorWaitGateReading {
+    # THE GATE OF ONE TRIPLE, AS READ: reading ABSENT, STANDS or NOT_ESTABLISHED; rel (its path under the mission
+    # root, '/'-separated); why (NOT_ESTABLISHED); consumed, revoked, disqualified, consumedAt, basis (STANDS).
+    param([Parameter(Mandatory = $true)][string]$MissionRoot, [Parameter(Mandatory = $true)][string]$Kind, [Parameter(Mandatory = $true)][string]$Id)
+    $grLeaf = $Kind + '-' + $Id + '.yaml'
+    $gr = [pscustomobject]@{ reading = 'NOT_ESTABLISHED'; rel = ('.mission/gates/' + $grLeaf); why = ''; consumed = $false; revoked = $false
+                             disqualified = $false; partial = $false; consumedAt = ''; basis = '' }
+    try {
+        $grMission = New-Object System.IO.DirectoryInfo((ConvertTo-PlacementExtendedPath -Path (Join-Path $MissionRoot '.mission')))
+        if (-not $grMission.Exists) { $gr.why = '.mission is not a folder under the mission root'; return $gr }
+        if (($grMission.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) { $gr.why = '.mission is a link'; return $gr }
+        $grTop = @($grMission.GetFileSystemInfos() | Where-Object { (ConvertTo-PlacementAsciiFold -Text ([string]$_.Name)) -ceq 'gates' })
+        if ($grTop.Count -eq 0) { $gr.reading = 'ABSENT'; $gr.why = '.mission holds no gates folder'; return $gr }
+        $grDir = $grTop[0]
+        if (($grTop.Count -ne 1) -or ([string]$grDir.Name -cne 'gates') -or (($grDir.Attributes -band [System.IO.FileAttributes]::Directory) -eq 0) -or
+            (($grDir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) {
+            $gr.why = '.mission/gates is not one real folder spelt gates'; return $gr
+        }
+        $grFold = ConvertTo-PlacementAsciiFold -Text $grLeaf
+        $grHits = @((New-Object System.IO.DirectoryInfo([string]$grDir.FullName)).GetFileSystemInfos() | Where-Object { (ConvertTo-PlacementAsciiFold -Text ([string]$_.Name)) -ceq $grFold })
+        if ($grHits.Count -eq 0) { $gr.reading = 'ABSENT'; return $gr }
+        $grHit = $grHits[0]
+        if (($grHits.Count -ne 1) -or ([string]$grHit.Name -cne $grLeaf) -or (($grHit.Attributes -band [System.IO.FileAttributes]::Directory) -ne 0) -or
+            (($grHit.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)) {
+            $gr.why = 'an entry of .mission/gates folds to ' + $grLeaf + ' but is not that one file spelt so'; return $gr
+        }
+        $grBytes = Read-PlacementBytes -Path (ConvertFrom-PlacementExtendedPath -Path ([string]$grHit.FullName))
+        $grText = (New-Object System.Text.UTF8Encoding($false, $true)).GetString($grBytes)
+        if ($grText.StartsWith([string][char]0xFEFF, [System.StringComparison]::Ordinal)) { $grText = $grText.Substring(1) }
+        $grKind = Get-PlacementGateField -Text $grText -Field 'kind'
+        $grId = Get-PlacementGateField -Text $grText -Field 'id'
+        $grSha = Get-PlacementGateField -Text $grText -Field 'binds_sha256'
+        $grClass = Get-LamGateClassForText -Text $grText
+        if (-not ($grKind.ok -and ($grKind.value -ceq $Kind) -and ([string]$grClass.kind -ceq $Kind))) { $gr.why = $grLeaf + ' does not carry one kind: ' + $Kind + ' that the shared classifier also reads'; return $gr }
+        if (-not ($grId.ok -and ($grId.value -ceq $Id))) { $gr.why = $grLeaf + ' does not carry one id: ' + $Id + ' spelt exactly so, and no mint can stand where it stands'; return $gr }
+        if (-not ($grSha.ok -and ($grSha.value -match '\A[0-9A-Fa-f]{64}\z'))) { $gr.why = $grLeaf + ' does not carry one binds_sha256 of 64 hex'; return $gr }
+        $gr.reading = 'STANDS'
+        $gr.consumed = Test-LamGateFieldSet -Text $grText -Field 'consumed_at'
+        $gr.revoked = Test-LamGateFieldSet -Text $grText -Field 'revoked_at'
+        $gr.disqualified = Test-LamGateFieldSet -Text $grText -Field 'witness_expired_at'
+        # PART OF A CONSUME BLOCK WITH consumed_at STILL null: the shape the console settle's first-stamp guard refuses
+        # (mission-gate.ps1:1177-1190), read by the shared predicate (lam-gate-class.ps1 Get-LamGateConsumeBlock).
+        $gr.partial = (-not $gr.consumed) -and (Get-LamGateConsumeBlock -Text $grText).any
+        if ($gr.consumed) {
+            $grAt = Get-ManifestFlatField -Text $grText -Field 'consumed_at'
+            $grBasis = Get-ManifestFlatField -Text $grText -Field 'consumed_basis'
+            $gr.consumedAt = [string]$grAt.value
+            $gr.basis = [string]$grBasis.value
+        }
+    } catch {
+        $gr.reading = 'NOT_ESTABLISHED'
+        $gr.why = 'the gate could not be read (' + (([string]$_.Exception.Message) -replace '[\r\n]+', ' ') + ')'
+    }
+    return $gr
+}
+
+function Get-OperatorWaitCondition {
+    # ONE TRIPLE'S CONDITION: outcome met, unmet, void or refused; read (what was read, printable); why (refused, void).
+    param([Parameter(Mandatory = $true)][string]$MissionRoot, [Parameter(Mandatory = $true)][string]$Kind, [Parameter(Mandatory = $true)][string]$Id,
+          [Parameter(Mandatory = $true)][string]$State)
+    $cd = [pscustomobject]@{ outcome = 'refused'; read = ''; why = '' }
+    $cg = Get-OperatorWaitGateReading -MissionRoot $MissionRoot -Kind $Kind -Id $Id
+    if ($cg.reading -eq 'NOT_ESTABLISHED') { $cd.read = $cg.rel + ': NOT ESTABLISHED'; $cd.why = 'the gate cannot be established: ' + $cg.why; return $cd }
+    if ($cg.reading -eq 'ABSENT') { $cd.read = $cg.rel + ': ABSENT' }
+    else {
+        $cd.read = $cg.rel + ': STANDS' + $(if ($cg.consumed) { ', consumed_at ' + $cg.consumedAt + ', consumed_basis ' + (ConvertTo-ManifestDisplayText -Text $cg.basis -Max 120) } else { ', consumed_at null' }) +
+                   $(if ($cg.revoked) { ', REVOKED' } else { '' }) + $(if ($cg.disqualified) { ', DISQUALIFIED' } else { '' })
+    }
+    if ($State -ceq 'minted') {
+        $cd.outcome = $(if ($cg.reading -eq 'STANDS') { 'met' } else { 'unmet' })
+        return $cd
+    }
+    # settled IS PUSH'S ALONE (ADR-046 Amendment 2): a head naming another kind is refused by the grammar before this is
+    # reached, and an admitted record line of another kind is read by push's rule (D-4).
+    $cdConsole = 'post-push witness by console'
+    if ($cg.reading -eq 'STANDS') {
+        # VOID (validator round 1 of the build, R2 and D2): first stamp wins, so a gate consumed on another basis, or
+        # carrying part of a consume block, is one no console settle can ever stamp -- a wait on it can never be met,
+        # and an admitted one is recorded void rather than held. A revoked or disqualified gate is not void: the
+        # operator's reapprove mints a fresh gate at the same path.
+        if ($cg.consumed) {
+            if ($cg.basis.StartsWith($cdConsole, [System.StringComparison]::Ordinal)) { $cd.outcome = 'met'; return $cd }
+            $cd.outcome = 'void'
+            $cd.why = 'the gate was consumed on another basis than the console''s settle, so no operator act can settle it now'; return $cd
+        }
+        if ($cg.partial) {
+            $cd.read += ', PART OF A CONSUME BLOCK'
+            $cd.outcome = 'void'
+            $cd.why = 'the gate carries part of a consume block with consumed_at null, which the console settle refuses (first stamp wins), so no operator act can settle it now'; return $cd
+        }
+        if ($cg.revoked) { $cd.why = 'the gate is revoked, and the console settle refuses a revoked gate'; return $cd }
+        if ($cg.disqualified) { $cd.why = 'the gate is disqualified (witness_expired_at)'; return $cd }
+    }
+    $cd.outcome = 'unmet'
+    return $cd
+}
+
+function Read-OperatorWaitRecord {
+    # THE RECORD, READ-ONLY: ok (false: it exists and cannot be read); why; lines (its line count); entries (event,
+    # kind, id, state, line) of the lines that parse as its records; loose (text, line) of every other non-blank line.
+    param([Parameter(Mandatory = $true)][string]$RecordPath)
+    $rr = [pscustomobject]@{ ok = $true; why = ''; lines = 0; entries = (New-Object System.Collections.Generic.List[object]); loose = (New-Object System.Collections.Generic.List[object]) }
+    if (-not (Test-Path -LiteralPath $RecordPath)) { return $rr }
+    try {
+        if (-not (Test-Path -LiteralPath $RecordPath -PathType Leaf)) { throw 'it is not a file' }
+        $rrText = (New-Object System.Text.UTF8Encoding($false)).GetString((Read-PlacementBytes -Path $RecordPath))
+    } catch {
+        $rr.ok = $false
+        $rr.why = 'the record ' + $script:WaitRecordRel + ' could not be read, so a prior release cannot be ruled out (' + (([string]$_.Exception.Message) -replace '[\r\n]+', ' ') + ')'
+        return $rr
+    }
+    $rrNo = 0
+    foreach ($rrLine in @($rrText -split "`n")) {
+        $rrNo++
+        if (-not $rrLine.Trim()) { continue }
+        $rrObj = $null
+        try { $rrObj = $rrLine | ConvertFrom-Json } catch { $rrObj = $null }
+        $rrNames = if (($null -ne $rrObj) -and ($rrObj -is [psobject])) { @($rrObj.PSObject.Properties.Name) } else { @() }
+        if ((@('event', 'kind', 'id', 'state') | Where-Object { $rrNames -cnotcontains $_ }).Count -eq 0 -and
+            (@('operator_wait_admitted', 'operator_wait_released', 'operator_wait_voided') -ccontains [string]$rrObj.event)) {
+            $rr.entries.Add([pscustomobject]@{ event = [string]$rrObj.event; kind = [string]$rrObj.kind; id = [string]$rrObj.id; state = [string]$rrObj.state; line = $rrNo })
+        } else { $rr.loose.Add([pscustomobject]@{ text = $rrLine; line = $rrNo }) }
+    }
+    $rr.lines = $rrNo - $(if ($rrText.EndsWith("`n")) { 1 } else { 0 })
+    return $rr
+}
+
+function Test-OperatorWaitSame {
+    # ONE TRIPLE: kind and state ordinal, the id ASCII case-folded.
+    param($A, [string]$Kind, [string]$Id, [string]$State)
+    return (([string]$A.kind -ceq $Kind) -and ([string]$A.state -ceq $State) -and ((ConvertTo-PlacementAsciiFold -Text ([string]$A.id)) -ceq (ConvertTo-PlacementAsciiFold -Text $Id)))
+}
+
+function Add-OperatorWaitRecordLines {
+    # THE RECORD'S ONE WRITE PER EVALUATION: every record of -Records appended UNDER ONE EXCLUSIVE HANDLE, the record
+    # re-read through that handle first, a record already there (same event and triple) not written twice. AN
+    # ADMISSION IS RE-DECIDED THERE (validator round 1 of the build, D4; Add-HandoffAdmission's way): it is not written
+    # where the re-read record now holds a release or a void of its triple, or another admitted triple that nothing
+    # released or voided -- what a second evaluation wrote between this one's reading and its write. Returns ok, why,
+    # lines (one line number per -Records item, in order; 0 for an admission not written) and admitWhy. Every failure
+    # is ok = $false: nothing half-told.
+    param([Parameter(Mandatory = $true)][string]$RecordPath, [Parameter(Mandatory = $true)][object[]]$Records)
+    $ar = [pscustomobject]@{ ok = $false; why = ''; lines = @(); admitWhy = '' }
+    $arStream = $null
+    try {
+        $arDir = Split-Path -Parent $RecordPath
+        if (-not (Test-Path -LiteralPath $arDir -PathType Container)) { New-Item -ItemType Directory -Path $arDir -Force -ErrorAction Stop | Out-Null }
+        $arStream = New-Object System.IO.FileStream($RecordPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        $arMem = New-Object System.IO.MemoryStream
+        try { $arStream.CopyTo($arMem); $arPrior = $arMem.ToArray() } finally { $arMem.Dispose() }
+        $arPriorText = (New-Object System.Text.UTF8Encoding($false)).GetString($arPrior)
+        $arHad = New-Object System.Collections.Generic.List[object]
+        $arNo = 0
+        foreach ($arL in @($arPriorText -split "`n")) {
+            $arNo++
+            if (-not $arL.Trim()) { continue }
+            try { $arO = $arL | ConvertFrom-Json; $arHad.Add([pscustomobject]@{ event = [string]$arO.event; kind = [string]$arO.kind; id = [string]$arO.id; state = [string]$arO.state; line = $arNo }) } catch { }
+        }
+        $arCount = 0
+        foreach ($arByte in $arPrior) { if ($arByte -eq 10) { $arCount++ } }
+        $arLead = ''
+        if (($arPrior.Length -gt 0) -and ($arPrior[$arPrior.Length - 1] -ne 10)) { $arLead = "`n"; $arCount++ }
+        $arWrite = New-Object System.Text.StringBuilder
+        [void]$arWrite.Append($arLead)
+        $arLines = @()
+        foreach ($arRec in $Records) {
+            $arOld = @($arHad | Where-Object { ($_.event -ceq [string]$arRec.event) -and (Test-OperatorWaitSame -A $_ -Kind ([string]$arRec.kind) -Id ([string]$arRec.id) -State ([string]$arRec.state)) } | Select-Object -First 1)
+            if ($arOld.Count -gt 0) { $arLines += [int]$arOld[0].line; continue }
+            if ([string]$arRec.event -ceq 'operator_wait_admitted') {
+                $arEnded = @($arHad | Where-Object { (@('operator_wait_released', 'operator_wait_voided') -ccontains $_.event) -and (Test-OperatorWaitSame -A $_ -Kind ([string]$arRec.kind) -Id ([string]$arRec.id) -State ([string]$arRec.state)) } | Select-Object -First 1)
+                if ($arEnded.Count -gt 0) { $ar.admitWhy = 'the record took a ' + $arEnded[0].event + ' of this triple at line ' + $arEnded[0].line + ' between the reading and the write'; $arLines += 0; continue }
+                $arOpenOther = @($arHad | Where-Object { ($_.event -ceq 'operator_wait_admitted') -and (-not (Test-OperatorWaitSame -A $_ -Kind ([string]$arRec.kind) -Id ([string]$arRec.id) -State ([string]$arRec.state))) } |
+                                 Where-Object { $arA = $_; @($arHad | Where-Object { (@('operator_wait_released', 'operator_wait_voided') -ccontains $_.event) -and (Test-OperatorWaitSame -A $_ -Kind $arA.kind -Id $arA.id -State $arA.state) }).Count -eq 0 } | Select-Object -First 1)
+                if ($arOpenOther.Count -gt 0) { $ar.admitWhy = 'one wait at a time: the record holds OPERATOR WAIT gate ' + $arOpenOther[0].kind + ' ' + $arOpenOther[0].id + ' ' + $arOpenOther[0].state + ' admitted at line ' + $arOpenOther[0].line + ' and not released'; $arLines += 0; continue }
+            }
+            [void]$arWrite.Append((($arRec | ConvertTo-Json -Compress) + "`n"))
+            $arCount++
+            $arLines += $arCount
+            $arHad.Add([pscustomobject]@{ event = [string]$arRec.event; kind = [string]$arRec.kind; id = [string]$arRec.id; state = [string]$arRec.state; line = $arCount })
+        }
+        $arBytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($arWrite.ToString())
+        if ($arBytes.Length -gt $arLead.Length) {
+            [void]$arStream.Seek(0, [System.IO.SeekOrigin]::End)
+            $arStream.Write($arBytes, 0, $arBytes.Length)
+            $arStream.Flush()
+        }
+        $ar.ok = $true
+        $ar.lines = $arLines
+    } catch { $ar.why = (([string]$_.Exception.Message) -replace '[\r\n]+', ' ') }
+    finally { if ($null -ne $arStream) { $arStream.Dispose() } }
+    return $ar
+}
+
+function Get-OperatorWaitDecision {
+    # THE ARM'S READING, READ-ONLY (the verdict path writes the record). Returns ONE object:
+    #   state          'inert' (no wait head), 'refused', 'admissible' (unmet, within the bound) or 'released'
+    #   why            the refused or inert reason; headShown: the head as printed; line: `OPERATOR WAIT gate k id s`
+    #   kind, id, cond the triple; read: what was read of its gate; releasedLine: the record line of an EARLIER release
+    #   admittedLine   the record line of this triple's earlier admission (0: none)
+    #   releases       records to append: every triple read met this evaluation (the head's, and earlier admitted
+    #                  ones), each with line and read
+    #   voids          records to append: every ADMITTED triple read VOID this evaluation -- one no operator act can
+    #                  release any more (validator round 1 of the build, R2) -- each with line, read and why
+    #   recordPath     the record's full path
+    param([Parameter(Mandatory = $true)][string]$MissionRoot)
+    $od = [pscustomobject]@{ state = 'inert'; why = ''; headShown = ''; line = ''; kind = ''; id = ''; cond = ''; read = ''; releasedLine = 0; admittedLine = 0
+                             releases = (New-Object System.Collections.Generic.List[object]); voids = (New-Object System.Collections.Generic.List[object])
+                             recordPath = (Join-Path $MissionRoot ($script:WaitRecordRel -replace '/', '\')) }
+    $odRec = Read-OperatorWaitRecord -RecordPath $od.recordPath
+    # Every triple admitted and not yet released or voided, in the record's order, the first admission of each.
+    $odOpen = New-Object System.Collections.Generic.List[object]
+    if ($odRec.ok) {
+        foreach ($odE in $odRec.entries) {
+            if ($odE.event -cne 'operator_wait_admitted') { continue }
+            if (@($odRec.entries | Where-Object { (@('operator_wait_released', 'operator_wait_voided') -ccontains $_.event) -and (Test-OperatorWaitSame -A $_ -Kind $odE.kind -Id $odE.id -State $odE.state) }).Count -gt 0) { continue }
+            if (@($odOpen | Where-Object { Test-OperatorWaitSame -A $_ -Kind $odE.kind -Id $odE.id -State $odE.state }).Count -gt 0) { continue }
+            $odOpen.Add($odE)
+        }
+        # AN EARLIER ADMITTED TRIPLE READ MET IS RELEASED NOW, whatever the head says -- ruling (x) turns on it; and one
+        # read VOID is recorded void, so a wait no operator act can release never holds the one-wait slot.
+        foreach ($odO in @($odOpen.ToArray())) {
+            if (($script:WaitKinds -cnotcontains $odO.kind) -or (@('minted', 'settled') -cnotcontains $odO.state) -or ($odO.id -cnotmatch $script:WaitIdPattern)) { continue }
+            $odC = Get-OperatorWaitCondition -MissionRoot $MissionRoot -Kind $odO.kind -Id $odO.id -State $odO.state
+            if ($odC.outcome -eq 'met') {
+                $od.releases.Add([pscustomobject]@{ kind = $odO.kind; id = $odO.id; state = $odO.state; read = $odC.read; line = ('OPERATOR WAIT gate ' + $odO.kind + ' ' + $odO.id + ' ' + $odO.state) })
+                [void]$odOpen.Remove($odO)
+            } elseif ($odC.outcome -eq 'void') {
+                $od.voids.Add([pscustomobject]@{ kind = $odO.kind; id = $odO.id; state = $odO.state; read = $odC.read; why = $odC.why; line = ('OPERATOR WAIT gate ' + $odO.kind + ' ' + $odO.id + ' ' + $odO.state) })
+                [void]$odOpen.Remove($odO)
+            }
+        }
+    }
+    # THE HEAD, read as the handoff arm reads it.
+    $odStatus = Join-Path $MissionRoot '.mission-runtime\lam\STATUS.md'
+    if (-not (Test-Path -LiteralPath $odStatus -PathType Leaf)) { $od.why = 'no OPERATOR WAIT line -- STATUS.md does not exist'; return $od }
+    try { $odBytes = Read-PlacementBytes -Path $odStatus }
+    catch { $od.state = 'refused'; $od.why = 'STATUS.md could not be read (' + (([string]$_.Exception.Message) -replace '[\r\n]+', ' ') + '), so no head is established'; return $od }
+    $odReader = New-Object System.IO.StreamReader -ArgumentList @((New-Object System.IO.MemoryStream -ArgumentList (, $odBytes)), (New-Object System.Text.UTF8Encoding($false)), $true)
+    try { $odText = $odReader.ReadToEnd() } finally { $odReader.Dispose() }
+    $odNl = $odText.IndexOf("`n")
+    $odHead = (($(if ($odNl -ge 0) { $odText.Substring(0, $odNl) } else { $odText })).TrimEnd([char[]]@("`r", ' ', "`t")))
+    $od.headShown = ConvertTo-ManifestDisplayText -Text $odHead -Max 600
+    if (-not $odHead.StartsWith($script:WaitAdmittedPrefix, [System.StringComparison]::Ordinal)) { $od.why = 'no OPERATOR WAIT line -- the first line of STATUS.md does not begin OPERATOR WAIT'; return $od }
+    $od.state = 'refused'
+    $odM = [regex]::Match($odHead, '\AOPERATOR WAIT gate ([^ ]+) ([^ ]+) ([^ ]+)\z')
+    if (-not $odM.Success) { $od.why = 'the line is not in the form "OPERATOR WAIT gate <kind> <id> <minted|settled>": one gate and one condition, nothing else'; return $od }
+    $odKind = $odM.Groups[1].Value; $odId = $odM.Groups[2].Value; $odCond = $odM.Groups[3].Value
+    if (@('halt-ruling', 'witness-attested') -ccontains $odKind) { $od.why = 'kind ' + $odKind + ' is not one a wait may name (a ruling is asked by a HALT; ADR-046 ruling (w))'; return $od }
+    if ($script:WaitKinds -cnotcontains $odKind) { $od.why = 'kind ' + (ConvertTo-ManifestDisplayText -Text $odKind -Max 60) + ' is not one of ' + ($script:WaitKinds -join ', '); return $od }
+    # -cnotmatch, never -notmatch: the culture-aware, case-folding match reads the Kelvin sign as k and a dotted capital
+    # I as i (validator round 1 of the build, R1), and an id outside ASCII is no id the gate tool's files spell.
+    if (($odId -cnotmatch $script:WaitIdPattern) -or ($odId.Length -gt $script:WaitIdMax)) { $od.why = 'the id is not one token [A-Za-z0-9][A-Za-z0-9._-]* of at most ' + $script:WaitIdMax + ' characters, so no mint could stand for it'; return $od }
+    if (@('minted', 'settled') -cnotcontains $odCond) { $od.why = 'the condition ' + (ConvertTo-ManifestDisplayText -Text $odCond -Max 60) + ' is neither minted nor settled'; return $od }
+    if (($odCond -ceq 'settled') -and ($script:WaitSettleKinds -cnotcontains $odKind)) { $od.why = $script:WaitSettleWhy; return $od }
+    $od.kind = $odKind; $od.id = $odId; $od.cond = $odCond
+    $od.line = 'OPERATOR WAIT gate ' + $odKind + ' ' + $odId + ' ' + $odCond
+    if (-not $odRec.ok) { $od.why = $odRec.why; return $od }
+    $odFold = ConvertTo-PlacementAsciiFold -Text $odId
+    $odLoose = @($odRec.loose | Where-Object { (ConvertTo-PlacementAsciiFold -Text ([string]$_.text)).Contains($odFold) } | Select-Object -First 1)
+    if ($odLoose.Count -gt 0) { $od.why = 'line ' + $odLoose[0].line + ' of ' + $script:WaitRecordRel + ' does not parse as its record and spells this id, so a prior release cannot be ruled out'; return $od }
+    $odBefore = @($odRec.entries | Where-Object { ($_.event -ceq 'operator_wait_released') -and (Test-OperatorWaitSame -A $_ -Kind $odKind -Id $odId -State $odCond) } | Select-Object -First 1)
+    if ($odBefore.Count -gt 0) { $od.state = 'released'; $od.releasedLine = [int]$odBefore[0].line; return $od }
+    $odVoidBefore = @($odRec.entries | Where-Object { ($_.event -ceq 'operator_wait_voided') -and (Test-OperatorWaitSame -A $_ -Kind $odKind -Id $odId -State $odCond) } | Select-Object -First 1)
+    if ($odVoidBefore.Count -gt 0) { $od.why = 'this wait was recorded VOID at line ' + $odVoidBefore[0].line + ' of ' + $script:WaitRecordRel + ': no operator act could release it, and it never admits again'; return $od }
+    $odAdm = @($odRec.entries | Where-Object { ($_.event -ceq 'operator_wait_admitted') -and (Test-OperatorWaitSame -A $_ -Kind $odKind -Id $odId -State $odCond) } | Select-Object -First 1)
+    if ($odAdm.Count -gt 0) { $od.admittedLine = [int]$odAdm[0].line }
+    $odC = Get-OperatorWaitCondition -MissionRoot $MissionRoot -Kind $odKind -Id $odId -State $odCond
+    $od.read = $odC.read
+    # A VOID head is refused; it is recorded void only where it was admitted (the loop above records that).
+    if (@('refused', 'void') -contains $odC.outcome) { $od.why = $odC.why; return $od }
+    if ($odC.outcome -eq 'met') {
+        $od.state = 'released'
+        if (@($od.releases | Where-Object { Test-OperatorWaitSame -A $_ -Kind $odKind -Id $odId -State $odCond }).Count -eq 0) {
+            $od.releases.Add([pscustomobject]@{ kind = $odKind; id = $odId; state = $odCond; read = $odC.read; line = $od.line })
+        }
+        return $od
+    }
+    $odOther = @($odOpen | Where-Object { -not (Test-OperatorWaitSame -A $_ -Kind $odKind -Id $odId -State $odCond) } | Select-Object -First 1)
+    if ($odOther.Count -gt 0) {
+        $od.why = 'one wait at a time (ADR-046 ruling (x)): OPERATOR WAIT gate ' + $odOther[0].kind + ' ' + (ConvertTo-ManifestDisplayText -Text $odOther[0].id -Max 200) + ' ' + $odOther[0].state +
+                  ' was admitted at line ' + $odOther[0].line + ' of ' + $script:WaitRecordRel + ' and is not released'
+        return $od
+    }
+    $od.state = 'admissible'
+    return $od
+}
+
 # EXIT 2 IS CLAUDE CODE'S BLOCKING SIGNAL FOR A STOP HOOK, so these two error paths were doing the
 # exact opposite of what they announce: they emit `decision: approve` -- "not blocking" -- and then
 # exit with the code that blocks. The decision JSON is honoured on exit 0; on exit 2 the exit code
@@ -5211,6 +5540,41 @@ function Invoke-Detector {
             return @{ ok = ($ho.state -ne 'eligible'); detail = $hoDetail; admitted = ($ho.state -eq 'eligible'); handoff = $ho }
         }
 
+        'operator_wait_present' {
+            # THE OPERATOR-WAIT ARM (the block above Get-OperatorWaitDecision says what it decides on; ADR-046).
+            # READ-ONLY HERE: the verdict path appends the record. ok unless the wait is ADMISSIBLE -- an inert,
+            # refused or released head blocks nothing a goal would not; `admitted` marks an admissible wait, and
+            # `wait` is what the verdict path reads. THE BACKSTOP REFUSES, as the handoff arm's: an arm that throws
+            # has established nothing, and a stop is never admitted on a claim nobody could check.
+            $owIgnored = @(@($D.Keys) | Where-Object { ([string]$_) -ne 'type' } | Sort-Object)
+            $ow = $null
+            try { $ow = Get-OperatorWaitDecision -MissionRoot $MissionRoot }
+            catch {
+                $ow = [pscustomobject]@{ state = 'refused'; why = ('the arm threw (' + ((([string]$_.Exception.Message) -replace '[\r\n]+', ' ')) + '), so nothing about the line is established')
+                                         headShown = ''; line = ''; kind = ''; id = ''; cond = ''; read = ''; releasedLine = 0; admittedLine = 0
+                                         releases = (New-Object System.Collections.Generic.List[object]); voids = (New-Object System.Collections.Generic.List[object])
+                                         recordPath = (Join-Path $MissionRoot ($script:WaitRecordRel -replace '/', '\')) }
+            }
+            $owState = [string]$ow.state
+            $owDetail = [string]$ow.why
+            if ($owState -eq 'admissible') { $owDetail = 'OPERATOR WAIT ADMISSIBLE -- ' + [string]$ow.line + ' -- read ' + [string]$ow.read }
+            elseif ($owState -eq 'released') {
+                $owDetail = 'OPERATOR WAIT RELEASED -- ' + [string]$ow.line
+                if ([int]$ow.releasedLine -gt 0) { $owDetail += ' -- released before, at ' + $script:WaitRecordRel + ' line ' + [string]$ow.releasedLine }
+                else { $owDetail += ' -- read ' + [string]$ow.read }
+                $owDetail += '; the goal decides'
+            }
+            elseif ($owState -eq 'refused') {
+                $owDetail = 'OPERATOR WAIT line NOT admitted -- ' + [string]$ow.why
+                if ($ow.headShown) { $owDetail += ' -- line: ' + [string]$ow.headShown }
+            }
+            # (.Count, never @(...) over the List: Windows PowerShell 5.1's binder throws "Argument types do not match" there.)
+            if ($ow.releases.Count -gt 0) { $owDetail += ' -- ' + $ow.releases.Count + ' triple(s) read met, to be recorded released' }
+            if ($ow.voids.Count -gt 0) { $owDetail += ' -- ' + $ow.voids.Count + ' admitted triple(s) read void, to be recorded void' }
+            if ($owIgnored.Count -gt 0) { $owDetail += " -- key(s) not read by this type: $($owIgnored -join ', ')" }
+            return @{ ok = ($ow.state -ne 'admissible'); detail = $owDetail; admitted = ($ow.state -eq 'admissible'); wait = $ow }
+        }
+
         'turn_cap' {
             # `cap` through the one whole-number rule (1 to 999999). A value that fails it leaves 0
             # here and the sentence below; from a goal file such a value never arrives (the goal does not parse).
@@ -5394,8 +5758,13 @@ $shortCircuited = 0
 $placementArmDeclared = @($detectors | Where-Object { ([string]$_['type']) -eq $script:PlacementArmType })
 $manifestArmDeclared = @($detectors | Where-Object { ([string]$_['type']) -eq $script:ManifestArmType })
 $handoffArmDeclared = @($detectors | Where-Object { ([string]$_['type']) -eq $script:HandoffArmType })
-$armTypes = @($script:PlacementArmType, $script:ManifestArmType, $script:HandoffArmType)
-$orderedDetectors = @($placementArmDeclared) + @($manifestArmDeclared) + @($handoffArmDeclared) + @($detectors | Where-Object { $armTypes -notcontains ([string]$_['type']) })
+# THE OPERATOR-WAIT ARM (ADR-046) is evaluated after the two AWAITING arms and before the handoff arm: it spends
+# nothing at admission, and the handoff arm stays last because it alone spends its brief.
+$waitArmDeclared = @($detectors | Where-Object { ([string]$_['type']) -eq $script:WaitArmType })
+$armTypes = @($script:PlacementArmType, $script:ManifestArmType, $script:WaitArmType, $script:HandoffArmType)
+$orderedDetectors = @($placementArmDeclared) + @($manifestArmDeclared) + @($waitArmDeclared) + @($handoffArmDeclared) + @($detectors | Where-Object { $armTypes -notcontains ([string]$_['type']) })
+$waitDecision = $null
+$waitResults = New-Object System.Collections.Generic.List[object]
 $armAdmittedBy = ''
 $placementAwaiting = New-Object System.Collections.Generic.List[string]
 $manifestAwaiting = New-Object System.Collections.Generic.List[string]
@@ -5470,6 +5839,11 @@ foreach ($d in $orderedDetectors) {
             if ($manifestNote -and (-not $manifestNotes[$manifestLine].Contains($manifestNote))) { $manifestNotes[$manifestLine].Add($manifestNote) }
         }
     }
+    if ($dType -eq $script:WaitArmType) {
+        # The FIRST wait arm's reading is the run's; a second one declared reads the same disk.
+        if (($null -eq $waitDecision) -and ($null -ne $r['wait'])) { $waitDecision = $r['wait'] }
+        if ($r['admitted'] -and (-not $armAdmittedBy)) { $armAdmittedBy = "the operator-wait arm found an unmet OPERATOR WAIT line ($($script:WaitAdmittedPrefix))" }
+    }
     if ($dType -eq $script:HandoffArmType) {
         # The FIRST handoff arm's reading is the run's; a second one declared reads the same disk.
         if (($null -eq $handoffDecision) -and ($null -ne $r['handoff'])) { $handoffDecision = $r['handoff'] }
@@ -5482,6 +5856,7 @@ foreach ($d in $orderedDetectors) {
     }
     [void]$results.Add($resultEntry)
     if ($dType -eq $script:HandoffArmType) { $handoffResults.Add($resultEntry) }
+    if ($dType -eq $script:WaitArmType) { $waitResults.Add($resultEntry) }
 }
 
 # --- C-3: a HALT outranks everything ------------------------------------------------------------
@@ -5521,6 +5896,38 @@ $haltsBySeatRecord = @($script:HaltsResolvedBySeatRecord)
 $haltScanRoots = @($script:HaltScanRootsReport)
 $haltScanExcluded = @($script:HaltScanExcludedReport)
 
+# THE OPERATOR-WAIT ARM's ONE WRITE (ADR-046): every triple read met is recorded released, by ANY evaluation and
+# whatever the verdict; and a Stop hook whose verdict the wait decides records the admission of a triple not
+# admitted before -- all of it under ONE exclusive handle. The wait decides the verdict only where nothing above it
+# on the ladder does: no halt-scope grammar fault, no open HALT, no AWAITING line.
+$waitAdmissible = ($null -ne $waitDecision) -and ([string]$waitDecision.state -eq 'admissible')
+$waitWillAdmit = $waitAdmissible -and (-not $goalGrammarHaltScope) -and ($openHalts.Count -eq 0) -and ($placementAwaiting.Count -eq 0) -and ($manifestAwaiting.Count -eq 0)
+$waitAdmitNeeded = $waitWillAdmit -and $AsStopHook -and ([int]$waitDecision.admittedLine -eq 0)
+$waitAppend = $null
+$waitAdmitLine = 0
+if ($null -ne $waitDecision) {
+    $waitStamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [System.Globalization.CultureInfo]::InvariantCulture)
+    $waitRecords = @()
+    foreach ($waitRel in $waitDecision.releases.ToArray()) {
+        $waitRecords += [ordered]@{ event = 'operator_wait_released'; at = $waitStamp; goal = $Goal; kind = [string]$waitRel.kind; id = [string]$waitRel.id; state = [string]$waitRel.state
+                                    head = [string]$waitRel.line; read = [string]$waitRel.read }
+    }
+    foreach ($waitVoid in $waitDecision.voids.ToArray()) {
+        $waitRecords += [ordered]@{ event = 'operator_wait_voided'; at = $waitStamp; goal = $Goal; kind = [string]$waitVoid.kind; id = [string]$waitVoid.id; state = [string]$waitVoid.state
+                                    head = [string]$waitVoid.line; read = ([string]$waitVoid.read + ' -- ' + [string]$waitVoid.why) }
+    }
+    if ($waitAdmitNeeded) {
+        $waitRecords += [ordered]@{ event = 'operator_wait_admitted'; at = $waitStamp; goal = $Goal; kind = [string]$waitDecision.kind; id = [string]$waitDecision.id; state = [string]$waitDecision.cond
+                                    head = [string]$waitDecision.line; read = [string]$waitDecision.read }
+    }
+    if ($waitRecords.Count -gt 0) {
+        $waitAppend = Add-OperatorWaitRecordLines -RecordPath ([string]$waitDecision.recordPath) -Records $waitRecords
+        if ($waitAdmitNeeded -and $waitAppend.ok) { $waitAdmitLine = [int](@($waitAppend.lines)[-1]) }
+    }
+}
+# A Stop hook's admission stands only where its line was written: re-decided under the handle, it may not be.
+$waitAdmitOk = (-not $waitAdmitNeeded) -or ($waitAdmitLine -gt 0)
+
 $failing = @($results | Where-Object { -not $_.ok })
 # THE FOURTH VERDICT: an admitted placement reads AWAITING_AMENDMENT_GATE. A HALT still
 # outranks it -- C-3 is unamended -- and the awaiting lines are written beside the HALT all the same.
@@ -5545,6 +5952,9 @@ if ($goalGrammarHaltScope) { $verdict = 'NOT_MET' }
 elseif ($openHalts.Count -gt 0) { $verdict = 'HALT' }
 elseif ($placementAwaiting.Count -gt 0) { $verdict = 'AWAITING_AMENDMENT_GATE' }
 elseif ($manifestAwaiting.Count -gt 0) { $verdict = 'AWAITING_DISPATCH_GATE' }
+# THE SEVENTH VERDICT (ADR-046): an admissible wait reads AWAITING_OPERATOR -- below the two AWAITING arms, above the
+# handoff arm. A Stop hook's admission is recorded first; one that could not be recorded admits nothing: NOT_MET.
+elseif ($waitWillAdmit) { $verdict = if ($waitAdmitOk) { 'AWAITING_OPERATOR' } else { 'NOT_MET' } }
 elseif ($handoffEligible) {
     if ($AsStopHook) {
         $handoffRecorded = Add-HandoffAdmission -Decision $handoffDecision -Goal $Goal -MissionRoot $MissionRoot
@@ -5572,6 +5982,53 @@ if ($handoffEligible) {
 $handoffRefusal = ''
 if (($null -ne $handoffDecision) -and ([string]$handoffDecision.state -eq 'refused')) { $handoffRefusal = 'HANDOFF head NOT admitted -- ' + [string]$handoffDecision.why }
 $handoffTail = if ($handoffRefusal) { ' ' + $handoffRefusal + '.' } else { '' }
+# THE OPERATOR-WAIT ARM's LINES (ADR-046 R7): which wait, its condition, what was read, and what the record now says
+# -- for the verdict artifact's three keys, the hand run's lines and the hook's reasons. All '' / empty where the
+# goal does not declare the arm, so every surface of such a goal reads as it did.
+$waitLines = @()
+$waitReleasedLines = @()
+$waitRefusedLines = @()
+$waitTail = ''
+if ($null -ne $waitDecision) {
+    $waitWrote = ($null -ne $waitAppend) -and $waitAppend.ok
+    $waitRelAt = 0
+    foreach ($waitRel in $waitDecision.releases.ToArray()) {
+        $waitLineOut = [string]$waitRel.line + ' -- RELEASED: read ' + [string]$waitRel.read
+        if ($waitWrote) { $waitLineOut += '; recorded at ' + $script:WaitRecordRel + ' line ' + @($waitAppend.lines)[$waitRelAt] }
+        else { $waitLineOut += '; the record could not be written (' + $(if ($null -ne $waitAppend) { $waitAppend.why } else { 'no write was made' }) + '), so it is read again at the next evaluation' }
+        $waitReleasedLines += $waitLineOut
+        $waitRelAt++
+    }
+    foreach ($waitVoid in $waitDecision.voids.ToArray()) {
+        $waitLineOut = [string]$waitVoid.line + ' -- VOIDED: ' + [string]$waitVoid.why + ' (read ' + [string]$waitVoid.read + ')'
+        if ($waitWrote) { $waitLineOut += '; recorded at ' + $script:WaitRecordRel + ' line ' + @($waitAppend.lines)[$waitRelAt] + ', and it frees the one-wait slot' }
+        else { $waitLineOut += '; the record could not be written (' + $(if ($null -ne $waitAppend) { $waitAppend.why } else { 'no write was made' }) + '), so it is read again at the next evaluation' }
+        $waitRefusedLines += $waitLineOut
+        $waitRelAt++
+    }
+    if (([string]$waitDecision.state -eq 'released') -and ([int]$waitDecision.releasedLine -gt 0)) {
+        $waitReleasedLines += ([string]$waitDecision.line + ' -- RELEASED BEFORE, at ' + $script:WaitRecordRel + ' line ' + $waitDecision.releasedLine + '; this line admits nothing')
+    }
+    if ([string]$waitDecision.state -eq 'refused') {
+        $waitRefusedOne = 'OPERATOR WAIT line NOT admitted -- ' + [string]$waitDecision.why + $(if ($waitDecision.headShown) { ' -- line: ' + [string]$waitDecision.headShown } else { '' })
+        $waitRefusedLines += $waitRefusedOne
+        $waitTail = ' ' + $waitRefusedOne + '.'
+    }
+    if ($waitAdmissible) {
+        $waitLineOut = [string]$waitDecision.line + ' -- ADMITTED -- read ' + [string]$waitDecision.read + '; ' + $script:WaitRecordRel + ': no release of this triple'
+        if ($verdict -eq 'AWAITING_OPERATOR') {
+            if ($waitAdmitLine -gt 0) { $waitLineOut += '; admission recorded at line ' + $waitAdmitLine }
+            elseif ([int]$waitDecision.admittedLine -gt 0) { $waitLineOut += '; admitted before, at line ' + $waitDecision.admittedLine }
+            else { $waitLineOut += '; a hand run records no admission' }
+        } elseif ($waitWillAdmit) {
+            $waitLineOut += '; NOT ADMITTED: the admission could not be recorded (' + $(if (($null -ne $waitAppend) -and $waitAppend.admitWhy) { $waitAppend.admitWhy } elseif ($null -ne $waitAppend) { $waitAppend.why } else { 'no write was made' }) + ')'
+            foreach ($waitEntry in $waitResults) { $waitEntry.detail = 'OPERATOR WAIT NOT ADMITTED -- the record ' + $script:WaitRecordRel + ' could not take the admission; a stop is admitted on a wait only once it is recorded -- ' + [string]$waitDecision.line }
+        } else {
+            $waitLineOut += '; NOT THE VERDICT: ' + $verdict + ' outranks it, and nothing is recorded for it'
+        }
+        $waitLines += $waitLineOut
+    }
+}
 
 # --- write the verdict beside the goal ----------------------------------------------------------
 $verdictPath = Join-Path (Split-Path -Parent $goalPath) "$Goal.verdict.yaml"
@@ -5674,6 +6131,16 @@ if ($manifestArmDeclared.Count -gt 0) {
     Add-VerdictQuotedList -Builder $sb -Key 'awaiting_dispatch_gate' -Items @($manifestAwaiting.ToArray())
     Add-VerdictQuotedList -Builder $sb -Key 'awaiting_dispatch_gate_notes' -Items @($dispatchEntries | Where-Object { $_ -match ' -- operator_note: ' })
 }
+# THE OPERATOR-WAIT ARM's THREE KEYS (ADR-046), written only when the goal DECLARES the arm, each `[]` when empty:
+#   operator_wait           the admissible wait: its line, what was read, and what became of the admission
+#   operator_wait_released  each triple this evaluation read met and recorded, or found released before
+#   operator_wait_refused   why an OPERATOR WAIT line was refused
+# The record is .mission-runtime/lam/operator-wait-releases.jsonl, never this artifact.
+if ($waitArmDeclared.Count -gt 0) {
+    Add-VerdictQuotedList -Builder $sb -Key 'operator_wait' -Items @($waitLines)
+    Add-VerdictQuotedList -Builder $sb -Key 'operator_wait_released' -Items @($waitReleasedLines)
+    Add-VerdictQuotedList -Builder $sb -Key 'operator_wait_refused' -Items @($waitRefusedLines)
+}
 if ($handoffArmDeclared.Count -gt 0) {
     Add-VerdictQuotedList -Builder $sb -Key 'handoff_admitted' -Items @($(if ($verdict -eq 'HANDOFF_ADMITTED') { [string]$handoffDecision.line }))
     Add-VerdictQuotedList -Builder $sb -Key 'handoff_refused' -Items @($(if ($handoffRefusal) { $handoffRefusal }))
@@ -5767,22 +6234,26 @@ if ($AsStopHook) {
         $admitList = New-Object System.Collections.Generic.List[string]
         if ($placementArmDeclared.Count -gt 0) { $admitList.Add('a placed amendment awaiting its gate (ungated_placement_absent)') }
         if ($manifestArmDeclared.Count -gt 0) { $admitList.Add('a placed round manifest awaiting its gate (ungated_manifest_absent)') }
+        # ADR-046: the wait arm in its place in the fixed order, and its refused line as the nearest after a refused
+        # handoff line -- both only where the goal declares it, so every other goal's sentence reads as it did.
+        if ($waitArmDeclared.Count -gt 0) { $admitList.Add('an OPERATOR WAIT line first on STATUS.md naming one gate not yet minted or settled (operator_wait_present)') }
         if ($handoffArmDeclared.Count -gt 0) { $admitList.Add('a handoff line first on STATUS.md whose brief re-derives (handoff_brief_present)') }
         $admitList.Add('a HALT under .mission-runtime/halts/')
         $admitNearest = if ($handoffRefusal) { 'the handoff line -- mend it as said above' }
+                        elseif ($waitRefusedLines.Count -gt 0) { 'the OPERATOR WAIT line -- mend it as said above' }
                         elseif (($manifestArmDeclared.Count -gt 0) -and (@($real | Where-Object { ([string]$_.type) -eq 'validator_pass_count' }).Count -gt 0)) { 'a placed round manifest -- place the manifest of the round under .mission/dispatches/' }
                         else { 'a HALT -- write a HALT that names what blocks' }
         $admitted = ' The stops this goal admits: ' + ($admitList -join '; ') + '. Nearest for this state: ' + $admitNearest + '.'
-        $reason = "Goal '$Goal' is NOT_MET on disk. Failing -- $why.$tail$handoffTail Verdict: $verdictPath. Continue working: this decision is derived from the evidence plane, not from the transcript.$admitted"
+        $reason = "Goal '$Goal' is NOT_MET on disk. Failing -- $why.$tail$handoffTail$waitTail Verdict: $verdictPath. Continue working: this decision is derived from the evidence plane, not from the transcript.$admitted"
         Write-Output (@{ decision = 'block'; reason = $reason } | ConvertTo-Json -Compress)
         exit 0
     }
     if ($verdict -eq 'HALT') {
         # Every AWAITING line is still named beside the HALT -- the placement arm's, then the manifest
         # arm's, each manifest line with its operator_note.
-        $alsoAdmitted = @($placementAwaiting.ToArray()) + @($dispatchEntries)
+        $alsoAdmitted = @($placementAwaiting.ToArray()) + @($dispatchEntries) + @($waitLines)
         $haltAwaitTail = if ($alsoAdmitted.Count -gt 0) { " Also admitted: $($alsoAdmitted -join ' ; ')." } else { '' }
-        Write-Output (@{ decision = 'approve'; reason = "Goal '$Goal' derives HALT: unanswered $($openHalts -join ', '). Not blocking -- control returns to the human.$haltAwaitTail$handoffTail" } | ConvertTo-Json -Compress)
+        Write-Output (@{ decision = 'approve'; reason = "Goal '$Goal' derives HALT: unanswered $($openHalts -join ', '). Not blocking -- control returns to the human.$haltAwaitTail$handoffTail$waitTail" } | ConvertTo-Json -Compress)
         exit 0
     }
     # THE PLACEMENT-WINDOW ARM ADMITTED A STOP. Its own branch, because the fall-through
@@ -5795,8 +6266,9 @@ if ($AsStopHook) {
         if ($awaitCaused) { $awaitRelease += '; an UNREADABLE or UNDETERMINABLE line consults no gate and is released only once its cause clears' }
         # A manifest admitted beside it is named after the sentence: the older arm's verdict stands, and
         # the operator is owed both lines ('' when there is none, so this reason reads as it did).
-        $awaitAlso = if ($dispatchEntries.Count -gt 0) { " Also admitted: $($dispatchEntries -join ' ; ')." } else { '' }
-        $awaitReason = "$(@($placementAwaiting.ToArray()) -join ' ; ') -- Goal '$Goal': an untracked file under .mission/amendments/ has no live amendment-material gate over its bytes, or that could not be established -- an ADMITTED STOP (LAM-ACCEPT amendment 54, operator ruling (ii), ledger 1404). Not blocking -- $awaitRelease. Verdict: $verdictPath.$awaitAlso$handoffTail"
+        $awaitAlsoItems = @($dispatchEntries) + @($waitLines)
+        $awaitAlso = if ($awaitAlsoItems.Count -gt 0) { " Also admitted: $($awaitAlsoItems -join ' ; ')." } else { '' }
+        $awaitReason = "$(@($placementAwaiting.ToArray()) -join ' ; ') -- Goal '$Goal': an untracked file under .mission/amendments/ has no live amendment-material gate over its bytes, or that could not be established -- an ADMITTED STOP (LAM-ACCEPT amendment 54, operator ruling (ii), ledger 1404). Not blocking -- $awaitRelease. Verdict: $verdictPath.$awaitAlso$handoffTail$waitTail"
         Write-Output (@{ decision = 'approve'; reason = $awaitReason } | ConvertTo-Json -Compress)
         exit 0
     }
@@ -5809,8 +6281,18 @@ if ($AsStopHook) {
         $dispCaused = @($manifestAwaiting.ToArray() | Where-Object { $_ -match ' (UNREADABLE|UNDETERMINABLE); (UNREADABLE|UNDETERMINABLE)\z' }).Count -gt 0
         $dispRelease = "the operator's mint of a canonical dispatch gate over each manifest's bytes is the release"
         if ($dispCaused) { $dispRelease += '; an UNREADABLE or UNDETERMINABLE line consults no gate and is released only once its cause clears' }
-        $dispReason = "$($dispatchEntries -join ' ; ') -- Goal '$Goal': an untracked round manifest under .mission/dispatches/ has no live dispatch gate over its bytes, or that could not be established -- an ADMITTED STOP (register row 352; ledger 1474 SS F, BATCH-2 WP-H (a)). Not blocking -- $dispRelease. Verdict: $verdictPath.$handoffTail"
+        $dispAlso = if ($waitLines.Count -gt 0) { " Also admitted: $($waitLines -join ' ; ')." } else { '' }
+        $dispReason = "$($dispatchEntries -join ' ; ') -- Goal '$Goal': an untracked round manifest under .mission/dispatches/ has no live dispatch gate over its bytes, or that could not be established -- an ADMITTED STOP (register row 352; ledger 1474 SS F, BATCH-2 WP-H (a)). Not blocking -- $dispRelease. Verdict: $verdictPath.$dispAlso$handoffTail$waitTail"
         Write-Output (@{ decision = 'approve'; reason = $dispReason } | ConvertTo-Json -Compress)
+        exit 0
+    }
+    # THE OPERATOR-WAIT ARM ADMITTED A STOP (ADR-046). Its own branch, for the placement arm's reason: the
+    # fall-through below says "MET on disk".
+    if ($verdict -eq 'AWAITING_OPERATOR') {
+        $waitGateRel = '.mission/gates/' + [string]$waitDecision.kind + '-' + [string]$waitDecision.id + '.yaml'
+        $waitRelease = if ([string]$waitDecision.cond -ceq 'minted') { "the operator's mint of $waitGateRel is the release" } else { "the console's settle of $waitGateRel is the release" }
+        $waitReason = "$($waitLines -join ' ; ') -- Goal '$Goal': the first line of STATUS.md is an OPERATOR WAIT line naming one gate condition the operator has not yet met -- an ADMITTED STOP (ADR-046). Not blocking -- $waitRelease; once read met it never admits again. Verdict: $verdictPath.$handoffTail"
+        Write-Output (@{ decision = 'approve'; reason = $waitReason } | ConvertTo-Json -Compress)
         exit 0
     }
     # THE HANDOFF ARM ADMITTED ONE STOP, and the admission is on the record.
@@ -5819,7 +6301,7 @@ if ($AsStopHook) {
         Write-Output (@{ decision = 'approve'; reason = $handoffReason } | ConvertTo-Json -Compress)
         exit 0
     }
-    Write-Output (@{ decision = 'approve'; reason = "Goal '$Goal' is MET on disk ($($results.Count) detector(s), 0 failing).$handoffTail" } | ConvertTo-Json -Compress)
+    Write-Output (@{ decision = 'approve'; reason = "Goal '$Goal' is MET on disk ($($results.Count) detector(s), 0 failing).$handoffTail$waitTail" } | ConvertTo-Json -Compress)
     exit 0
 }
 
@@ -5832,6 +6314,8 @@ foreach ($dispatchOut in $manifestAwaiting) {
     Out-Line "  $dispatchOut"
     foreach ($dispatchOutNote in @($manifestNotes[$dispatchOut].ToArray())) { Out-Line "    operator_note: $dispatchOutNote" }
 }
+# ... THEN the operator-wait arm's lines (ADR-046): the admissible wait, each release, a refusal.
+foreach ($waitOut in @($waitLines) + @($waitReleasedLines) + @($waitRefusedLines)) { Out-Line "  $waitOut" }
 if ($verdict -eq 'HANDOFF_ADMITTED') { Out-Line "  $($handoffDecision.line)" }
 elseif ($handoffRefusal) { Out-Line "  $handoffRefusal" }
 Out-Line "  goal file : $goalPath"
@@ -5852,4 +6336,6 @@ if ($verdict -eq 'HALT') { exit 3 }
 if ($verdict -eq 'AWAITING_AMENDMENT_GATE') { exit 4 }
 if ($verdict -eq 'AWAITING_DISPATCH_GATE') { exit 5 }
 if ($verdict -eq 'HANDOFF_ADMITTED') { exit 6 }
+# 7 is the operator-wait arm's admitted stop (ADR-046).
+if ($verdict -eq 'AWAITING_OPERATOR') { exit 7 }
 exit 1
