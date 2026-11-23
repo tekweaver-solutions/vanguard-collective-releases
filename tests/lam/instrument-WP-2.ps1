@@ -12473,6 +12473,13 @@ Add-R55Row -Label '(4b) CEREMONY the complete line of that placement is APPENDED
 # THE BASE RUNNER'S TREE: a scratch copy of what the runner reads beside itself -- tools\lam, the next-gen hooks and
 # the guard library they load (tools\framework\hooks, READ and copied, nothing under it written), model-routing.yaml
 # -- with the runner replaced by the base blob. The composer's copy there stamps nothing; this row writes no note.
+# THE ONE LINE THE BASE RUNNER CANNOT PRINT (UC-22): at each placement the runner now files a byte-equal copy of the
+# placed result in the mission root's validators archive, .mission-runtime/lam/validators/<dispatch id>/<name>, and says
+# so in ONE line directly after its PLACED line; the base runner predates that step. The row admits exactly that line --
+# at exactly that place, with exactly its text, naming the archive path and the placed copy's sha256 -- reads the copy in
+# the archive byte for byte, its times the placed copy's, the only file there, and reads that the base runner filed
+# nothing. Every other line is still compared line for line: any other extra, missing, reordered or changed line, or a
+# filing line anywhere else or in any other words, makes the row False.
 $r55BaseTree = Join-Path $r55Temp 'base-tree'
 New-Item -ItemType Directory -Path (Join-Path $r55BaseTree 'tools\framework') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\lam') -Destination (Join-Path $r55BaseTree 'tools\lam') -Recurse -Force
@@ -12497,18 +12504,44 @@ $r55KeysSame = $false
 $r55Differ = @('(the base runner did not run)')
 $r55OutSame = $false
 $r55OutSaid = '(the base runner did not run)'
+$r55FileOk = $false
+$r55FileSaid = '(the base runner did not run)'
 if ($null -ne $r55q) {
     # THE TWO RUNS' STDOUT, line for line, each run's own root read as <base> and every sha as <hex>.
     $r55Shape = { param([string]$Text, [string]$Base) @(@($Text -split "`n") | ForEach-Object { (($_.TrimEnd("`r")).Replace($Base, '<base>').Replace($Base.Replace('\', '/'), '<base>') -replace '[0-9a-f]{40,64}', '<hex>') }) }
     $r55ShapeA = @(& $r55Shape $r55p.run.out $r55.base)
     $r55ShapeB = @(& $r55Shape $r55q.run.out $r55b.base)
-    $r55OutSame = (($r55ShapeA -join "`n") -ceq ($r55ShapeB -join "`n")) -and ($r55ShapeA.Count -gt 5)
-    $r55OutSaid = "$($r55ShapeA.Count) and $($r55ShapeB.Count) lines"
+    $r55RawA = @(@($r55p.run.out -split "`n") | ForEach-Object { $_.TrimEnd("`r") })
+    # THE FILING LINE (UC-22): its exact text, built from the placed copy's own name and bytes, raw (no line of it shaped);
+    # its place, directly after the base runner's one PLACED line. The tree's stdout with that ONE line taken out must
+    # EQUAL the base runner's line for line.
+    $r55FileRel = '.mission-runtime/lam/validators/' + $r55p.id + '/' + [System.IO.Path]::GetFileName($r55p.dst)
+    $r55FileSha = Get-WpgSha $r55p.dst
+    $r55FileWant = "mission-dispatch: validator result FILED in the validators archive at $r55FileRel -- sha256 $r55FileSha, byte-equal to the placed copy, its times kept"
+    $r55PlacedB = @(for ($r55I = 0; $r55I -lt $r55ShapeB.Count; $r55I++) { if ($r55ShapeB[$r55I] -cmatch '^mission-dispatch: validator result PLACED at ') { $r55I } })
+    $r55FileAt = if ($r55PlacedB.Count -eq 1) { $r55PlacedB[0] + 1 } else { -1 }
+    $r55ShapeAx = @(for ($r55I = 0; $r55I -lt $r55ShapeA.Count; $r55I++) { if ($r55I -ne $r55FileAt) { $r55ShapeA[$r55I] } })
+    $r55FileLine = ($r55FileAt -ge 0) -and ([string]$r55RawA[$r55FileAt] -ceq $r55FileWant)
+    $r55OutSame = $r55FileLine -and ($r55ShapeA.Count -eq ($r55ShapeB.Count + 1)) -and ($r55ShapeAx.Count -eq $r55ShapeB.Count) -and (($r55ShapeAx -join "`n") -ceq ($r55ShapeB -join "`n")) -and ($r55ShapeB.Count -gt 5)
+    $r55OutSaid = "$($r55ShapeA.Count) and $($r55ShapeB.Count) lines; the base runner's PLACED lines: $($r55PlacedB.Count); tree line $($r55FileAt + 1), directly after it, the filing line as demanded=$r55FileLine"
+    if (-not $r55FileLine) { $r55OutSaid += "; tree line $($r55FileAt + 1) reads [" + [string]$r55RawA[$r55FileAt] + '] where [' + $r55FileWant + '] was demanded' }
     if (-not $r55OutSame) {
-        for ($r55I = 0; $r55I -lt [Math]::Max($r55ShapeA.Count, $r55ShapeB.Count); $r55I++) {
-            if ([string]$r55ShapeA[$r55I] -cne [string]$r55ShapeB[$r55I]) { $r55OutSaid += "; first difference at line $($r55I + 1): tree [" + [string]$r55ShapeA[$r55I] + '] base [' + [string]$r55ShapeB[$r55I] + ']'; break }
+        for ($r55I = 0; $r55I -lt [Math]::Max($r55ShapeAx.Count, $r55ShapeB.Count); $r55I++) {
+            if ([string]$r55ShapeAx[$r55I] -cne [string]$r55ShapeB[$r55I]) { $r55OutSaid += "; with that one line taken out, first difference at line $($r55I + 1): tree [" + [string]$r55ShapeAx[$r55I] + '] base [' + [string]$r55ShapeB[$r55I] + ']'; break }
         }
     }
+    # THE COPY IN THE ARCHIVE: byte-equal to the placed result, its creation and last-write times the placed copy's, the
+    # only file under the archive; and the base runner's twin root has no archive at all.
+    $r55FileAbs = Join-Path $r55.root ($r55FileRel -replace '/', '\')
+    $r55ArcFiles = @(Get-ChildItem -LiteralPath (Join-Path $r55.root '.mission-runtime\lam\validators') -Recurse -Force -File -ErrorAction SilentlyContinue)
+    $r55FileBytes = (Test-Path -LiteralPath $r55FileAbs -PathType Leaf) -and (Test-Path -LiteralPath $r55p.dst -PathType Leaf) -and
+        ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($r55FileAbs)) -ceq [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($r55p.dst)))
+    $r55FileTimes = $r55FileBytes -and ((Get-Item -LiteralPath $r55FileAbs).LastWriteTimeUtc -eq (Get-Item -LiteralPath $r55p.dst).LastWriteTimeUtc) -and
+        ((Get-Item -LiteralPath $r55FileAbs).CreationTimeUtc -eq (Get-Item -LiteralPath $r55p.dst).CreationTimeUtc)
+    $r55FileAlone = ($r55ArcFiles.Count -eq 1) -and ($r55ArcFiles[0].FullName -ieq $r55FileAbs)
+    $r55BaseArc = Test-Path -LiteralPath (Join-Path $r55b.root '.mission-runtime\lam\validators')
+    $r55FileOk = $r55FileBytes -and $r55FileTimes -and $r55FileAlone -and (-not $r55BaseArc)
+    $r55FileSaid = "the copy at $r55FileRel byte-equal to the placed result=$r55FileBytes, its times the placed copy's=$r55FileTimes, the only file in the archive=$r55FileAlone (files there: $($r55ArcFiles.Count)); an archive in the base runner's twin root=$r55BaseArc"
 }
 if (($null -ne $r55q) -and ($null -ne $r55qC.obj) -and ($null -ne $r55C1.obj)) {
     $r55qKeys = @(Get-R55AnchorKeys $r55q.anchors)
@@ -12523,9 +12556,9 @@ if (($null -ne $r55q) -and ($null -ne $r55qC.obj) -and ($null -ne $r55C1.obj)) {
         if ($r55Va -cne $r55Vb) { $r55Differ += $r55N }
     }
 }
-Add-R55Row -Label '(4a) CONTROL the same stub and artifact through THE BASE RUNNER (the installed synthetic base base-700e19e5-s06, pinned by sha256) in a twin root: the same exit, the same stdout line for line, the anchors'' keys in the same order, the complete line EQUAL field by field' `
-    -Ok ($r55BaseHeld -and ($null -ne $r55q) -and ($r55q.run.exit -eq $r55p.run.exit) -and $r55OutSame -and $r55KeysSame -and ($r55Differ.Count -eq 0) -and ($r55q.run.out -match '(?m)^mission-dispatch: validator result PLACED')) `
-    -Said ("base runner read from $($r55BaseRead.from): $(if ($r55BaseHeld) { 'held to its pin' } else { 'NOT HELD, sha256 ' + $r55BaseRead.sha }); exits tree $($r55p.run.exit) / base $(if ($r55q) { $r55q.run.exit } else { '(none)' }); stdout (each root read as <base>, each sha as <hex>) equal=$r55OutSame, $r55OutSaid; anchors keys $($r55pKeys.Count), same sequence=$r55KeysSame; fields that differ (each run's own root read as <base>): $(if ($r55Differ.Count) { $r55Differ -join ', ' } else { 'none of ' + @($r55C1.obj.PSObject.Properties.Name).Count }) :: the base runner said: $(if ($r55q) { Get-R55Lines $r55q.run.out 'REFUSED|validator result' } else { '(nothing)' })")
+Add-R55Row -Label '(4a) CONTROL the same stub and artifact through THE BASE RUNNER (the installed synthetic base base-700e19e5-s06, pinned by sha256) in a twin root: the same exit; the same stdout line for line but for ONE line, the filing step''s own (UC-22) -- directly after the PLACED line, exactly the FILED line naming the validators archive path and the placed copy''s sha256 -- with that copy standing in the archive byte-equal to the placed result, its times kept, the only file there, and the base runner filing nothing; the anchors'' keys in the same order; the complete line EQUAL field by field' `
+    -Ok ($r55BaseHeld -and ($null -ne $r55q) -and ($r55q.run.exit -eq $r55p.run.exit) -and $r55OutSame -and $r55FileOk -and $r55KeysSame -and ($r55Differ.Count -eq 0) -and ($r55q.run.out -match '(?m)^mission-dispatch: validator result PLACED')) `
+    -Said ("base runner read from $($r55BaseRead.from): $(if ($r55BaseHeld) { 'held to its pin' } else { 'NOT HELD, sha256 ' + $r55BaseRead.sha }); exits tree $($r55p.run.exit) / base $(if ($r55q) { $r55q.run.exit } else { '(none)' }); stdout (each root read as <base>, each sha as <hex>) equal but for the filing line=$r55OutSame, $r55OutSaid; the filing step's own (UC-22): $r55FileSaid; anchors keys $($r55pKeys.Count), same sequence=$r55KeysSame; fields that differ (each run's own root read as <base>): $(if ($r55Differ.Count) { $r55Differ -join ', ' } else { 'none of ' + @($r55C1.obj.PSObject.Properties.Name).Count }) :: the base runner said: $(if ($r55q) { Get-R55Lines $r55q.run.out 'REFUSED|validator result' } else { '(nothing)' })")
 
 # ---- (2) the descendant ends having written NOTHING ------------------------------------------------------------------
 $r55Sp2 = Add-R55Line -Ledger $r55.ledger -Name 'spawn-2' -Record ([ordered]@{ event = 'spawn'; seq = 2; kind = 'validator'; dispatch_id = 'D-R55-B'; validates = $r55Aid; round = 1; tip_judged = $r55.head })
@@ -12680,7 +12713,7 @@ finally {
             -Said ($r55Temp + ' exists=' + (Test-Path -LiteralPath $r55Temp) + ' entries left=' + $r55Left + ' descendants stopped first=[' + ($r55Stopped -join ',') + ']' + $(if ($r55RmWhy) { '; Remove-Item said: ' + $r55RmWhy } else { '' }))
     }
 }
-Check -Id 'R-55' -Title 'NO RESULT AT SESSION END (BATCH-3 WP-K (a)): a validator session, stubbed, that exits leaving no result at its declared result_path in its own tree while a descendant process of it is alive makes the runner WAIT, no longer than -NoResultWaitSeconds, for the descendants to end, and read the result once more -- where the descendant wrote the result inside the bound it is PLACED and bound as a result written before the exit is; where the descendant ended with none, the runner exits 3 under a NAMED refusal, NO-RESULT-AT-SESSION-END-DESCENDANTS-ENDED, in its anchors, in the rejection record and in ONE note composed by tools/lam/spawn_ledger.py carrying the pids it saw, the complete line composed from those anchors names the refusal beside its null result, and the close CLI''s roster gate and the transcription tool''s bare-id path, the tree''s own, each set that line aside beside a bound line at the same round, the gate naming it on its [PASS] line; where the bound elapses with the descendant alive the refusal is NO-RESULT-AT-SESSION-END-BOUND-ELAPSED, naming the bound and the count still alive, and the runner returns without waiting for it; a bound of 0 switches the wait off and no descendant alive is not waited for, each under its own name; and a session that writes its result before it exits is placed with no trace of any of this, its anchors'' keys and its complete line equal to the base runner''s over the same stub; no real claude CLI ran, by a tripwire first on PATH' `
+Check -Id 'R-55' -Title 'NO RESULT AT SESSION END (BATCH-3 WP-K (a)): a validator session, stubbed, that exits leaving no result at its declared result_path in its own tree while a descendant process of it is alive makes the runner WAIT, no longer than -NoResultWaitSeconds, for the descendants to end, and read the result once more -- where the descendant wrote the result inside the bound it is PLACED and bound as a result written before the exit is; where the descendant ended with none, the runner exits 3 under a NAMED refusal, NO-RESULT-AT-SESSION-END-DESCENDANTS-ENDED, in its anchors, in the rejection record and in ONE note composed by tools/lam/spawn_ledger.py carrying the pids it saw, the complete line composed from those anchors names the refusal beside its null result, and the close CLI''s roster gate and the transcription tool''s bare-id path, the tree''s own, each set that line aside beside a bound line at the same round, the gate naming it on its [PASS] line; where the bound elapses with the descendant alive the refusal is NO-RESULT-AT-SESSION-END-BOUND-ELAPSED, naming the bound and the count still alive, and the runner returns without waiting for it; a bound of 0 switches the wait off and no descendant alive is not waited for, each under its own name; and a session that writes its result before it exits is placed with no trace of any of this, over the same stub its exit and its stdout line for line the base runner''s but for ONE line, the filing step''s own (UC-22) -- the FILED line directly after the PLACED line, naming the validators archive path and the placed copy''s sha256, the copy standing there byte-equal to the placed result -- and its anchors'' keys and its complete line equal to the base runner''s; no real claude CLI ran, by a tripwire first on PATH' `
       -Ok $r55ok -Detail ("      THE $(@($r55rows | Where-Object { $_ -match ' : (True|False)' }).Count) ROWS:`n" + ($r55rows -join "`n"))
 
 # =============================================================================================

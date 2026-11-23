@@ -89,6 +89,18 @@ $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Say { param([string]$Text) [Console]::Out.WriteLine('mission.ps1: ' + $Text) }
 
+# UI-3 (1.3.3) UC-21, register row 582: THE REGISTRATION LINE says which folder was registered and what was written, in the
+# words the user guide's registry paragraph uses -- host-id in the Vanguard home (made, or read), the checkout's row in
+# projects.yaml (added, or already there and kept), the mission-event feed folder (made, or already there and untouched).
+# 1.3.2 printed "the mission-event feed folder .mission-runtime/telemetry/ made" whether or not the folder stood already.
+function Format-RegistrationLine {
+    param($Reg)
+    $hostSaid = if ($Reg.host_id_made) { "host-id made at $($Reg.host_id_path)" } else { "host-id read from $($Reg.host_id_path)" }
+    $rowSaid = if ($Reg.row_added) { "a row added to $($Reg.registry)" } else { "already a row in $($Reg.registry), kept as it is" }
+    $feedSaid = if ($Reg.telemetry_made) { 'the mission-event feed folder .mission-runtime/telemetry/ made' } else { 'the mission-event feed folder .mission-runtime/telemetry/ already there' }
+    return ("registered on this host: the checkout {0} -- host_id {1} ({2}), {3} ({4})" -f $Reg.checkout_path, $Reg.host_id, $hostSaid, $rowSaid, $feedSaid)
+}
+
 $root = [System.IO.Path]::GetFullPath($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Target)).TrimEnd('\', '/')
 if (-not (Test-Path -LiteralPath $root -PathType Container)) { Say "no folder at $root -- run install.ps1 -Target first."; exit 1 }
 
@@ -302,7 +314,7 @@ detectors:
         try {
             . $tmI
             $regI = Register-MissionCheckout -Root $root
-            Say ("  registered on this host: host_id {0}, {1} ({2})" -f $regI.host_id, $(if ($regI.row_added) { 'a row added to ' + $regI.registry } else { 'already a row in ' + $regI.registry }), 'the mission-event feed folder .mission-runtime/telemetry/ made')
+            Say ('  ' + (Format-RegistrationLine $regI))
             Invoke-MissionTelemetry -Root $root -Snapshot -Verb 'mission-init'
         } catch { Say "  registration on this host did not complete ($($_.Exception.Message)); the mission is initialised and nothing in it depends on the feed." }
     }
@@ -323,8 +335,9 @@ if ($Verb -eq 'register') {
     if (-not (Test-Path -LiteralPath $tmR -PathType Leaf)) { Say "the registration step is not on disk at $tmR. Nothing was written."; exit 1 }
     . $tmR
     $regR = Register-MissionCheckout -Root $root
-    # the line init prints for its own registration (RELEASE-4 S1, F-P7b; INSTALL.md section 7 gives it)
-    Say ("registered on this host: host_id {0}, {1} ({2})" -f $regR.host_id, $(if ($regR.row_added) { 'a row added to ' + $regR.registry } else { 'already a row in ' + $regR.registry }), 'the mission-event feed folder .mission-runtime/telemetry/ made')
+    # the line init prints for its own registration (RELEASE-4 S1, F-P7b; INSTALL.md section 7 gives it); UI-3 UC-21: what it
+    # wrote, said as written
+    Say (Format-RegistrationLine $regR)
     $giR = Join-Path $root '.gitignore'
     # the rule init writes (F-P7a): the whole runtime plane
     $giHeld = @('/.mission-runtime/', '.mission-runtime/')
@@ -341,7 +354,14 @@ if ($Verb -eq 'register') {
         try { $giB = $script:Utf8NoBom.GetBytes($giAddR); $giS.Write($giB, 0, $giB.Length) } finally { $giS.Dispose() }
         Say "  .gitignore $(if ($null -eq $giText) { 'created' } else { 'appended 1 rule' }): /.mission-runtime/ (the runtime plane, never committed)"
     }
+    # UI-3 UC-21: and whether a snapshot was written -- the feed's newest mission_snapshot read before and after
+    $snapBefore = $null; $snapAfter = $null; $snapRead = $true
+    try { $snapBefore = Get-MissionLastSnapshotSha -Root $root } catch { $snapRead = $false }
     Invoke-MissionTelemetry -Root $root -Snapshot -Verb 'mission-register'
+    try { $snapAfter = Get-MissionLastSnapshotSha -Root $root } catch { $snapRead = $false }
+    if (-not $snapRead) { Say "  snapshot: whether a mission_snapshot line was appended is not known -- the feed, .mission-runtime/telemetry/events.jsonl, could not be read before and after" }
+    elseif ($snapAfter -and ($snapAfter -cne $snapBefore)) { Say "  snapshot: a mission_snapshot line appended to the mission-event feed, .mission-runtime/telemetry/events.jsonl" }
+    else { Say "  snapshot: no mission_snapshot line appended -- the newest one in the feed already holds the mission's derived state, or the state could not be derived (the cause is then logged to .mission-runtime\evidence\<dispatch>\hook-errors.log, session-unknown from a plain terminal)" }
     exit 0
 }
 

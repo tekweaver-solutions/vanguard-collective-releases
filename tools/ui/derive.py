@@ -89,7 +89,11 @@ def latest_snapshot(events):
 # space pastes as printed. Where it does not know the folder, it says so in words; no angle-bracket placeholder is printed.
 # Validator round 1: every character PowerShell reads as a single quote -- the ASCII one and U+2018, U+2019, U+201A, U+201B --
 # is doubled; and the head is .\mission.ps1, as PowerShell runs a script from the release folder (the user guide writes it so).
-COMMAND_HEAD = ".\\mission.ps1 register -Target"
+# UI-3 (1.3.3) UC-19, register row 579: THE COMMAND RUNS AS PASTED where the execution policy refuses a bare script (Restricted,
+# or a tree carrying the mark of the web): it carries the bypass in the form every command of INSTALL.md uses -- powershell
+# -NoProfile -ExecutionPolicy Bypass -File <script> <arguments> -- run from the release folder. -File hands the folder to
+# mission.ps1 as one literal argument, so RB-28's quoting is kept unchanged.
+COMMAND_HEAD = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\mission.ps1 register -Target"
 PS_SINGLE_QUOTES = "'\u2018\u2019\u201a\u201b"
 FRESH_SNAPSHOT_COMMAND = (COMMAND_HEAD + " followed by the project folder in single quotes -- the dashboard does not know which "
                           "folder this reading comes from")
@@ -371,6 +375,26 @@ def latest_verify(events):
     return v[-1] if v else None
 
 
+def is_installer_check(e):
+    """UI-3 (UC-9): a verify_result whose arms_run is solely install-verify -- the installer's check of the framework files
+    against framework.lock (install.ps1 -Verify), never a mission verify."""
+    arms = (e["line"].get("payload") or {}).get("arms_run") if e else None
+    return isinstance(arms, list) and len(arms) > 0 and all(a == "install-verify" for a in arms)
+
+
+def latest_mission_verify(events):
+    """UI-3 (UC-9): the newest verify_result whose arms_run is not solely install-verify -- the run "Last verify" and
+    "Verify detail" show; an installer check newer than it never takes them."""
+    v = [e for e in of_kind(events, "verify_result") if not is_installer_check(e)]
+    return v[-1] if v else None
+
+
+def latest_installer_check(events):
+    """UI-3 (UC-9): the installer's newest check (is_installer_check), shown as its own line on the framework version card."""
+    v = [e for e in of_kind(events, "verify_result") if is_installer_check(e)]
+    return v[-1] if v else None
+
+
 # RELEASE-5 group B (RB-7): THE STOP EVALUATOR'S READING OF A VERIFY RUN. Its verify_pass_or_dib detector runs mission verify
 # and writes "mission verify exited <n> -> <PASS | PASS-DIB | REFUSE>. admitted: <subject>, ... <the boundary it disclosed>"
 # into the goal verdict on disk, which the 1.3.1 snapshot carries (goal_verdicts). The verdict file names no verify run id,
@@ -392,7 +416,19 @@ VERIFY_READING_RULE = (
     "REFUSE reading may be shown beside another refused run, which it never admits; where the evaluator's own verify run "
     "wrote no verify_result line, its reading is joined to the run before it on the same terms; and the detectors are "
     "paired with the goal file as it stands when the snapshot is written, so a goal file edited after the evaluation shifts "
-    "the pairing. An admitting reading of a run outside these is never joined (validator round 3).")
+    "the pairing. An admitting reading of a run outside these is never joined (validator round 3). UI-3 (UC-9): the runs "
+    "are the mission verifies -- a verify_result whose arms_run is solely install-verify (the installer's check against "
+    "framework.lock) is never V, never falls between, and is read by no evaluator. UI-3 amendment 3 (UC-36): A SECOND SOURCE, "
+    "the goal_verdict line the evaluator appends after each evaluation (framework 1.3.3), read from V's own stream, of each goal "
+    "its newest line alone (as a snapshot holds each goal's newest verdict alone): where its "
+    "reading names the report the verify run wrote (report_path and report_sha256), it read V exactly when those are V's "
+    "source_path and sha256 -- a line naming another run's report never reads V; where it names none, it is joined on the terms "
+    "above, its evaluated_at, exit, word, admitted subjects and against standing for the snapshot's. Of every reading of V, the "
+    "snapshot's and the lines', the newest evaluated_at is shown (on a tie, the later in feed order); source says which. An "
+    "evaluation a line covers (the same goal and evaluated_at) is read from the line alone: the snapshot's copy of that verdict "
+    "never overrides what the line says of the run it read. Where the two differ for one verdict: the line writes a declared "
+    "against that lies under the mission root relative (as verify_result does), and a boundary naming a host path with that "
+    "path replaced, where the snapshot keeps the goal file's and the verdict's own text.")
 def _norm_rel(p):
     """A relative path as both writers spell it, for comparison: forward slashes, no leading ./, case folded."""
     s = str(p or "").strip().replace("\\", "/")
@@ -404,33 +440,82 @@ def _norm_rel(p):
 _VERIFY_DETAIL = re.compile(r"^mission verify exited (-?\d+) -> (PASS-DIB|PASS|REFUSE)\.(?: admitted: ((?:\S+, )*\S+))?\s*(.*)$", re.S)
 
 
-def verify_reading(events):
-    """The evaluator's reading of the newest verify_result (VERIFY_READING_RULE): {goal, word, ok, admits, admitted,
-    boundary, evaluated_at, goal_verdict, file}, or None when no goal verdict the latest snapshot carries read that run."""
-    v = latest_verify(events)
-    if v is None:
+def verify_reading(events, v=None):
+    """The evaluator's reading of a verify run (VERIFY_READING_RULE) -- v, else the newest mission verify
+    (latest_mission_verify): {goal, word, ok, admits, admitted, boundary, evaluated_at, goal_verdict, file, against,
+    against_checked, source ("mission_snapshot" | "goal_verdict", UI-3 amendment 3), source_seq (that line's seq),
+    verify_identified (the line named the run's report and sha256)}, or None when no
+    goal verdict the latest snapshot carries read that run, or v is the installer's check (UI-3, UC-9)."""
+    v = latest_mission_verify(events) if v is None else v
+    if v is None or is_installer_check(v):
         return None
     p, vt = v["line"].get("payload") or {}, parse_ts(v["ts"])
     if vt is None:
         return None
-    # validator round 2: the run's own stream -- its newest snapshot's goal verdicts, its other runs
+    # validator round 2: the run's own stream -- its newest snapshot's goal verdicts, its other runs (UI-3: its other mission
+    # verifies; an installer check is no run the evaluator reads)
     own = [e for e in events if e["key"] == v["key"]]
-    others = [parse_ts(e["ts"]) for e in of_kind(own, "verify_result") if e is not v]
-    best = None
-    for goal, g in sorted(snapshot_map(latest_snapshot(own), "goal_verdicts").items()):
+    others = [parse_ts(e["ts"]) for e in of_kind(own, "verify_result") if e is not v and not is_installer_check(e)]
+
+    def in_window(at):
+        return at is not None and at >= vt and not any(t is not None and vt < t <= at for t in others)
+
+    cands = []  # (evaluated_at, feed position, reading)
+    # builder review: an evaluation the evaluator's own line covers (same goal, same evaluated_at) is read from that line alone --
+    # a snapshot copying the same verdict file never overrides what the line says of the run it read
+    covered = {}
+    for e in own:
+        if e["kind"] == "goal_verdict":
+            gp = e["line"].get("payload") or {}
+            if isinstance(gp.get("goal"), str) and isinstance(gp.get("evaluated_at"), str):
+                covered.setdefault(gp["goal"], set()).add(gp["evaluated_at"])
+    snap = latest_snapshot(own)
+    for goal, g in sorted(snapshot_map(snap, "goal_verdicts").items()):
         if not isinstance(g, dict):
             continue
+        if isinstance(g.get("evaluated_at"), str) and g.get("evaluated_at") in covered.get(goal, ()):
+            continue
         at = parse_ts(g.get("evaluated_at")) if isinstance(g.get("evaluated_at"), str) else None
-        if at is None or at < vt or any(t is not None and vt < t <= at for t in others):
+        if not in_window(at):
             continue
         dets = g.get("verify_detectors") if isinstance(g.get("verify_detectors"), list) and g.get("verify_detectors") else [g.get("verify")]
         for r in dets:
             x = _detector_reading(goal, g, r, p)
             if x is not None:
-                if best is None or at > parse_ts(best["evaluated_at"]):
-                    best = x
+                x.update(source="mission_snapshot", source_seq=snap["seq"], verify_identified=False)
+                cands.append((at, own.index(snap), x))
                 break
-    return best
+    # UI-3 amendment 3 (UC-36): the goal_verdict lines of V's own stream -- of each goal, its newest line alone, as a snapshot
+    # holds each goal's newest verdict alone (a trap's rewrite of a verdict supersedes the line written before it)
+    newest = {}
+    for i, e in enumerate(own):
+        if e["kind"] == "goal_verdict":
+            gk = (e["line"].get("payload") or {}).get("goal")
+            newest[gk if isinstance(gk, str) else ("#", i)] = i
+    keep = set(newest.values())
+    for i, e in enumerate(own):
+        if e["kind"] != "goal_verdict" or i not in keep:
+            continue
+        gp = e["line"].get("payload") or {}
+        at = parse_ts(gp.get("evaluated_at")) if isinstance(gp.get("evaluated_at"), str) else None
+        g = {"verdict": gp.get("verdict"), "evaluated_at": gp.get("evaluated_at"), "file": e["line"].get("source_path")}
+        for r in gp.get("verify_readings") if isinstance(gp.get("verify_readings"), list) else []:
+            if not isinstance(r, dict):
+                continue
+            named = isinstance(r.get("report_path"), str) and isinstance(r.get("report_sha256"), str)
+            if named:
+                if _norm_rel(r["report_path"]) != _norm_rel(v["line"].get("source_path")) or r["report_sha256"] != v["line"].get("sha256"):
+                    continue
+            elif not in_window(at):
+                continue
+            x = _line_reading(gp.get("goal"), g, r, p)
+            if x is not None:
+                x.update(source="goal_verdict", source_seq=e["seq"], verify_identified=named)
+                cands.append((at or vt, i, x))
+                break
+    if not cands:
+        return None
+    return max(cands, key=lambda c: (c[0], c[1]))[2]
 
 
 def _detector_reading(goal, g, r, p):
@@ -442,10 +527,27 @@ def _detector_reading(goal, g, r, p):
     # validator round 1: and the artifact -- the goal file's verify_pass_or_dib detector declares the `against` it runs
     # verify with; a run against another artifact is not the run that detector read
     decl = r.get("against") if isinstance(r.get("against"), str) and r.get("against").strip() else None
+    admitted = [x.strip() for x in m.group(3).split(",")] if m.group(3) else []
+    return _reading(goal, g, p, int(m.group(1)), m.group(2), admitted, m.group(4).strip() or None, r.get("ok") is True, decl)
+
+
+def _line_reading(goal, g, r, p):
+    """UI-3 amendment 3 (UC-36): one reading of a goal_verdict line (its verify_readings entry r) of the run p, or None -- the
+    same reading _detector_reading gives for the verdict detail the entry was taken from."""
+    code, word = as_int(r.get("exit_code")), r.get("word")
+    if code is None or word not in ("PASS", "PASS-DIB", "REFUSE") or not isinstance(goal, str):
+        return None
+    admitted = [str(x) for x in r.get("admitted")] if isinstance(r.get("admitted"), list) else []
+    decl = r.get("against") if isinstance(r.get("against"), str) and r.get("against").strip() else None
+    boundary = r.get("boundary").strip() or None if isinstance(r.get("boundary"), str) else None
+    return _reading(goal, g, p, code, word, admitted, boundary, r.get("ok") is True, decl)
+
+
+def _reading(goal, g, p, code, word, admitted, boundary, ok, decl):
+    """The reading of the run p by a detector that said (code, word, admitted, boundary, ok, decl), or None when what it said is
+    not of p (VERIFY_READING_RULE): another artifact, another exit, other subjects."""
     if decl is not None and _norm_rel(decl) != _norm_rel(p.get("against")):
         return None
-    code, word = int(m.group(1)), m.group(2)
-    admitted = [x.strip() for x in m.group(3).split(",")] if m.group(3) else []
     rb = p.get("refused_by") if isinstance(p.get("refused_by"), list) else None
     if p.get("verdict") == "PASS":
         same = code == 0 and word == "PASS"
@@ -455,9 +557,8 @@ def _detector_reading(goal, g, r, p):
         same = False
     if not same:
         return None
-    ok = r.get("ok") is True
     return {"goal": goal, "word": word, "ok": ok, "admits": ok and word in ("PASS", "PASS-DIB"), "admitted": admitted,
-            "boundary": m.group(4).strip() or None, "evaluated_at": g.get("evaluated_at"), "goal_verdict": g.get("verdict"), "file": g.get("file"),
+            "boundary": boundary, "evaluated_at": g.get("evaluated_at"), "goal_verdict": g.get("verdict"), "file": g.get("file"),
             "against": decl, "against_checked": decl is not None}
 
 
@@ -647,36 +748,123 @@ def dispatch_first_seen(events):
     return out
 
 
+CLOSED_MILESTONE = ("passed", "withdrawn")
+# UI-3 (UC-14): a milestone the feed first shows already closed was never observed open -- no time of it is shown
+NOT_RECORDED = "not recorded: closed before the feed began"
+# UI-3 amendment 1 (UC-31): a planned milestone that is not the mission's next has no window
+NOT_STARTED = "not started"
+MILESTONE_TIMES_RULE = (
+    "times observed at snapshots, in feed order. The mission's next milestone is the snapshot's current milestone when that "
+    "milestone is listed and not closed; only otherwise the earliest milestone not closed, in the milestones' natural order "
+    "(passed and withdrawn are closed; a withdrawn one is never the next). A milestone is taken as started when it became the "
+    "mission's next milestone or was seen active, whichever a snapshot shows first: its window opens at that snapshot's ts. A "
+    "planned milestone that is not the next has no running window (" + NOT_STARTED + " when it has no other). A window closes at "
+    "the first snapshot showing the milestone closed: at its done_ts when that lies at or after the window's opening, else at "
+    "that snapshot's ts. A window that ended because the milestone stopped being the next, with no close, is not counted. A "
+    "closed milestone is reopened -- seen active, or again the next -- only by a snapshot of a checkout that itself showed it "
+    "closed; a checkout that never showed it closed changes nothing about it. Reopened, it runs again and closed_at is its "
+    "latest close. A milestone's elapsed is the sum of its windows: those that ended in a close, and the open one to the clock "
+    "while it runs; a planned milestone keeps the sum and count of its windows that ended in a close. A milestone whose first "
+    "appearance in the feed is already closed has no time (" + NOT_RECORDED + ") until it is reopened; a writer's started_ts is "
+    "never read")
+
+
+def _natural_id(mid):
+    """A milestone id's natural order (M2 before M10) -- metrics.MILESTONE_ORDER's."""
+    parts = re.split(r"(\d+)", str(mid))
+    return [int(x) if n % 2 else x for n, x in enumerate(parts)], str(mid)
+
+
 def milestone_times(events):
-    """milestone id -> {opened_at, opened_basis, closed_at, closed_basis}. THE FIRST-SEEN RULE: opened = the latest map's
-    started_ts (the writer's observed start), else the ts of the first snapshot whose map shows the milestone active, when
-    no earlier snapshot showed it passed or withdrawn (a milestone first seen already closed was never seen open: its
-    opening is unknown, never its closing); closed = the latest map's done_ts, else the ts of the first snapshot showing it
-    passed or withdrawn -- cleared when a later snapshot shows it in neither."""
-    out = {}
+    """milestone id -> {opened_at, opened_basis, closed_at, closed_basis, elapsed_reason, windows}: UI-3 (UC-13..UC-17) as
+    amendment 1 (UC-31..UC-33) and amendment 2 (UC-41..UC-44) rule it -- THE ONE DERIVATION of a milestone's windows,
+    MILESTONE_TIMES_RULE. windows = [{opened_at, opened_seq, opened_basis, closed_at, closed_basis}] in order, the last with
+    closed_at null while it runs; opened_at = the first window's opening, closed_at = the latest close (null while a window is
+    open); each basis names the seq and states the number of windows; a window not counted (the milestone stopped being the
+    next) is said with its seqs. elapsed_reason: NOT_RECORDED for a milestone first seen closed and never reopened,
+    NOT_STARTED for a planned one with no window."""
+    st_of, win, last_next = {}, {}, None
     for e in of_kind(events, "mission_snapshot"):
-        for mid, m in snapshot_map(e, "milestones").items():
-            if not isinstance(m, dict):
+        mm = {k: v for k, v in snapshot_map(e, "milestones").items() if isinstance(v, dict)}
+        sts = {mid: milestone_status(m.get("status")) for mid, m in mm.items()}
+        cur = (e["line"].get("payload") or {}).get("current_milestone")
+        # amendment 2 (UC-42): the snapshot's current milestone, where it is listed and open; else the earliest not closed
+        if isinstance(cur, str) and sts.get(cur) is not None and sts[cur] not in CLOSED_MILESTONE:
+            nxt, nxt_how = cur, "the mission's next milestone (the snapshot's current milestone)"
+        else:
+            open_ids = sorted((mid for mid, s in sts.items() if s not in CLOSED_MILESTONE), key=_natural_id)
+            nxt, nxt_how = (open_ids[0] if open_ids else None), "the mission's next milestone (the earliest not closed)"
+        last_next = nxt
+        for mid, m in mm.items():
+            st = sts[mid]
+            x = st_of.get(mid)
+            if x is None:
+                x = st_of[mid] = {"first_closed": st in CLOSED_MILESTONE, "first_seq": e["seq"], "first_status": st, "last_status": st,
+                                  "closed_in": set(), "dropped": []}
+                win[mid] = []
+            # amendment 2 (UC-41): once a checkout showed the milestone closed, a checkout that never did changes nothing about it
+            if x["closed_in"] and e["key"] not in x["closed_in"] and st not in CLOSED_MILESTONE:
                 continue
-            st = milestone_status(m.get("status"))
-            t = out.setdefault(mid, {"opened_at": None, "opened_basis": None, "closed_at": None, "closed_basis": None, "seen_closed": False})
-            if st in ("passed", "withdrawn") and t["opened_at"] is None and not t["seen_closed"]:
-                t["seen_closed"], t["opened_basis"] = True, "unknown: first seen already %s (seq %s)" % (st, e["seq"])
-            if t["opened_at"] is None and not t["seen_closed"] and st == "active":
-                t["opened_at"], t["opened_basis"] = e["ts"], "the first snapshot showing it active (seq %s)" % e["seq"]
-            if st in ("passed", "withdrawn"):
-                if t["closed_at"] is None:
-                    t["closed_at"], t["closed_basis"] = e["ts"], "the first snapshot showing it %s (seq %s)" % (st, e["seq"])
+            x["last_status"] = st
+            ws = win[mid]
+            running = bool(ws) and ws[-1]["closed_at"] is None
+            # amendment 1 (UC-31), amendment 2 (UC-43): a window held as the next ends uncounted when the milestone, still
+            # planned, stops being the next -- said with its seqs
+            if running and st not in CLOSED_MILESTONE and st != "active" and mid != nxt:
+                w = ws.pop()
+                x["dropped"].append((w["opened_seq"], e["seq"]))
+                running = False
+            if not running and st not in CLOSED_MILESTONE and (st == "active" or mid == nxt):
+                how = "showing it active" if st == "active" else "in which it is " + nxt_how
+                again = ", after its close" if (ws or x["first_closed"] or x["closed_in"]) else ""
+                ws.append({"opened_at": e["ts"], "opened_seq": e["seq"],
+                           "opened_basis": "the ts of the first mission_snapshot %s%s (seq %s)" % (how, again, e["seq"]),
+                           "closed_at": None, "closed_basis": None})
+            elif running and st in CLOSED_MILESTONE:
+                w = ws[-1]
+                done = m.get("done_ts") if isinstance(m.get("done_ts"), str) else None
+                dt, ot = parse_ts(done), parse_ts(w["opened_at"])
+                if dt is not None and ot is not None and dt >= ot:
+                    w["closed_at"], w["closed_basis"] = done, "the done_ts of the first mission_snapshot showing it %s (seq %s), at or after the window's opening" % (st, e["seq"])
+                else:
+                    why = ("it carries no done_ts" if done is None else "its done_ts names no real instant" if dt is None else
+                           "the opening names no real instant" if ot is None else "its done_ts lies before the window's opening")
+                    w["closed_at"], w["closed_basis"] = e["ts"], "the ts of the first mission_snapshot showing it %s (seq %s); %s" % (st, e["seq"], why)
+            if st in CLOSED_MILESTONE:
+                x["closed_in"].add(e["key"])
+    out = {}
+    for mid, x in st_of.items():
+        ws = win[mid]
+        planned = x["last_status"] not in CLOSED_MILESTONE and x["last_status"] != "active"
+        if planned and mid != last_next and ws and ws[-1]["closed_at"] is None:
+            ws.pop()  # UC-31 at the feed's end: a planned milestone that is not the next has no running window
+        dropped = "; ".join("was the mission's next milestone from seq %s to seq %s; not counted" % d for d in x["dropped"])
+        if not ws:
+            if x["first_closed"]:
+                why = "%s (first seen %s, at seq %s)" % (NOT_RECORDED, x["first_status"], x["first_seq"])
+                out[mid] = {"opened_at": None, "opened_basis": why + ("; " + dropped if dropped else ""), "closed_at": None, "closed_basis": why,
+                            "elapsed_reason": NOT_RECORDED, "windows": []}
+            elif x["last_status"] in CLOSED_MILESTONE:
+                why = "not recorded: %s without being seen started (first listed at seq %s)" % (x["last_status"], x["first_seq"])
+                out[mid] = {"opened_at": None, "opened_basis": why + ("; " + dropped if dropped else ""), "closed_at": None, "closed_basis": why,
+                            "elapsed_reason": why, "windows": []}
             else:
-                t["closed_at"], t["closed_basis"] = None, None
-    for mid, m in snapshot_map(latest_snapshot(events), "milestones").items():
-        if isinstance(m, dict) and mid in out:
-            if isinstance(m.get("started_ts"), str):
-                out[mid]["opened_at"], out[mid]["opened_basis"] = m["started_ts"], "the snapshot's started_ts"
-            if isinstance(m.get("done_ts"), str):
-                out[mid]["closed_at"], out[mid]["closed_basis"] = m["done_ts"], "the snapshot's done_ts"
-    for t in out.values():
-        t.pop("seen_closed", None)
+                why = "%s: %s" % (NOT_STARTED, dropped if dropped else "planned, never the mission's next milestone nor seen active (first listed at seq %s)" % x["first_seq"])
+                out[mid] = {"opened_at": None, "opened_basis": why, "closed_at": None, "closed_basis": None, "elapsed_reason": NOT_STARTED, "windows": []}
+            continue
+        n, last = len(ws), ws[-1]
+        # UC-32: the basis states the number of windows, one included; UC-43: a window not counted is said with its seqs
+        ob = ("1 window -- opened at " + ws[0]["opened_basis"]) if n == 1 else "%d windows -- the first opened at %s; reopened at %s" % (
+            n, ws[0]["opened_basis"], "; ".join(w["opened_basis"] for w in ws[1:]))
+        if dropped:
+            ob += "; also " + dropped
+        cb = None if last["closed_basis"] is None else "%s; the latest close of %d window%s" % (last["closed_basis"], n, "" if n == 1 else "s")
+        out[mid] = {"opened_at": ws[0]["opened_at"], "opened_basis": ob, "closed_at": last["closed_at"], "closed_basis": cb,
+                    "elapsed_reason": None, "windows": [dict(w) for w in ws]}
+    # amendment 2 (UC-41; validator round 1, turn 3): the status the derivation accepted -- a checkout that never showed a
+    # closed milestone closed changes nothing about it, its status included
+    for mid, x in st_of.items():
+        out[mid]["status"] = x["last_status"]
     return out
 
 

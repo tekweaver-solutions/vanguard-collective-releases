@@ -120,6 +120,33 @@ $goalPath = $null
 $verdictPath = $null
 $verdict = $null
 
+# UI-3 amendment 3 (1.3.3), group V, UC-34 / UC-35: THE EVALUATOR'S READING IN THE FEED. After each evaluation -- a verdict
+# file written whole, by the main path, the absent goal's or the trap's -- ONE goal_verdict line is appended through the feed's
+# one writer, unchanged (tools/lam/goal-verdict-event.ps1 -> mission-telemetry.ps1's Invoke-MissionTelemetry ->
+# Write-MissionEvent), its source that verdict file. ONCE PER RUN -- except a trap that fires after the main path's (or the
+# absent goal's) line and rewrites the verdict file: its line follows, the newest of the goal, as the file on disk now says.
+# THE APPEND CANNOT CHANGE AN EVALUATION: it runs after the verdict file is complete on disk, in a child scope (no name of
+# this file is shadowed), every stream of which goes to $null (the printed lines, the hook's one JSON line among them, are
+# untouched), inside try/catch (this file's trap is never reached through it); it sets nothing this file reads afterwards, and
+# the writer itself never throws. The verify_pass_or_dib detector stashes what identifies its run (the report verify printed)
+# in GoalVerdictRuns without changing what it returns, so the verdict file's bytes are what they were.
+$script:GoalVerdictRuns = New-Object System.Collections.Generic.List[object]
+$script:GoalVerdictSent = $false
+function Send-GoalVerdictLine {
+    # -Rewrite: the trap's. A trap that fires AFTER the main path's line rewrites the verdict file (NOT_MET, evaluator_error);
+    # its line then follows, so the feed's newest line of the goal is the verdict on disk (builder review).
+    param([string]$Path, [switch]$Rewrite)
+    if ($script:GoalVerdictSent -and -not $Rewrite) { return }
+    $script:GoalVerdictSent = $true
+    try {
+        $null = & {
+            param($Lib, $Root, $VPath, $Runs)
+            . $Lib
+            Send-GoalVerdictEvent -MissionRoot $Root -VerdictPath $VPath -Runs $Runs
+        } (Join-Path $PSScriptRoot 'goal-verdict-event.ps1') $MissionRoot $Path @($script:GoalVerdictRuns.ToArray()) *>&1
+    } catch { }
+}
+
 # =================================================================================================
 # TURN COUNTING -- THE WIRING turn_cap NEVER HAD (V-1 round 3, WP-3 residual).
 # =================================================================================================
@@ -279,6 +306,10 @@ trap {
             $trapNotWritten = "writing $trapTarget failed (" + ((([string]$_.Exception.Message) -replace '[\r\n]+', ' ')) + ')'
         }
     }
+    # UI-3 amendment 3 (UC-34): the trap's NOT_MET verdict, where written, gets its goal_verdict line -- after the main path's
+    # line too, which it supersedes (the block at the head of this file); guarded, so the fail-closed refusal below is reached
+    # whatever happens here
+    if ($trapWritten) { try { Send-GoalVerdictLine -Path $trapWritten -Rewrite } catch { } }
     $trapTail = if ($trapWritten) { " Verdict: $trapWritten." } else { " No verdict file was written: $trapNotWritten." }
     if ($AsStopHook) {
         $trapJson = ''
@@ -3297,6 +3328,8 @@ if (-not $goalPath) {
             $absentNotWritten = "writing $absentTry failed ($(($_.Exception.Message -replace '[\r\n]+', ' ')))"
         }
     }
+    # UI-3 amendment 3 (UC-34): a recorded absent goal is an evaluation; its goal_verdict line (the block at the head of this file)
+    if ($absentVerdictPath) { Send-GoalVerdictLine -Path $absentVerdictPath }
     $absentTail = if ($absentVerdictPath) { " Verdict: $absentVerdictPath." } else { " No verdict file was written: $absentNotWritten." }
     # =============================================================================================
     # (the BATCH-4 charter; the operator's rulings
@@ -5160,7 +5193,10 @@ function Invoke-Detector {
             else               { $v = Get-LamVerifyVerdict -VerifyOutput $verifyText -ExitCode $code }
             $ok = ($v.verdict -eq 'PASS') -or ($v.verdict -eq 'PASS-DIB')
             $adm = if ($v.admitted.Count -gt 0) { " admitted: $($v.admitted -join ', ')" } else { '' }
-            return @{ ok = $ok; detail = "mission verify exited $code -> $($v.verdict).$adm $($v.reason)" }
+            $vDetail = "mission verify exited $code -> $($v.verdict).$adm $($v.reason)"
+            # UI-3 amendment 3 (UC-34): what identifies this run, for the goal_verdict line (the block at the head of this file)
+            try { [void]$script:GoalVerdictRuns.Add(@{ detail = $vDetail; against = $against; text = $verifyText }) } catch { }
+            return @{ ok = $ok; detail = $vDetail }
         }
 
         'validator_pass_count' {
@@ -6207,6 +6243,8 @@ foreach ($r in $results) {
     [void]$sb.AppendLine("    detail: '$detailFlat'")
 }
 [System.IO.File]::WriteAllText($verdictPath, $sb.ToString(), (New-Object System.Text.UTF8Encoding($false)))
+# UI-3 amendment 3 (UC-34): the verdict file is complete on disk; its goal_verdict line (the block at the head of this file)
+Send-GoalVerdictLine -Path $verdictPath
 
 # --- report --------------------------------------------------------------------------------------
 if ($AsStopHook) {

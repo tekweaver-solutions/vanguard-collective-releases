@@ -25,8 +25,6 @@ _BY = {c[0]: (n, c) for n, c in enumerate(CLASSES)}
 HALT_SEVERITY = {"critical": ("critical", 1), "blocking": ("critical", 1), "high": ("high", 2), "low": ("low", 4)}
 HALT_WARNING = ("medium", 3)
 BLOCKING_HALT = ("critical", "high", "blocking")
-# RELEASE-5 group B (RB-7): a verify refusal the stop evaluator's reading of that same run admits warns as medium
-ADMITTED = ("medium", 3)
 
 
 def halt_word(sev):
@@ -83,21 +81,33 @@ def mission_errors(events, streams, ahead_days):
             out.append(_error("partial_manifest", f, "dispatch %s finalized with %s -- the manifest of session %s, %s" % (
                 did, ", ".join(derive.partial_fields(f)), derive._id(fp.get("dispatch_id")),
                 "capture gaps not recorded" if gaps is None else "%d capture gap%s" % (gaps, "" if gaps == 1 else "s")), identity))
-    v = derive.latest_verify(events)
+    # UI-3 amendment 1 (UC-28, ruling (n)): the newest MISSION verify -- the one "Last verify" shows; an installer check, older or
+    # newer, never stands in for it
+    v = derive.latest_mission_verify(events)
     if v is not None:
         p = v["line"]["payload"]
         div = derive.as_int(p.get("divergences"))
-        # RELEASE-5 group B (RB-7): a refusal the stop evaluator's reading of the same run admits is said beside that reading,
-        # in its own words, and is no blocking error (a warning)
-        ev = derive.verify_reading(events)
+        # UI-3 (UC-12, register row 602): a verify the stop evaluator's reading of that same run admits (admits true, so the
+        # card's blocking is false) is no error -- in no list and no count; the verify cards show the evaluator's reading. A
+        # verify with no admitting reading stays an error exactly as RELEASE-5 group B (RB-7) made it.
+        ev = derive.verify_reading(events, v)
         adm = ev is not None and ev["admits"] and p.get("verdict") != "PASS"
-        tail = (" -- the stop evaluator's reading of this run (goal %s, evaluated_at %s): %s; the boundary it disclosed: %s"
-                % (ev["goal"], ev["evaluated_at"], ev["word"], ev["boundary"] or "none named")) if adm else ""
+        if not adm and div is not None and div > 0:
+            out.append(_error("testimony_conflict", v, "the last mission verify (verdict %s) found %d divergence(s) between testimony and the runner's anchors" % (p.get("verdict"), div),
+                              identity))
+        elif not adm and p.get("verdict") != "PASS":
+            out.append(_error("failed_verify", v, "the last mission verify's verdict is %s" % p.get("verdict"), identity))
+    # UI-3 amendment 1 (UC-29): the installer's newest check, with differences, is an error of the same class in its own words,
+    # listed apart from the mission verify; an installer PASS with none lists nothing
+    ic = derive.latest_installer_check(events)
+    if ic is not None:
+        p = ic["line"]["payload"]
+        div = derive.as_int(p.get("divergences"))
+        what = "the installer's check of the framework files against %s (verdict %s)" % (p.get("against") or "framework.lock", p.get("verdict"))
         if div is not None and div > 0:
-            out.append(_error("testimony_conflict", v, "the last mission verify (verdict %s) found %d divergence(s) between testimony and the runner's anchors" % (p.get("verdict"), div) + tail,
-                              identity, ADMITTED if adm else None))
+            out.append(_error("testimony_conflict", ic, what + " found %d divergence(s) from the lock" % div, identity))
         elif p.get("verdict") != "PASS":
-            out.append(_error("failed_verify", v, "the last mission verify's verdict is %s" % p.get("verdict") + tail, identity, ADMITTED if adm else None))
+            out.append(_error("failed_verify", ic, what + " did not pass", identity))
     for gid, g in sorted(derive.gates(events).items()):
         if g["kind"] == "gate_expired":
             out.append(_error("expired_gate", g, "gate %s (%s) expired at %s" % (gid, g["line"]["payload"].get("kind"), g["line"]["payload"].get("expires_at")), identity))

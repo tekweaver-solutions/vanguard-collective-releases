@@ -92,12 +92,11 @@ def mission_stats(events, window):
     hs = derive.halts(events)
     raised = [h for h in hs.values() if h["raised"] is not None]
     resolved = [h for h in raised if h["resolved"] is not None]
-    spans = [x for x in (_seconds(h["raised"]["ts"], h["resolved"]["ts"]) for h in resolved) if x is not None]
     out["halts_raised"] = _stat(len(raised), "count of HALT ids with a halt_raised line", window)
     out["halts_resolved"] = _stat(len(resolved), "count of raised HALT ids whose latest halt_raised is followed by a halt_resolved", window)
-    out["halt_mean_time_to_resolve_s"] = _stat(round(sum(spans) / len(spans), 3) if spans else None,
-                                               "mean over resolved HALTs of (halt_resolved ts - halt_raised ts), seconds; a pair whose ts names no real instant is left out", window,
-                                               resolved_measured=len(spans))
+    # UI-3 (UC-8, register row 595): ONE definition of mean time to resolve -- the HALT card's, over its measured HALTs
+    spans, _ = _halt_spans(derive.halt_times(events))
+    out["halt_mean_time_to_resolve_s"] = _stat(_mean(spans), HALT_TTR, window, resolved_measured=len(spans))
 
     calls = derive.of_kind(events, "tool_call")
     captured = [e for e in calls if e["line"]["payload"].get("exit_code") is not None]
@@ -107,39 +106,68 @@ def mission_stats(events, window):
         "tool_call lines with exit_code non-zero / tool_call lines with exit_code captured; \"not captured\" when every exit_code is null",
         window, numerator=nonzero, denominator=len(captured), tool_calls=len(calls))
 
-    out["elapsed_per_milestone"] = _stat(_segments(events), "per milestone: ts of the first snapshot naming the next milestone (or, for the current one, "
-                                                            "the mission's last line) - ts of the first snapshot naming it, seconds", window)
+    segs = _segments(events, mission_clock(events))
+    out["elapsed_per_milestone"] = _stat(segs, ELAPSED_RUNS, window, not_recorded=sum(1 for s in segs if s["elapsed_reason"] == derive.NOT_RECORDED),
+                                         not_started=sum(1 for s in segs if s["elapsed_reason"] == derive.NOT_STARTED))
     return out
 
 
-def _segments(events):
-    """The current_milestone runs of the mission's snapshots: [{milestone, from_ts, to_ts, closed, elapsed_s}]. A milestone the
-    latest snapshot's map shows withdrawn has no run (it is out of every elapsed and slowest figure); the last run of a
-    milestone that map shows passed is closed, ending at its done_ts -- unknown, so unmeasured, where the feed carries none."""
-    snap = derive.latest_snapshot(events)
-    mm = snap["line"]["payload"].get("milestones") if snap else None
-    mm = mm if isinstance(mm, dict) else {}
-    status = {k: derive.milestone_status(v.get("status")) for k, v in mm.items() if isinstance(v, dict)}
-    segs, cur = [], None
-    for e in derive.of_kind(events, "mission_snapshot"):
-        m = e["line"]["payload"].get("current_milestone")
-        if cur is not None and m == cur["milestone"]:
-            continue
-        if cur is not None:
-            cur["to_ts"], cur["closed"] = e["ts"], True
-            segs.append(cur)
-        cur = None if m is None else {"milestone": m, "from_ts": e["ts"], "to_ts": None, "closed": False}
-    if cur is not None:
-        if status.get(cur["milestone"]) == "passed":
-            done = mm[cur["milestone"]].get("done_ts")
-            cur["to_ts"], cur["closed"] = (done if isinstance(done, str) else None), True
-        else:
-            cur["to_ts"] = events[-1]["ts"]
-        segs.append(cur)
-    segs = [s for s in segs if status.get(s["milestone"]) != "withdrawn"]
-    for s in segs:
-        s["elapsed_s"] = None if s["to_ts"] is None else _seconds(s["from_ts"], s["to_ts"])
-    return segs
+# UI-3 (UC-13..UC-17, register row 588): ONE DERIVATION of a milestone's window serves the Milestones table (milestones[]
+# elapsed_s), milestone_timing (the Dispatches column, the Stats strip) and the per-milestone runs (elapsed_per_milestone,
+# slowest_milestones): milestone_windows below, over derive.milestone_times.
+ELAPSED_RUNS = ("per milestone of the latest mission_snapshot's milestones map, but those it shows withdrawn, in the milestones' natural "
+                "order: from_ts = opened_at, to_ts = closed_at (or, while running, the mission feed's last ts), elapsed_s = the sum of its "
+                "windows, seconds -- as milestone_timing reads it (" + derive.MILESTONE_TIMES_RULE + "); null with elapsed_reason where the "
+                "feed records none; not_recorded = how many read " + derive.NOT_RECORDED + "; not_started = how many read " + derive.NOT_STARTED)
+
+
+def milestone_windows(events, clock):
+    """UI-3: milestone id -> its windows over the latest snapshot's milestones map: {id, title, status, opened_at, opened_basis,
+    closed_at, closed_basis, windows, elapsed_s, elapsed_reason, running, dispatch_count, dispatch_ids}, in the milestones'
+    natural order. Amendment 1 (UC-32): elapsed = the sum of its windows, each closed_at - opened_at, the open one (marked
+    running) to the mission feed's last ts. Dispatches (UC-16) = the dispatch_opened lines whose ts lies within any of its
+    windows; null where no window is measured. Every time is the feed's own, observed at snapshots
+    (derive.MILESTONE_TIMES_RULE)."""
+    mm = derive.snapshot_map(derive.latest_snapshot(events), "milestones")
+    times = derive.milestone_times(events)
+    opened_lines = [(derive.parse_ts(e["ts"]), derive._id(e["line"]["payload"].get("dispatch_id"))) for e in derive.of_kind(events, "dispatch_opened")]
+    out = {}
+    for mid in sorted(mm, key=_natural):
+        m = mm[mid] if isinstance(mm[mid], dict) else {}
+        t = times.get(mid) or {"opened_at": None, "opened_basis": derive.NOT_RECORDED, "closed_at": None, "closed_basis": derive.NOT_RECORDED,
+                               "elapsed_reason": derive.NOT_RECORDED, "windows": []}
+        why = t["elapsed_reason"]
+        ws = t.get("windows") or []
+        running = why is None and bool(ws) and ws[-1]["closed_at"] is None
+        el, spans = None, []
+        if why is None:
+            for w in ws:
+                end = w["closed_at"] if w["closed_at"] is not None else clock
+                s_ = _seconds(w["opened_at"], end) if (w["opened_at"] and end) else None
+                if s_ is None:
+                    why = "a ts names no real instant"
+                    break
+                if s_ < 0:
+                    why = "opened_at after the clock" if w["closed_at"] is None else "closed_at before opened_at (a host clock stepped back)"
+                    break
+                spans.append((derive.parse_ts(w["opened_at"]), derive.parse_ts(end), s_))
+            if why is None:
+                el = round(sum(x[2] for x in spans), 3)
+        # the windows' dispatches only where every window is measured
+        measured = el is not None
+        within = [d for ts, d in opened_lines if measured and ts is not None and any(lo <= ts <= hi for lo, hi, _ in spans)]
+        out[mid] = dict(t, id=mid, title=m.get("title"), status=t.get("status") or derive.milestone_status(m.get("status")), elapsed_s=el, elapsed_reason=why,
+                        running=running, dispatch_count=len(within) if measured else None, dispatch_ids=sorted(set(within)))
+    return out
+
+
+def _segments(events, clock):
+    """The per-milestone runs (elapsed_per_milestone, slowest_milestones): [{milestone, from_ts, to_ts, closed, elapsed_s,
+    elapsed_reason}] -- ELAPSED_RUNS, one row per milestone_windows row but those the latest map shows withdrawn (out of
+    every elapsed and slowest figure); closed = not running."""
+    return [{"milestone": w["id"], "from_ts": w["opened_at"], "to_ts": w["closed_at"] if w["closed_at"] is not None else (clock if w["running"] else None),
+             "closed": not w["running"], "elapsed_s": w["elapsed_s"], "elapsed_reason": w["elapsed_reason"]}
+            for w in milestone_windows(events, clock).values() if w["status"] != "withdrawn"]
 
 
 # =================================================================================================
@@ -256,15 +284,16 @@ def error_ages(errs, clock, window):
 def last_verify(events, clock, window, against=MISSION_CLOCK):
     """V-18: the latest verify -- verdict, what it covered (L-6: scope), checks, age. On /api/missions its age is against
     the fleet's clock (F5: one clock per card); on the Project tile, against the mission's."""
-    f = ("the mission's latest verify_result in feed order: value = its verdict; scope = its arms_run and against, and the current_milestone "
+    f = ("the mission's latest verify_result in feed order whose arms_run is not solely install-verify (UI-3: the installer's check is "
+         "the framework version card's own line): value = its verdict; scope = its arms_run and against, and the current_milestone "
          "of the latest mission_snapshot at or before it; checks = the number of arms run; age_s = " + against + " - its ts, seconds")
-    v = derive.latest_verify(events)
+    v = derive.latest_mission_verify(events)
     if v is None:
         return _stat(None, f, window, verdict=None, scope=None, checks=None, divergences=None, ts=None, age_s=None, source=None,
                      evaluator=None, blocking=None)
     p = v["line"]["payload"]
     arms = p.get("arms_run") if isinstance(p.get("arms_run"), list) else []
-    ev = derive.verify_reading(events)
+    ev = derive.verify_reading(events, v)
     return _stat(p.get("verdict"), f, window, verdict=p.get("verdict"),
                  scope={"milestone": _milestone_at(events, v), "arms_run": p.get("arms_run"), "against": p.get("against")},
                  checks=len(arms), divergences=p.get("divergences"), ts=v["ts"], age_s=_seconds(v["ts"], clock),
@@ -374,9 +403,10 @@ def live(events, clock, window):
 
 
 MILESTONE_ORDER = "ordered by id naturally (its digit runs read as numbers: M2 before M10)"
-MILESTONE_ELAPSED = ("(done_ts, else " + MISSION_CLOCK + ") - started_ts, seconds; null while started_ts is null (elapsed_reason \"not "
-                     "started\"), when a ts names no real instant (\"a ts names no real instant\"), or when it would be negative "
-                     "(\"started_ts after the clock\", or \"started_ts after done_ts\")")
+MILESTONE_ELAPSED = ("the sum of the milestone's windows, observed at snapshots (UI-3: the one derivation milestone_timing reads -- " +
+                     derive.MILESTONE_TIMES_RULE + "), the open one to " + MISSION_CLOCK + "; null with elapsed_reason \"" + derive.NOT_RECORDED +
+                     "\" for a milestone first seen already closed, \"" + derive.NOT_STARTED + "\" for a planned one that has no window, or \"a ts "
+                     "names no real instant\"")
 MILESTONE_ROW_FORMULA = ("a milestone of the latest mission_snapshot's milestones map, " + MILESTONE_ORDER + "; title, status, assertions_total "
                          "and assertions_green as the snapshot writer derived them; elapsed_s = " + MILESTONE_ELAPSED)
 
@@ -385,19 +415,6 @@ def _natural(mid):
     """A milestone id's natural order: its digit runs as numbers, then the id itself (M2 < M10; M02 beside M2)."""
     parts = re.split(r"(\d+)", mid)
     return [int(p) if n % 2 else p for n, p in enumerate(parts)], mid
-
-
-def _milestone_elapsed(start, done, clock):
-    """(elapsed_s, elapsed_reason) of one milestone row: never negative (UI-1 S4 C-6)."""
-    if start is None:
-        return None, "not started"
-    end = done if done is not None else clock
-    el = _seconds(start, end)
-    if el is None:
-        return None, "a ts names no real instant"
-    if el < 0:
-        return None, "started_ts after done_ts" if done is not None else "started_ts after the clock"
-    return el, None
 
 
 def milestones(events, clock, window):
@@ -427,11 +444,13 @@ def milestones(events, clock, window):
         return {"list": None, "progress": None, "reason": reason, "basis": basis,
                 "tile": _stat(None, pf, window, current=None, of=None, complete=None, active=None, planned=None, reason=reason)}
     rows = []
+    win = milestone_windows(events, clock)
     for mid in sorted(mm, key=_natural):
         m = mm[mid] if isinstance(mm[mid], dict) else {}
-        el, why = _milestone_elapsed(m.get("started_ts"), m.get("done_ts"), clock)
-        rows.append({"id": mid, "title": m.get("title"), "status": derive.milestone_status(m.get("status")), "assertions_total": derive.as_int(m.get("assertions_total")),
-                     "assertions_green": derive.as_int(m.get("assertions_green")), "elapsed_s": el, "elapsed_reason": why,
+        w = win[mid]
+        # amendment 2 (UC-41): the status the one derivation accepted (a checkout that never showed the close changes nothing)
+        rows.append({"id": mid, "title": m.get("title"), "status": w["status"], "assertions_total": derive.as_int(m.get("assertions_total")),
+                     "assertions_green": derive.as_int(m.get("assertions_green")), "elapsed_s": w["elapsed_s"], "elapsed_reason": w["elapsed_reason"],
                      "formula": MILESTONE_ROW_FORMULA, "window": window})
     passed = sum(1 for r in rows if r["status"] == "passed")
     pending = sum(1 for r in rows if r["status"] == "pending")
@@ -626,7 +645,7 @@ def fleet_stats(missions, fleet_figures, clock, window):
     for m in missions:
         c, cp, nz = _exit_codes(m["events"])
         calls, captured, nonzero = calls + c, captured + cp, nonzero + nz
-    slow = [dict(s, mission_id=m["mission_id"]) for m in missions for s in _segments(m["events"])]
+    slow = [dict(s, mission_id=m["mission_id"]) for m in missions for s in _segments(m["events"], mission_clock(m["events"]))]
     slow.sort(key=lambda s: (s["elapsed_s"] is None, -(s["elapsed_s"] or 0), s["mission_id"], str(s["milestone"])))
     return {
         "kpis": {
@@ -640,7 +659,9 @@ def fleet_stats(missions, fleet_figures, clock, window):
                                             "\"not captured\" when no exit_code is", window, numerator=nonzero, denominator=captured, tool_calls=calls),
         },
         "series": series([m["events"] for m in missions], clock, window),
-        "slowest_milestones": _stat(slow, "every mission's elapsed_per_milestone runs, slowest first (elapsed_s descending, unmeasured last)", window),
+        "slowest_milestones": _stat(slow, "every mission's elapsed_per_milestone runs, slowest first (elapsed_s descending, unmeasured last): " + ELAPSED_RUNS, window,
+                                    not_recorded=sum(1 for s in slow if s["elapsed_reason"] == derive.NOT_RECORDED),
+                                    not_started=sum(1 for s in slow if s["elapsed_reason"] == derive.NOT_STARTED)),
     }
 
 
@@ -664,22 +685,42 @@ def validator_rounds(events, window):
                  dispatch_rule="a dispatch's series = the mission's restricted to its assertion_targets (validator results name no dispatch)")
 
 
-def halt_card(events, clock, window):
-    """B-6: open, answered (and withdrawn) HALTs; mean and median time to resolve over answered HALTs whose two times are
-    known (answered_at - raised_at, seconds, never negative); the answered HALTs whose time could not be read (unknown, never
-    a zero); the oldest open HALT's age against the mission clock."""
-    t = derive.halt_times(events)
-    rows = [dict(v, halt_id=k) for k, v in sorted(t.items())]
-    ans = [r for r in rows if r["state"] == "answered"]
-    opn = [r for r in rows if r["state"] == "open"]
+HALT_TTR = ("the HALT card's mean time to resolve (UI-3, one definition): the mean over the answered HALTs whose two times are known "
+            "of answered_at - raised_at, seconds, never negative (" + derive.HALT_PRECEDENCE + "); resolved_measured = how many HALTs it "
+            "is over; null when none is measured")
+
+
+def _mean(spans):
+    return round(sum(spans) / len(spans), 3) if spans else None
+
+
+def _halt_spans(times, rows=None):
+    """UI-3 (UC-8): (spans, unknown) -- the time to resolve of each answered HALT whose two times are known (HALT_TTR), and the
+    answered HALTs whose time could not be read. rows (the HALT card's) gain their ttr_s."""
+    rows = rows if rows is not None else [dict(v, halt_id=k) for k, v in sorted(times.items())]
     spans, unknown = [], []
-    for r in ans:
+    for r in rows:
+        if r["state"] != "answered":
+            continue
         s = _seconds(r["raised_at"], r["answered_at"]) if (r["raised_at"] and r["answered_at"]) else None
         if s is None or s < 0:
             unknown.append(r["halt_id"])
         else:
             r["ttr_s"] = s
             spans.append(s)
+    return spans, unknown
+
+
+def halt_card(events, clock, window):
+    """B-6: open, answered (and withdrawn) HALTs; mean and median time to resolve over answered HALTs whose two times are
+    known (answered_at - raised_at, seconds, never negative); the answered HALTs whose time could not be read (unknown, never
+    a zero); the oldest open HALT's age against the mission clock. UI-3 (UC-8): its mean is THE mean time to resolve
+    (_halt_spans, HALT_TTR), the one the Stats tile shows."""
+    t = derive.halt_times(events)
+    rows = [dict(v, halt_id=k) for k, v in sorted(t.items())]
+    ans = [r for r in rows if r["state"] == "answered"]
+    opn = [r for r in rows if r["state"] == "open"]
+    spans, unknown = _halt_spans(t, rows)
     oldest = None
     for r in opn:
         age = _seconds(r["raised_at"], clock) if (r["raised_at"] and clock) else None
@@ -702,43 +743,32 @@ def halt_card(events, clock, window):
                  # answers; and the goal each checkout's snapshot read (null and a note where a snapshot predates the reading)
                  answered_allowlist=None if (goals and all(g["goal"] is None for g in goals)) else sum(1 for r in rows if r["state"] == "answered_allowlist"),
                  goal_readings=goals,
-                 mean_ttr_s=round(sum(spans) / len(spans), 3) if spans else None,
+                 mean_ttr_s=_mean(spans),
                  median_ttr_s=round(statistics.median(spans), 3) if spans else None, measured=len(spans),
                  unknown=unknown, oldest_open=oldest, open_unknown=open_unknown, clock=clock, against=MISSION_CLOCK,
                  precedence=derive.HALT_PRECEDENCE, halts=rows)
 
 
-MILESTONE_TIMING = ("elapsed = closed_at - opened_at; for a milestone not closed, " + MISSION_CLOCK + " - opened_at, marked running; "
-                    "dispatches = those first seen (dispatch_opened, else the first snapshot naming them) within [opened_at, closed_at "
-                    "or the clock]")
+MILESTONE_TIMING = ("times observed at snapshots (UI-3, the one derivation of the Milestones table, this strip and the per-milestone runs): " +
+                    derive.MILESTONE_TIMES_RULE + ". elapsed = the sum of its windows, the open one to " + MISSION_CLOCK + ", marked "
+                    "running; dispatches = the dispatch_opened lines whose ts lies within one of its windows, null where no window is measured")
 
 
 def milestone_timing(events, clock, window):
-    """B-8: per milestone of the latest snapshot's map, in the milestones' natural order: opened_at, closed_at (derive's
-    first-seen rule), elapsed_s, running, and the dispatches first seen within it."""
-    snap = derive.latest_snapshot(events)
-    mm = derive.snapshot_map(snap, "milestones")
-    times, seen = derive.milestone_times(events), derive.dispatch_first_seen(events)
-    rows = []
-    for mid in sorted(mm, key=_natural):
-        m = mm[mid] if isinstance(mm[mid], dict) else {}
-        t = times.get(mid) or {"opened_at": None, "opened_basis": None, "closed_at": None, "closed_basis": None}
-        st = derive.milestone_status(m.get("status"))
-        running = t["opened_at"] is not None and t["closed_at"] is None
-        end = t["closed_at"] if t["closed_at"] is not None else (clock if running else None)
-        el = _seconds(t["opened_at"], end) if (t["opened_at"] and end) else None
-        if el is not None and el < 0:
-            el = None
-        lo, hi = derive.parse_ts(t["opened_at"]), derive.parse_ts(end)
-        ids = sorted(d for d, ts in seen.items() if lo is not None and hi is not None and derive.parse_ts(ts) is not None and lo <= derive.parse_ts(ts) <= hi)
-        rows.append(dict(t, id=mid, title=m.get("title"), status=st, elapsed_s=el, running=running,
-                         dispatch_count=len(ids) if lo is not None else None, dispatch_ids=ids))
-    return _stat(rows if rows else None, MILESTONE_TIMING, window, clock=clock)
+    """B-8, as UI-3 (UC-13..UC-17) derives it: per milestone of the latest snapshot's map, in the milestones' natural order,
+    its window (milestone_windows): opened_at, closed_at, each with its basis naming the seq, elapsed_s and elapsed_reason,
+    running, and the dispatch_opened lines within it."""
+    rows = list(milestone_windows(events, clock).values())
+    return _stat(rows if rows else None, MILESTONE_TIMING, window, clock=clock,
+                 not_recorded=sum(1 for r in rows if r["elapsed_reason"] == derive.NOT_RECORDED),
+                 not_started=sum(1 for r in rows if r["elapsed_reason"] == derive.NOT_STARTED))
 
 
 def verify_card(events, window):
     """B-10: the latest verify_result's divergences, each listed (path, kind, the two digests' sha8s where both exist), from
-    its additive divergence_list; with no such list, its divergences count only, and the list "not carried"."""
+    its additive divergence_list; with no such list, its divergences count only, and the list "not carried". UI-3 (UC-9) names
+    "Last verify" and "Verify detail" alone: this card still reads the newest verify_result, the installer's check included
+    (B-10 lists the divergences install.ps1 -Verify writes)."""
     v = derive.latest_verify(events)
     if v is None:
         return _stat(None, "no verify_result line", window, listed=None, count=None, carried=False, verify_verdict=None, evaluator=None, blocking=None)
@@ -746,9 +776,11 @@ def verify_card(events, window):
     p = v["line"]["payload"]
     # RELEASE-5 group B (RB-7): the verify tool's own verdict in its own word, the stop evaluator's reading of that same run
     # (derive.VERIFY_READING_RULE) beside it, and whether the card blocks
-    ev = derive.verify_reading(events)
+    ev = derive.verify_reading(events, v)
     extra = {"verify_verdict": p.get("verdict"), "evaluator": ev, "blocking": _verify_blocks(p, ev), "evaluator_rule": derive.VERIFY_READING_RULE,
-             "evaluator_note": _evaluator_note(events, ev)}
+             "evaluator_note": _evaluator_note(events, ev),
+             # UI-3 amendment 1 (UC-30): whose run the card lists -- the installer's check or the mission's verify
+             "run_kind": "installer_check" if derive.is_installer_check(v) else "mission_verify", "against": p.get("against")}
     if d is None:
         return _stat(p.get("divergences"), "the latest verify_result's divergences count (it carries no divergence_list)", window,
                      listed=None, count=p.get("divergences"), carried=False, verdict=p.get("verdict"), ts=v["ts"], seq=v["seq"], **extra)

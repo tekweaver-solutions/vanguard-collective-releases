@@ -1172,7 +1172,7 @@ switch ($Case) {
     L "(RA-7) relative forms reaching tools\.venv in the release set: $($relHits.Count)"
     foreach ($h in $relHits) { L "  (RA-7) UNEXPLAINED $h" }
     Check "(RA-7) no release-set file reaches tools\.venv by a relative form ($($relForms.Count) forms read); found: $($relHits.Count)" ($relHits.Count -eq 0)
-    $notes = Join-Path $Tagged.root 'docs\RELEASE-NOTES-v1.3.2.md'
+    $notes = Join-Path $Tagged.root 'docs\RELEASE-NOTES-v1.3.3.md'
     if (Test-Path -LiteralPath $notes -PathType Leaf) {
         # JUDGED, NOT ONLY LISTED (validator round 2): each notes line naming tools\.venv must place it as the host's or
         # as an earlier release's -- the line also names tools\ui\.venv, the host, or a release before 1.3.1 -- else it
@@ -1183,11 +1183,11 @@ switch ($Case) {
             if ($ln -notmatch '(?i)tools[\\/]+\.venv') { continue }
             $nAll++
             $ok = $ln -match '(?i)tools[\\/]+ui[\\/]+\.venv|\bhost|\b1\.[0-2]\.\d+\b|\b1\.3\.0\b'
-            L "  (RA-7) docs/RELEASE-NOTES-v1.3.2.md:$i $(if ($ok) { 'ok' } else { 'PLACES THE SET THERE' })  $ln"
+            L "  (RA-7) docs/RELEASE-NOTES-v1.3.3.md:$i $(if ($ok) { 'ok' } else { 'PLACES THE SET THERE' })  $ln"
             if (-not $ok) { $nBad += $i }
         }
-        Check "(RA-7) the 1.3.2 notes: every line naming tools\.venv ($nAll) also names tools\ui\.venv, the host or a release before 1.3.1; failing: $($nBad.Count)$(if ($nBad.Count) { ' (lines ' + ($nBad -join ', ') + ')' })" ($nBad.Count -eq 0)
-    } else { Skip 'SKIPPED BY NAME: (RA-7) docs/RELEASE-NOTES-v1.3.2.md is not in the tree yet (packaging writes it); its lines are not read' }
+        Check "(RA-7) the 1.3.3 notes: every line naming tools\.venv ($nAll) also names tools\ui\.venv, the host or a release before 1.3.1; failing: $($nBad.Count)$(if ($nBad.Count) { ' (lines ' + ($nBad -join ', ') + ')' })" ($nBad.Count -eq 0)
+    } else { Skip 'SKIPPED BY NAME: (RA-7) docs/RELEASE-NOTES-v1.3.3.md is not in the tree yet (packaging writes it); its lines are not read' }
     Check "(RA-7) every tools\.venv / tools/.venv in the release set is explained by file and count; unexplained: $($bad.Count)$(if ($bad.Count) { ' (' + ($bad -join ', ') + ')' })" ($bad.Count -eq 0)
 }
 { $_ -in 'ra9', 'ra15' } {
@@ -1531,7 +1531,7 @@ switch ($Case) {
         'tests/lam/instrument-WP-4.ps1'                                     = @('amp=40 other=6 sp=15', "$I; the others: $T")
         'tests/lam/instrument-WP-5.ps1'                                     = @('amp=1 other=1', "$I; the other: a markdown fence name")
         'tests/lam/instrument-WP-6.ps1'                                     = @('amp=8', $I)
-        'tests/lam/instrument-WP-7.ps1'                                     = @('amp=3 bind=1 sp=6 var=9 wrap=3', "$W; the wrap lines hand <the full path> or `$Exe to Invoke-W7Native and Invoke-W7, which start it with & (:271, :288); the var lines carry `$psExe or `$Exe to those")
+        'tests/lam/instrument-WP-7.ps1'                                     = @('amp=3 bind=1 sp=6 var=9 wrap=4', "$W; the wrap lines hand <the full path> or `$Exe to Invoke-W7Native and Invoke-W7, which start it with & (:271, :288); the var lines carry `$psExe or `$Exe to those")
         'tests/lam/wp7-group-b.py'                                          = @('py=2', 'CURED: its Windows PowerShell child gets the environment with PSModulePath taken out')
         'tools/evidence-hooks-next/claude-settings.proposed.json'           = @('hook=6', $H)
         'tools/evidence-hooks-next/hooks/evidence-dispatch-end.ps1'         = @('amp=1', "the sealed hook set; $A")
@@ -1568,6 +1568,8 @@ switch ($Case) {
         'tools/tests/cli/test_prune_worktrees.py'                           = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
         'tools/tests/cli/test_validator_result_transcription.py'            = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
         'tools/tests/cli/test_witnessed_substrate_generalization.py'        = @('py=2', 'THROUGH tools/tests/cli/conftest.py (its children take this process''s environment)')
+        # UI-3 packaging of 1.3.3: the register command the pages print names powershell; the service starts no child.
+        'tools/ui/derive.py'                                                = @('py=1', 'NAMES IT ONLY: the register command the pages print (COMMAND_HEAD, :96), text the service serves; the service starts no PowerShell child')
     }
     function Get-Ra10Verdict { param([string]$Root, [string]$Label)
         $paths = [string[]]@($owned.Keys)
@@ -1649,7 +1651,9 @@ switch ($Case) {
     # a figure. If packaging takes a PowerShell 7 reading, this member and the pinned paragraph change with it.
     # RELEASE-5 packaging of 1.3.2 (amendment 2): the notes read are the 1.3.2 notes, and the pinned paragraph names 1.3.2;
     # the 1.3.1 notes ship unedited (PK-17) and were read by this member at v1.3.1.
-    $pinned = '**The acceptance instruments under PowerShell 7 (row 538).** The acceptance runner (`tools\lam\lam-instrument-run.ps1`) starts each instrument with `& powershell`, so WP-1, WP-2, WP-3 and WP-4 run under Windows PowerShell 5.1 whatever shell starts the runner. Their reading under a PowerShell 7 host was not taken for 1.3.2, and these notes claim none.'
+    # UI-3 packaging of 1.3.3: the notes read are the 1.3.3 notes, and the pinned paragraph names 1.3.3; the 1.3.2 notes ship
+    # unedited (UP-14) and were read by this member at v1.3.2.
+    $pinned = '**The acceptance instruments under PowerShell 7 (row 538).** The acceptance runner (`tools\lam\lam-instrument-run.ps1`) starts each instrument with `& powershell`, so WP-1, WP-2, WP-3 and WP-4 run under Windows PowerShell 5.1 whatever shell starts the runner. Their reading under a PowerShell 7 host was not taken for 1.3.3, and these notes claim none.'
     $pinnedMay = 'The 1.3.0 notes said WP-1 to WP-4 were measured under both shells, and no capture of them under a PowerShell 7 host is held.'
     function Get-Ra11Norm { param([string]$S) return (($S -replace '\s+', ' ').Trim()) }
     function Test-Ra11Notes { param([string]$Text)
@@ -1692,14 +1696,14 @@ switch ($Case) {
         L "(RA-11 in-member) $($c[0]): pinned paragraph $($v.states); claims $($v.claims.Count)$(if ($v.claims.Count) { ' -- ' + ($v.claims -join ' | ') })"
         Check "(RA-11 in-member) $($c[0]) -- $(if ($c[2]) { 'passes' } else { 'fails' })" ($ok -eq $c[2])
     }
-    $notes = Join-Path $Tagged.root 'docs\RELEASE-NOTES-v1.3.2.md'
-    if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) { Skip 'SKIPPED BY NAME: (RA-11) docs/RELEASE-NOTES-v1.3.2.md is not in the tree yet (packaging writes it); its paragraphs are not read (the rule above is shown RED and GREEN over texts of its own)' }
+    $notes = Join-Path $Tagged.root 'docs\RELEASE-NOTES-v1.3.3.md'
+    if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) { Skip 'SKIPPED BY NAME: (RA-11) docs/RELEASE-NOTES-v1.3.3.md is not in the tree yet (packaging writes it); its paragraphs are not read (the rule above is shown RED and GREEN over texts of its own)' }
     else {
         $v = Test-Ra11Notes ([System.IO.File]::ReadAllText($notes))
-        L "(RA-11) docs/RELEASE-NOTES-v1.3.2.md: the pinned paragraph $($v.states) time(s); claims $($v.claims.Count)"
+        L "(RA-11) docs/RELEASE-NOTES-v1.3.3.md: the pinned paragraph $($v.states) time(s); claims $($v.claims.Count)"
         foreach ($c in $v.claims) { L "  (RA-11) CLAIMS A READING  $c" }
-        Check '(RA-11) the 1.3.2 notes carry the pinned paragraph: the runner pins Windows PowerShell for WP-1..WP-4 and the reading under PowerShell 7 was not taken' ($v.states -ge 1)
-        Check "(RA-11) no other paragraph of the 1.3.2 notes ties the instruments to a shell or reports their verdict or a figure; claiming: $($v.claims.Count)" ($v.claims.Count -eq 0)
+        Check '(RA-11) the 1.3.3 notes carry the pinned paragraph: the runner pins Windows PowerShell for WP-1..WP-4 and the reading under PowerShell 7 was not taken' ($v.states -ge 1)
+        Check "(RA-11) no other paragraph of the 1.3.3 notes ties the instruments to a shell or reports their verdict or a figure; claiming: $($v.claims.Count)" ($v.claims.Count -eq 0)
     }
 }
 'a' {

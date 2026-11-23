@@ -620,7 +620,8 @@ The contract — `mission-event`. One append-only, never-committed file per proj
 `.mission-runtime/telemetry/events.jsonl`. Every line carries `schema_version, mission_id, host_id,
 seq, ts, kind, payload, source_path, sha256, commit`; a line without its `source_path@sha256` is
 rejected at ingest and counted. Emitters: PostToolUse / Stop / PreCompact hooks (tool level);
-spec-bump, gate, HALT, `mission verify` and commit-ledger verbs (stage level). The append never
+spec-bump, gate, HALT, `mission verify` and commit-ledger verbs (stage level); from framework 1.3.3 the goal
+evaluator after each evaluation (`goal_verdict`, its source the goal's verdict file). The append never
 blocks and never fails the tool call or verb that triggered it. Field-level definition, kinds and
 payloads in the schemas document; the UI-1 S0 contract (falsifiers before code) fixes what this ADR
 leaves to S0 and is the acceptance for S1–S3.

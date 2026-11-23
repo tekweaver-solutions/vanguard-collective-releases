@@ -727,6 +727,117 @@ function Invoke-LamResultPlacement {
 }
 
 # =============================================================================================
+# THE RUNNER FILES EACH PLACED RESULT IN THE VALIDATORS ARCHIVE (UI-3, 1.3.3; register rows 568, 569; UC-22..UC-24)
+# =============================================================================================
+# 1.3.2 READS kept evidence for closed work (rulings (bi), (bk)) -- a file of the result's own name anywhere under
+# .mission-runtime/lam/validators whose bytes the close tool's reader accepts against the complete line -- but no tool WROTE
+# that archive: a host copied each placed result there by hand before the next round's preparation removed the working copy,
+# or the closed assertion read "record alone". From 1.3.3, right after a placement at tests/lam/<name>.result.yaml, the
+# runner files a byte-equal copy of the PLACED file at .mission-runtime/lam/validators/<dispatch id>/<name>.result.yaml, by
+# this function, in its own process (never an agent's tool call; no settings template is widened for it):
+#   * THE SAME NAME AND THE SAME BYTES ALREADY IN THE ARCHIVE -- anywhere under it, looked for as the reader looks: every
+#     folder, links neither followed nor read, the name compared as the reader compares it (case-insensitively) -- NOTHING IS
+#     WRITTEN, and the copy already there is named;
+#   * THE SAME NAME WITH OTHER BYTES at this dispatch's own place: that file is NEVER OVERWRITTEN; the new bytes are kept
+#     beside it, at <dispatch id>/<first 16 hex of their sha256>/<name>.result.yaml, so the reader -- which tries every file
+#     of the name and selects by the complete line's hash -- still finds the one the ledger binds;
+#   * the copy is made as the placement makes its own: to a temporary name beside its place, hashed, renamed without
+#     overwrite, the placed copy's creation and last-write times kept, hashed again;
+#   * ANYTHING THAT STOPS IT -- a file or a link where a folder of the archive's path goes, a folder that cannot be written --
+#     is returned as 'not-filed' with its reason, never thrown: the caller says it in one line, and the placement and the
+#     dispatch's outcome stand as they were.
+# The reader finds a copy by the name validator-<assertion id>.result.yaml; a declared result_path of another name is filed
+# all the same, and the line says the reader will not look for it under that name. Results placed before 1.3.3 are not
+# filed retroactively. The function reads nothing outside its parameters, so an instrument can lift it with the parser.
+function Invoke-LamResultArchiveFiling {
+    param(
+        [Parameter(Mandatory = $true)][string]$MissionRoot,
+        [Parameter(Mandatory = $true)][string]$Placed,
+        [Parameter(Mandatory = $true)][string]$Dispatch
+    )
+    $ErrorActionPreference = 'Stop'
+    $res = [pscustomobject]@{ outcome = 'not-filed'; path = ''; rel = ''; sha256 = ''; reason = ''; note = '' }
+    $staging = ''
+    try {
+        $rootFull = [System.IO.Path]::GetFullPath($MissionRoot).TrimEnd('\', '/')
+        $relOf = { param([string]$P) (($P.Substring($rootFull.Length + 1)) -replace '\\', '/') }
+        $hashOf = { param([string]$P) (Get-FileHash -Algorithm SHA256 -LiteralPath $P).Hash.ToLowerInvariant() }
+        $isLink = { param([string]$P) $i = New-Object System.IO.DirectoryInfo $P; $i.Exists -and [bool]($i.Attributes -band [System.IO.FileAttributes]::ReparsePoint) }
+        $leaf = [System.IO.Path]::GetFileName($Placed)
+        if ($leaf -notmatch '^(?i:validator-.+\.result\.yaml)$') { $res.note = "; the archive's reader looks for files named validator-<assertion id>.result.yaml and will not look for this one by its name" }
+        if (-not [System.IO.File]::Exists($Placed)) { $res.reason = "there is no placed copy at $Placed to file"; return $res }
+        $sha = & $hashOf $Placed
+        $res.sha256 = $sha
+        # the archive's own path, segment by segment: a file where a folder goes, or a link, and nothing is written there
+        $arc = $rootFull
+        foreach ($seg in @('.mission-runtime', 'lam', 'validators')) {
+            $arc = Join-Path $arc $seg
+            if ([System.IO.File]::Exists($arc)) { $res.reason = "a file stands at $(& $relOf $arc), where a folder of the validators archive's path goes"; return $res }
+            if (& $isLink $arc) { $res.reason = "$(& $relOf $arc) is a link, which the archive's reader does not follow"; return $res }
+        }
+        # the same name and the same bytes anywhere under the archive: nothing is written
+        if ([System.IO.Directory]::Exists($arc)) {
+            $stack = New-Object System.Collections.Stack
+            $stack.Push((New-Object System.IO.DirectoryInfo $arc))
+            while ($stack.Count -gt 0) {
+                $d = $stack.Pop()
+                $ents = @()
+                try { $ents = @($d.GetFileSystemInfos()) } catch { continue }
+                foreach ($e in $ents) {
+                    if ($e.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { continue }
+                    if ($e -is [System.IO.DirectoryInfo]) { $stack.Push($e); continue }
+                    if (-not [string]::Equals($e.Name, $leaf, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+                    $h = $null
+                    try { $h = & $hashOf $e.FullName } catch { $h = $null }
+                    if ($h -ceq $sha) {
+                        $res.outcome = 'already-filed'; $res.path = $e.FullName; $res.rel = & $relOf $e.FullName
+                        $res.reason = "a file of the same name and the same bytes is already in the archive at $($res.rel)"
+                        return $res
+                    }
+                }
+            }
+        }
+        # this dispatch's own place; the same name with other bytes there is never overwritten -- the new bytes go beside it
+        $folder = if ($Dispatch -match '^[A-Za-z0-9][A-Za-z0-9._-]*$') { $Dispatch } else { 'dispatch-' + ((& { $b = [System.Text.Encoding]::UTF8.GetBytes($Dispatch); [BitConverter]::ToString(([System.Security.Cryptography.SHA256]::Create()).ComputeHash($b)).Replace('-', '').Substring(0, 16).ToLowerInvariant() })) }
+        $dir = Join-Path $arc $folder
+        $dest = Join-Path $dir $leaf
+        if ([System.IO.File]::Exists($dest) -or [System.IO.Directory]::Exists($dest)) {
+            $dir = Join-Path $dir $sha.Substring(0, 16)
+            $dest = Join-Path $dir $leaf
+            if ([System.IO.File]::Exists($dest) -or [System.IO.Directory]::Exists($dest)) {
+                $res.reason = "a file of the same name with other bytes stands at $(& $relOf (Join-Path (Split-Path -Parent $dir) $leaf)) and something already stands beside it at $(& $relOf $dest); neither is overwritten"
+                return $res
+            }
+        }
+        foreach ($p in @((Join-Path $arc $folder), $dir)) { if (& $isLink $p) { $res.reason = "$(& $relOf $p) is a link, which the archive's reader does not follow"; return $res } }
+        [void][System.IO.Directory]::CreateDirectory($dir)
+        $staging = Join-Path $dir ('.' + $leaf + '.filing-' + [guid]::NewGuid().ToString('N'))
+        [System.IO.File]::Copy($Placed, $staging, $false)
+        $staged = & $hashOf $staging
+        if ($staged -cne $sha) { $res.reason = "the copy made beside $(& $relOf $dest) hashes to $staged, not the placed copy's $sha"; return $res }
+        # the rename refuses a file that arrived at $dest meanwhile: never an overwrite
+        [System.IO.File]::Move($staging, $dest)
+        $staging = ''
+        $src = Get-Item -LiteralPath $Placed
+        $filed = Get-Item -LiteralPath $dest
+        $filed.CreationTimeUtc = $src.CreationTimeUtc
+        $filed.LastWriteTimeUtc = $src.LastWriteTimeUtc
+        $after = & $hashOf $dest
+        $res.path = $dest; $res.rel = & $relOf $dest
+        if ($after -cne $sha) { $res.reason = "the file renamed into place at $($res.rel) hashes to $after, not the placed copy's $sha; it is left there for the operator"; return $res }
+        $res.outcome = 'filed'
+        $res.reason = "filed at $($res.rel)"
+        return $res
+    } catch {
+        $res.outcome = 'not-filed'
+        $res.reason = "the copy could not be written ($($_.Exception.Message))"
+        return $res
+    } finally {
+        if ($staging -and [System.IO.File]::Exists($staging)) { try { [System.IO.File]::Delete($staging) } catch { } }
+    }
+}
+
+# =============================================================================================
 # NO RESULT AT SESSION END (BATCH-3 WP-K (a))
 # =============================================================================================
 # THE DEFECT. Spawn seq 211, D-V-A-596-R2: a headless validator started its full suite in the
@@ -4968,6 +5079,18 @@ if (($roleKind -eq 'validator') -and $validatorResult.path -and (@('PASS', 'REFU
 if ($placement.outcome -ceq 'placed') {
     $placementNote = "copied from this validator's own tree to the mission root, byte-equal and time-preserving; the complete line binds result_sha256 $($placement.copy_sha256), the copy's, with result_source_sha256, result_source_path and result_dest_path beside it"
     Write-Line "mission-dispatch: validator result PLACED at $($placement.destination) -- sha256 $($placement.copy_sha256), $($placement.bytes) bytes, copied from $($placement.source) (sha256 $($placement.source_sha256)); the two hashes are EQUAL (register row 349)"
+    # UI-3 (1.3.3) UC-22..UC-24: the placed copy filed in the validators archive (Invoke-LamResultArchiveFiling's header).
+    # Said in one line; whatever it says, the placement and this dispatch's outcome stand -- nothing joins $handoffProblems.
+    $filing = $null
+    try { $filing = Invoke-LamResultArchiveFiling -MissionRoot $MissionRoot -Placed $placement.destination -Dispatch $Dispatch }
+    catch { $filing = [pscustomobject]@{ outcome = 'not-filed'; path = ''; rel = ''; sha256 = ''; reason = "the filing step failed ($($_.Exception.Message))"; note = '' } }
+    if ($filing.outcome -ceq 'filed') {
+        Write-Line "mission-dispatch: validator result FILED in the validators archive at $($filing.rel) -- sha256 $($filing.sha256), byte-equal to the placed copy, its times kept$($filing.note)"
+    } elseif ($filing.outcome -ceq 'already-filed') {
+        Write-Line "mission-dispatch: validator result ALREADY FILED in the validators archive at $($filing.rel) -- the same name and the same bytes (sha256 $($filing.sha256)); nothing written$($filing.note)"
+    } else {
+        Write-Line "mission-dispatch: validator result NOT FILED in the validators archive -- $($filing.reason); the placement stands and this dispatch does not fail for it$($filing.note)"
+    }
 } elseif ($placement.outcome -like 'refused-*') {
     $placementNote = $placement.reason
     Write-Line "mission-dispatch: RESULT-PLACEMENT-REFUSED-$($placement.code) -- $($placement.reason)"

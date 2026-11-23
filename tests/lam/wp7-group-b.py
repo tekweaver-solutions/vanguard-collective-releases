@@ -14,6 +14,7 @@ tests\\lam\\wp7-real-feed.py api.
 """
 import datetime
 import glob
+import hashlib
 import importlib.util
 import json
 import os
@@ -156,6 +157,74 @@ def expect_milestone(root, mid):
                 added.setdefault(b[:-5], d)
     within = sorted(k for k, d in added.items() if opened and closed and opened <= d <= closed)
     return {"opened_at": opened, "closed_at": closed, "elapsed_s": secs(opened, closed) if opened and closed else None, "dispatch_ids": within, "added": added}
+
+
+# UI-3 (1.3.3): B-8's rule as the UI-3 contract replaced it -- milestone times taken from the FEED alone (rulings (e), (i)),
+# read here by this member's own code, never the service's: UC-13 (the window opens at the first snapshot showing the
+# milestone not closed and, by UC-31 as UC-42 amends it, either seen active or the mission's next milestone -- the snapshot's
+# current milestone when listed and not closed, else the earliest not closed in natural order; it closes at the first later
+# snapshot showing it closed: that snapshot's done_ts when at or after the opening, else its ts), UC-14 (a milestone first seen
+# already closed has no time), UC-16 (Dispatches = the dispatch_opened lines whose ts lies within the window, or to the
+# feed's last ts while it runs). A reopen (UC-32, UC-41) is detected and reported, not derived: the smoke mission has none.
+FEED_CLOSED = ("passed", "done", "withdrawn")
+
+
+def _natural(m):
+    return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", m)]
+
+
+def expect_feed_milestone(objs, mid):
+    """{opened_at, closed_at, elapsed_s, running, dispatch_ids, first_seen_closed, reopened, clock} for mid over the feed's
+    objects (any order: snapshots read in seq order, times compared as the feed's own ISO stamps)."""
+    snaps = sorted((o for o in objs if o["kind"] == "mission_snapshot"), key=lambda o: o["seq"])
+    clock = max(o["ts"] for o in objs) if objs else None
+    opened = closed = first_closed = None
+    reopened = False
+    for o in snaps:
+        ms = o["payload"].get("milestones") or {}
+        if mid not in ms:
+            continue
+        st = ms[mid].get("status")
+        shut = st in FEED_CLOSED
+        if first_closed is None:
+            first_closed = shut
+        if first_closed:
+            continue
+        cur = o["payload"].get("current_milestone")
+        open_ids = sorted((k for k in ms if ms[k].get("status") not in FEED_CLOSED), key=_natural)
+        nxt = cur if (cur in ms and ms[cur].get("status") not in FEED_CLOSED) else (open_ids[0] if open_ids else None)
+        starts = (not shut) and (st == "active" or nxt == mid)
+        if opened is None:
+            if starts:
+                opened = o["ts"]
+        elif closed is None:
+            if shut:
+                done = ms[mid].get("done_ts")
+                closed = done if (done and done >= opened) else o["ts"]
+        elif starts:
+            reopened = True
+    running = opened is not None and closed is None
+    end = closed if closed is not None else clock
+    within = sorted({o["payload"]["dispatch_id"] for o in objs if o["kind"] == "dispatch_opened" and opened and end and opened <= o["ts"] <= end})
+    return {"opened_at": opened, "closed_at": closed, "elapsed_s": secs(opened, end) if opened and end else None, "running": running,
+            "dispatch_ids": within if opened else [], "first_seen_closed": bool(first_closed), "reopened": reopened, "clock": clock}
+
+
+def with_dispatches(objs, opened_at, keep_until=None):
+    """The feed's objects (those with seq <= keep_until, when given) and, after them, one dispatch_opened line per dispatch
+    id -> ts in opened_at (those at or before the kept lines' last ts), as the runner's open writes it (dispatch_id, kind,
+    feature, assertion_targets), the stream's own fields, seq continuing. (feed lines, the composed objects)"""
+    base = [o for o in objs if keep_until is None or o["seq"] <= keep_until]
+    clock = max(o["ts"] for o in base)
+    out, seq = list(base), max(o["seq"] for o in base)
+    for did, ts in sorted(opened_at.items(), key=lambda kv: (kv[1], kv[0])):
+        if ts > clock:
+            continue
+        seq += 1
+        p = {"dispatch_id": did, "kind": "mainline", "feature": None, "assertion_targets": []}
+        out.append(dict(base[0], seq=seq, ts=ts, kind="dispatch_opened", payload=p, source_path=".mission/dispatches/%s.yaml" % did,
+                        sha256=hashlib.sha256(json.dumps(p, sort_keys=True).encode("utf-8")).hexdigest(), commit=None))
+    return [json.dumps(o, ensure_ascii=False, separators=(",", ":")) for o in out], out
 
 
 # ---------------------------------------------------------------------------------------------- the service, read through the reader
@@ -359,29 +428,53 @@ def u44(run, smoke_root, feed):
 
 
 def u46(run, smoke_root, feed):
+    """B-8, as the UI-3 contract replaced its rule (UC-13 with UC-31/UC-42, UC-14, UC-16; ruling (i): times are feed-only):
+    M-1 over the smoke replay, derived by this member from the feed (expect_feed_milestone) and served alike; its times also
+    equal to git's dating of the smoke history (the replay stamps each commit's snapshot with its author date); its dispatches
+    the dispatch_opened lines within its window -- over the bare replay, which carries none, and over the replay with one
+    dispatch_opened line per dispatch artifact at the date git first holds it (what the runner's open writes); a cut feed reads
+    it running; a closing stamp edited moves it."""
     d, ok = [], True
     e = expect_milestone(smoke_root, "M-1")
+    objs = [json.loads(l) for l in rf.lines_of(feed)]
+    f = expect_feed_milestone(objs, "M-1")
+    good = (not f["first_seen_closed"]) and (not f["reopened"]) and (f["opened_at"], f["closed_at"], f["elapsed_s"]) == (e["opened_at"], e["closed_at"], e["elapsed_s"])
+    ok &= good
+    d.append("M-1 read from the replay feed by the contract's rule: opened %s closed %s elapsed %s (first seen closed %s, reopened %s); git's dating %s / %s / %s -> %s"
+             % (f["opened_at"], f["closed_at"], f["elapsed_s"], f["first_seen_closed"], f["reopened"], e["opened_at"], e["closed_at"], e["elapsed_s"], good))
     rows = {r["id"]: r for r in (api(run, "u46a", feed)["mission"]["milestone_timing"]["value"] or [])}
     g = rows.get("M-1") or {}
-    good = (g.get("opened_at"), g.get("closed_at"), g.get("elapsed_s"), g.get("running"), g.get("dispatch_ids")) == (e["opened_at"], e["closed_at"], e["elapsed_s"], False, e["dispatch_ids"])
+    good = (g.get("opened_at"), g.get("closed_at"), g.get("elapsed_s"), g.get("running"), g.get("dispatch_ids")) == (f["opened_at"], f["closed_at"], f["elapsed_s"], False, f["dispatch_ids"])
     ok &= good
-    d.append("M-1 over the smoke replay: served opened %s closed %s elapsed %s running %s dispatches %s; derived from git %s / %s / %s / %s -> %s"
-             % (g.get("opened_at"), g.get("closed_at"), g.get("elapsed_s"), g.get("running"), g.get("dispatch_ids"), e["opened_at"], e["closed_at"], e["elapsed_s"], e["dispatch_ids"], good))
-    objs = [json.loads(l) for l in rf.lines_of(feed)]
-    cut = max(o["seq"] for o in objs if o["ts"] < e["closed_at"])
-    clock = max(o["ts"] for o in objs if o["seq"] <= cut)
-    run_ = {r["id"]: r for r in (api(run, "u46b", feed, until=cut)["mission"]["milestone_timing"]["value"] or [])}.get("M-1") or {}
-    within = sorted(k for k, dd in e["added"].items() if e["opened_at"] <= dd <= clock)
-    good = run_.get("running") is True and run_.get("closed_at") is None and run_.get("elapsed_s") == secs(e["opened_at"], clock) and run_.get("dispatch_ids") == within
+    d.append("M-1 over the smoke replay (%d dispatch_opened line(s) in it): served opened %s closed %s elapsed %s running %s dispatches %s; derived %s / %s / %s / False / %s -> %s"
+             % (sum(1 for o in objs if o["kind"] == "dispatch_opened"), g.get("opened_at"), g.get("closed_at"), g.get("elapsed_s"), g.get("running"), g.get("dispatch_ids"),
+                f["opened_at"], f["closed_at"], f["elapsed_s"], f["dispatch_ids"], good))
+    # the replay with the dispatches' dispatch_opened lines: UC-16's count over a feed that carries them
+    dl, dobjs = with_dispatches(objs, e["added"])
+    df = os.path.join(run, "u46-dispatches.jsonl")
+    open(df, "w", encoding="utf-8", newline="\n").write("\n".join(dl) + "\n")
+    fd = expect_feed_milestone(dobjs, "M-1")
+    gd = {r["id"]: r for r in (api(run, "u46d", df)["mission"]["milestone_timing"]["value"] or [])}.get("M-1") or {}
+    good = len(fd["dispatch_ids"]) > 0 and fd["dispatch_ids"] == e["dispatch_ids"] and (gd.get("dispatch_ids"), gd.get("dispatch_count")) == (fd["dispatch_ids"], len(fd["dispatch_ids"]))
     ok &= good
-    d.append("the feed cut at seq %d (before M-1 passed): running %s, elapsed %s (derived %s against the feed's clock %s), dispatches %s (derived %s) -> %s"
-             % (cut, run_.get("running"), run_.get("elapsed_s"), secs(e["opened_at"], clock), clock, run_.get("dispatch_ids"), within, good))
-    closer = min(o["seq"] for o in objs if o["ts"] == e["closed_at"])
+    d.append("the replay with a dispatch_opened line per dispatch artifact at git's date (%d line(s)): served dispatches %s (count %s); derived within [opened, closed] %s (git's own reading %s) -> %s"
+             % (len(e["added"]), gd.get("dispatch_ids"), gd.get("dispatch_count"), fd["dispatch_ids"], e["dispatch_ids"], good))
+    cut = max(o["seq"] for o in objs if o["kind"] == "mission_snapshot" and o["ts"] < f["closed_at"])
+    cl, cobjs = with_dispatches(objs, e["added"], keep_until=cut)
+    cf = os.path.join(run, "u46-cut.jsonl")
+    open(cf, "w", encoding="utf-8", newline="\n").write("\n".join(cl) + "\n")
+    fc = expect_feed_milestone(cobjs, "M-1")
+    run_ = {r["id"]: r for r in (api(run, "u46b", cf)["mission"]["milestone_timing"]["value"] or [])}.get("M-1") or {}
+    good = fc["running"] and run_.get("running") is True and run_.get("closed_at") is None and run_.get("elapsed_s") == fc["elapsed_s"] and run_.get("dispatch_ids") == fc["dispatch_ids"] and len(fc["dispatch_ids"]) > 0
+    ok &= good
+    d.append("the feed cut at seq %d (before M-1 passed), with the dispatch_opened lines up to its clock %s: running %s, elapsed %s (derived %s), dispatches %s (derived %s) -> %s"
+             % (cut, fc["clock"], run_.get("running"), run_.get("elapsed_s"), fc["elapsed_s"], run_.get("dispatch_ids"), fc["dispatch_ids"], good))
+    closer = min(o["seq"] for o in objs if o["kind"] == "mission_snapshot" and o["ts"] == f["closed_at"])
     moved = [json.dumps(dict(o, ts="2026-01-01T01:12:00.000Z") if o["seq"] == closer else o, ensure_ascii=False, separators=(",", ":")) for o in objs]
     pf = os.path.join(run, "u46-plant.jsonl")
     open(pf, "w", encoding="utf-8", newline="\n").write("\n".join(moved) + "\n")
     p = {r["id"]: r for r in (api(run, "u46c", pf)["mission"]["milestone_timing"]["value"] or [])}.get("M-1") or {}
-    good = p.get("elapsed_s") is not None and g.get("elapsed_s") is not None and p["elapsed_s"] != g["elapsed_s"] and p["elapsed_s"] == secs(e["opened_at"], "2026-01-01T01:12:00.000Z")
+    good = p.get("elapsed_s") is not None and g.get("elapsed_s") is not None and p["elapsed_s"] != g["elapsed_s"] and p["elapsed_s"] == secs(f["opened_at"], "2026-01-01T01:12:00.000Z")
     ok &= good
     d.append("planted: the closing snapshot (seq %d) restamped 2026-01-01T01:12:00.000Z: elapsed %s -> %s -> %s" % (closer, g.get("elapsed_s"), p.get("elapsed_s"), good))
     return ok, d

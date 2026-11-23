@@ -20,11 +20,13 @@ or from a clone of the public repository at its release tag and upgrades a proje
 that authenticate with a Claude subscription or an Anthropic API key. Version 1.1.0 adds the dashboard, `vanguard ui`: a
 read-only, local view of every project registered on the machine, fed by the mission-event feed the
 hooks and lifecycle commands now append. Version 1.2.0 was the licence release. In 1.3.0 the dashboard read what a
-mission proved, round by round, and how long it took, and a session's end came to be written by a SessionEnd hook. The
-current release is 1.3.2, which replaces 1.3.1, a private release: the dashboard's Python set has a folder of its own
-(`tools\ui\.venv`), the dashboard reads what the mission's own record holds -- closed work keeping its verdict once its
-result file is removed -- and a seat can stop to wait on one act of the operator's; its notes are
-[docs/RELEASE-NOTES-v1.3.2.md](docs/RELEASE-NOTES-v1.3.2.md), known limits first.
+mission proved, round by round, and how long it took, and a session's end came to be written by a SessionEnd hook. In
+1.3.2, which replaced 1.3.1, a private release, the dashboard's Python set got a folder of its own (`tools\ui\.venv`),
+the dashboard came to read what the mission's own record holds -- closed work keeping its verdict once its result file
+is removed -- and a seat could stop to wait on one act of the operator's. The current release is 1.3.3: the
+dashboard's pages brought to what the feed records -- milestone times observed at snapshots, and the verify cards led
+by the stop evaluator's reading, which now reaches the feed -- and the dispatch runner keeping the validators archive;
+its notes are [docs/RELEASE-NOTES-v1.3.3.md](docs/RELEASE-NOTES-v1.3.3.md), known limits first.
 
 New to the framework? Start with [docs/QUICKSTART.md](docs/QUICKSTART.md), then read the operator's
 guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguard-collective-user-guide.md).
@@ -44,7 +46,7 @@ guide, [docs/framework/vanguard-collective-user-guide.md](docs/framework/vanguar
 
 Beside these, `tools/framework/` holds the first-generation hooks the next generation delegates to,
 and `tools/mission-*.ps1` are the mission lifecycle commands. What is installed into a project is
-exactly the set the release's `provenance/manifest.jsonl` defines (386 files in the release, `ui/dist/`
+exactly the set the release's `provenance/manifest.jsonl` defines (387 files in the release, `ui/dist/`
 and `THIRD-PARTY-NOTICES` among them); `provenance/` and this repository's own files are not installed.
 
 ## Prerequisites

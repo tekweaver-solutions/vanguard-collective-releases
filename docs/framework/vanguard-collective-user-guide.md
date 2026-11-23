@@ -1,4 +1,4 @@
-# Vanguard Collective 1.3.2 -- the operator's guide
+# Vanguard Collective 1.3.3 -- the operator's guide
 
 This guide says what the parts of the framework are, what each one records, who may write it, and
 how to read what the acceptance instruments say about it. It does not repeat the procedures: the
@@ -501,26 +501,30 @@ failure). A count line whose numbers no instrument could print is not read at al
   row that was measured and missed fails the member: a measured miss outranks an unmeasurable row.
 
 **Why skips are expected on a fresh project.** A skip names an environment, not a defect.
-A full reading of a fresh install of this release -- a new git project with a bare origin, the install from the ZIP
+A full reading of a fresh install of 1.3.3 -- a new git project with a bare origin, the install from the ZIP
 with the Python set, `mission init`, `mission smoke` (MET), `mission register`, the smoke mission built, the container
-engine up -- failed nothing, and read:
+engine up -- failed nothing, and read as below. WP-1 to WP-6 were read on a fresh install of an earlier build of 1.3.3,
+whose installed files differ from this release's only in `tests\lam\instrument-WP-7.ps1` and the verify spec
+(`docs\framework\mission-verify-spec.md`), neither of which those six run or read; WP-7 was read on a fresh install of
+this release's ZIP. WP-7's members are F-0, U-1 to U-53, V-1 to V-20 and L-1 to L-16.
 
-| instrument | passed | skipped (by name) |
-|---|---|---|
-| WP-1 | 42 of 43 | H-12 |
-| WP-2 | 75 of 78 | R-16, R-B, R-57 |
-| WP-3 | 69 of 77 | C-1k, C-1v, C-1w, C-1bd, C-1be, C-2c, C-2d, C-3e |
-| WP-4 | 67 of 70 | T-42, T-53, T-54 |
-| WP-5 | 10 of 10 | none |
-| WP-6 | 13 of 13 | none |
-| WP-7 | 25 of 89 | V-1 to V-20, L-1 to L-16, F-0, U-4, U-5, U-10, U-13 to U-16, U-20, U-21, U-24 to U-29, U-32, U-35, U-38, U-41, U-43, U-45, U-47 to U-52 |
+| instrument | passed | skipped (by name) | read on |
+|---|---|---|---|
+| WP-1 | 42 of 43 | H-12 | the earlier build |
+| WP-2 | 75 of 78 | R-16, R-B, R-57 | the earlier build |
+| WP-3 | 69 of 77 | C-1k, C-1v, C-1w, C-1bd, C-1be, C-2c, C-2d, C-3e | the earlier build |
+| WP-4 | 67 of 70 | T-42, T-53, T-54 | the earlier build |
+| WP-5 | 10 of 10 | none | the earlier build |
+| WP-6 | 13 of 13 | none | the earlier build |
+| WP-7 | 26 of 90 | V-1 to V-20, L-1 to L-16, F-0, U-4, U-5, U-10, U-13 to U-16, U-20, U-21, U-24 to U-29, U-32, U-35, U-38, U-41, U-43, U-45, U-47 to U-52 | this release's ZIP |
 
-With the container engine down -- read at 1.3.1, on a fresh install of 1.3.1, and not taken again for 1.3.2, since no
-file 1.3.2 changed reads the engine -- WP-3 read 69 of 77 with 8 named skips -- **C-1aw** skipped in
+With the container engine down -- read at 1.3.1, on a fresh install of 1.3.1, and not taken again for 1.3.2 or 1.3.3,
+since no file either changed reads the engine -- WP-3 read 69 of 77 with 8 named skips -- **C-1aw** skipped in
 place of C-1bd, which it then measured -- and WP-5, WP-6 and WP-7's F-0 and U-1 to U-52 as with the engine up (10 of
-10, 13 of 13, and 25 passed with 28 skipped). Without the Python set (WP-5, WP-6 and WP-7's F-0 and U-1 to U-52 read),
-WP-5 and WP-6 read the same, and WP-7 skips eleven members more -- the members that need the Python set: U-19, U-22,
-U-30, U-31, U-33, U-34, U-39, U-40, U-42, U-44 and U-46. Each skip carries its reason on its face:
+10, 13 of 13, and 25 passed with 28 skipped). Without the Python set -- read at 1.3.2, on a fresh install of 1.3.2, and
+not taken again for 1.3.3, since `install.ps1` and every file it runs are 1.3.2's; WP-5, WP-6 and WP-7's F-0 and U-1 to
+U-52 read -- WP-5 and WP-6 read the same, and WP-7 skips eleven members more -- the members that need the Python set:
+U-19, U-22, U-30, U-31, U-33, U-34, U-39, U-40, U-42, U-44 and U-46. Each skip carries its reason on its face:
 
 - **No project acceptance record: WP-1 H-12, WP-2 R-16 and R-B, WP-3 C-1v, C-1w and C-2d.** Each
   measures against a project's own acceptance record, `docs/framework/LAM-ACCEPT.md`, which no
@@ -601,13 +605,37 @@ nothing to an agent, writes nothing into a project, and holds no cost figure.
   one card per mission, those that need attention first: its state, current milestone, last activity,
   assertions and the error that ranks highest, naming the artifact.
 - **Project**: the mission's header tiles; milestone progress; features and their assertions; the open
-  sessions and dispatches; the spec timeline; the last verify, its scope shown beside its verdict; and the
-  open errors ranked by severity, each with the `source_path@sha256` of the line it came from.
+  sessions and dispatches, a session's row saying a failed count only where an exit code was captured; the spec
+  timeline; the tile "Last verify" and the card "Verify detail", both reading the newest mission verify, its scope
+  shown beside its verdict; and the open errors ranked by severity, each with the `source_path@sha256` of the
+  line it came from.
 - **Stats**: Green -- green assertions over all of them, the headline; the pass rate of those evaluated,
   green over green and red, always labelled so; dispatches finalized against PARTIAL; validator rounds
-  confirmed against refuted; HALTs raised and resolved and the mean time to resolve; the tool-call non-zero
-  exit rate, or "exit code not captured" where no exit code was captured (the harness gives the hooks none);
-  and the time spent on each milestone.
+  confirmed against refuted; HALTs raised and resolved and the mean time to resolve; and the elapsed time of
+  each milestone, observed at snapshots (below). A mission's Stats screen also carries the Framework version
+  card: each checkout by the last two parts of its folder, the whole path on opening the row (a click, or
+  focus and Enter), and the installer's newest check as a line of its own.
+
+No page shows a tool-call failure rate: the harness gives the hooks no exit code, so none is captured, and the
+words "exit code not captured" appear on no page.
+
+**The verify cards and the errors.** Where the stop evaluator read the shown verify run against the artifact its
+detector declares, "Last verify" and "Verify detail" lead with the evaluator's word -- `PASS-DIB` where it admitted a
+refused run -- and the verify's own verdict, its checks and its divergences stand beneath, with whether the goal
+admitted that run. The errors read the same newest mission verify: a run the evaluator admitted is no error, in no
+list and no count; a run with no admitting reading stays an error. An installer check (`install.ps1 -Verify`'s
+`verify_result`) never stands in for the mission verify, on the cards or among the errors: one with differences is
+its own critical line, in the installer's words.
+
+**Milestone times, observed at snapshots.** The Milestones table, the Stats screens' milestone strip, "Elapsed time
+per milestone" and "Slowest milestones across the fleet" read one derivation, whose formula text states it. A
+milestone's window opens at the first snapshot that shows it the mission's next milestone or active, and closes at
+the first snapshot that shows it closed (passed or withdrawn); a writer's `started_ts` is never read. Its elapsed
+time is the sum of its windows, the open one counted to the mission feed's last `ts` while it runs, and its
+dispatches are the `dispatch_opened` lines within them. A milestone the feed first shows already closed reads
+`not recorded: closed before the feed began` until it is reopened -- seen active, or again the next, by a snapshot
+of a checkout that itself showed it closed; a planned milestone that is not the next reads `not started`. The
+charts draw the measured milestones only, and say how many are not recorded and how many not started.
 
 Every figure carries its formula and the window it was read over, and is computed when it is asked for,
 never stored. Every tile carries a badge naming what it was read as of -- the stream, its last `seq` and
@@ -622,6 +650,13 @@ line valid against `docs\framework\mission-event.schema.json` (expanded-schemas 
 `source_path@sha256` it reports; a line without it is rejected and counted. The service tails every
 registered feed into a disposable projection, `ui.db`, in the Vanguard home; `vanguard ui --rebuild`
 deletes it and regenerates it from the feeds.
+
+**The stop evaluator's line.** From 1.3.3 the stop evaluator appends one `goal_verdict` line to the feed at every
+evaluation, the Stop hook's or by hand, its source the goal's verdict file (expanded-schemas section 14). The verify
+cards read each goal's newest such line in the verify run's own stream as a second source, beside the newest
+snapshot's goal verdicts, and show the newest evaluation's reading of the run -- so a verify the stop admitted shows
+admitted with no snapshot written. After an upgrade, until the first evaluation writes a line, they read the
+snapshot alone, as 1.3.2 did.
 
 **The tail window -- a stated limit.** On each poll, and after a restart, the service resumes a feed from the
 byte where it stopped. Before it reads on, it compares the feed's first line and the last 4096 bytes before
@@ -645,7 +680,7 @@ the newest `mission_snapshot` line of the mission's feed: each assertion's statu
 from the spawn ledger's bound validator results by the close tool's own reader, else from
 `.mission\validator-results`, and, for one not judged, why), the milestone tallies, the current spec version
 (from `.mission\spec\current.txt`), the HALT states (open is what the stop evaluator counts unanswered; a HALT
-file it does not count is set aside), the dispatch states, and the goal verdicts the verify card reads. Both
+file it does not count is set aside), the dispatch states, and the goal verdicts the verify cards read. Both
 screens say which snapshot that is -- its `seq` and when it was written -- and how many feed lines came after
 it. A snapshot is written only by a lifecycle command, and only when what it derives has changed: `mission.ps1
 init` and `register`, the stage verbs that commit, the dispatch runner's open and close, `mission-gate`'s
@@ -656,26 +691,40 @@ To write a fresh snapshot now, run, from the release folder:
 .\mission.ps1 register -Target C:\work\my-project
 ```
 
+The screens print this command, from 1.3.3, in the form in which INSTALL.md runs the release's scripts --
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\mission.ps1 register -Target '<the project folder>'` -- so that it
+runs as pasted where the execution policy refuses a bare script (Restricted, or a release folder carrying the mark
+of the web).
+
 It keeps the project's registry row as it is, appends `/.mission-runtime/` to a root `.gitignore` that has no
 line ignoring that folder (creating the file if there is none), and appends a
 snapshot to that checkout's own feed when the derived state differs from the newest snapshot in it -- so, where a
 mission has several checkouts, target the one the screens' snapshot line names (`seq <n> of <checkout>`); always,
 the first time after an upgrade to
 1.3.2, whose snapshot carries readings an older one lacks. Until then the screens show each such reading as
-not in this snapshot, with this command. It prints nothing about the snapshot itself: where the mission's state
-cannot be derived, no line is written, the command still exits 0, and the cause is logged to
+not in this snapshot, with this command. From 1.3.3 it says which checkout it registered and what it wrote -- the
+`host-id` made or read, the checkout's row in `projects.yaml` added or kept, the feed folder made or already there --
+and whether it appended a snapshot (`snapshot: a mission_snapshot line appended ...` or `snapshot: no mission_snapshot
+line appended ...`). It cannot tell a state that did not change from one that could not be derived: where the
+mission's state cannot be derived, no line is written, the command still exits 0, and the cause is logged to
 `.mission-runtime\evidence\<dispatch>\hook-errors.log` (`session-unknown` when no dispatch or session names the
 run, as from a plain terminal) -- so the screens' snapshot line, which names the
-snapshot they read and the lines after it, is the place to see whether a fresh one was written.
+snapshot they read and the lines after it, is the place to see which snapshot they read.
 
 **The evidence an assertion stands on.** Each judged assertion names it in one of four words: *working copy* (the
 result file its spawn-ledger `complete` line binds, re-hashed equal where it lies), *archive copy* (for a milestone
 whose spec status is done, the working copy being gone: a file of the result's own name anywhere under
 `.mission-runtime\lam\validators`, re-hashed equal, shown with its path), *record alone* (the same, with no copy of
 the bound bytes found: the `complete` line's own verdict, marked on the page and counted apart in the milestone's
-tally) or *old results folder* (`.mission\validator-results`). A host keeps that archive by copying each placed
-result file, under its own name, into any folder under `.mission-runtime\lam\validators` before the next round's
-preparation removes the working copy -- the dashboard only reads it, and `mission close-milestone` still demands the
+tally) or *old results folder* (`.mission\validator-results`). From 1.3.3 the dispatch runner keeps that archive:
+each time it places a validator's result at `tests\lam\<name>.result.yaml` it also files a byte-equal copy at
+`.mission-runtime\lam\validators\<dispatch id>\<name>.result.yaml` -- nothing is written where the archive already
+holds a file of that name with those bytes; a file of that name with other bytes is never overwritten, the new bytes
+going beside it (`<dispatch id>\<first 16 hex of their sha256>\`); and where the copy cannot be written the runner
+says so in one line (`validator result NOT FILED in the validators archive -- <reason>`) and the placement and the
+dispatch stand. Results placed before 1.3.3 are not filed retroactively: for those, a host still copies each result
+file, under its own name, into any folder under `.mission-runtime\lam\validators` before the next round's preparation
+removes the working copy. The dashboard only reads the archive, and `mission close-milestone` still demands the
 working copy.
 
 **Starting it.** From the project, after the install put its Python set in `tools\ui\.venv` (INSTALL.md

@@ -231,6 +231,8 @@ def mission(model, mid):
     disp = derive.dispatches(evs)
     open_d = sorted(d for d, v in disp.items() if v["opened"] is not None and v["finalized"] is None)
     sess = derive.open_sessions(evs)
+    # the newest verify_result, as B-10 lists it (UI-3: "Last verify" and "Verify detail" read the newest MISSION verify --
+    # tiles.last_verify -- and the Verify detail card names that run's own record)
     v = derive.latest_verify(evs)
     last_verify = None
     if v is not None:
@@ -371,12 +373,21 @@ def mission_stats(model, mid):
                        "no lock to compare" if lock is None else "equal" if v == lock else "unequal")
             rows.append({"checkout_path": r_.checkout_path, "framework_version": v, "present": not r_.stale, "reading": reading})
         compared = [r for r in rows if r["present"]]
+        # UI-3 (UC-9, register row 596): the installer's newest check (install.ps1 -Verify's verify_result, arms_run solely
+        # install-verify, against framework.lock) -- its own line on this card, never "Last verify" or "Verify detail"
+        ic = derive.latest_installer_check(evs)
+        icp = (ic["line"].get("payload") or {}) if ic else {}
+        installer = None if ic is None else {
+            "verdict": icp.get("verdict"), "against": icp.get("against"), "divergences": icp.get("divergences"), "ts": ic["ts"], "seq": ic["seq"],
+            "age_s": metrics._seconds(ic["ts"], clock), "source": ic["line"]["source_path"] + "@" + ic["line"]["sha256"],
+            "formula": "the mission's newest verify_result whose arms_run is solely install-verify (the installer's check of the framework "
+                       "files against framework.lock); age_s = " + metrics.MISSION_CLOCK + " - its ts, seconds"}
         body["face"] = {
             "sessions": metrics.sessions_card(evs, w), "dispatches": metrics.dispatches_card(evs, w),
             "validator_rounds": metrics.validator_rounds(evs, w), "halt_card": metrics.halt_card(evs, clock, w),
             "milestone_timing": metrics.milestone_timing(evs, clock, w), "verify_card": metrics.verify_card(evs, w),
             "tail_window_bytes": model.settings.tail_window_bytes,
-            "framework": {"lock_version": lock, "registry": rows,
+            "framework": {"lock_version": lock, "registry": rows, "installer_check": installer,
                           "unequal": [r["checkout_path"] for r in compared if lock is not None and r["reading"] in ("unequal", "version not recorded")],
                           # validator round 1: with no row's folder present nothing is compared -- neither equal nor unequal
                           "equal": None if lock is None or not compared else all(r["reading"] == "equal" for r in compared),

@@ -1,4 +1,4 @@
-# Vanguard Collective 1.3.2 -- Quickstart
+# Vanguard Collective 1.3.3 -- Quickstart
 
 The shortest correct path from nothing to an installed project, an initialised mission, a built
 smoke mission and a first acceptance reading. Every step is a command you run in **your own
@@ -42,7 +42,7 @@ Releases page, https://github.com/tekweaver-solutions/vanguard-collective-releas
 assets: `vanguard-collective-v<VERSION>.zip` (the versioned name; `<VERSION>` is the text of the
 release's `VERSION` file), the same archive as `vanguard-collective.zip` (the fixed name, so
 `.../releases/latest/download/vanguard-collective.zip` is always the latest), `SHA256SUMS` and
-`MEMBERS.sha256`. Download `vanguard-collective-v1.3.2.zip`, `SHA256SUMS` and `MEMBERS.sha256` from the
+`MEMBERS.sha256`. Download `vanguard-collective-v1.3.3.zip`, `SHA256SUMS` and `MEMBERS.sha256` from the
 release into `C:\dl`, from the page or with the GitHub CLI:
 
 ```powershell
@@ -54,7 +54,7 @@ Check the ZIP against `SHA256SUMS`, whose first line names the ZIP and whose sec
 
 ```powershell
 $want = ((Get-Content C:\dl\SHA256SUMS)[0] -split '  ')[0]
-(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.3.2.zip).Hash.ToLower() -eq $want
+(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.3.3.zip).Hash.ToLower() -eq $want
 ```
 
 It must print `True`; if not, stop -- the archive is not the one that was released. Check
@@ -62,8 +62,8 @@ It must print `True`; if not, stop -- the archive is not the one that was releas
 expand:
 
 ```powershell
-Unblock-File C:\dl\vanguard-collective-v1.3.2.zip
-Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.3.2.zip -DestinationPath C:\dl\vanguard-collective-v1.3.2
+Unblock-File C:\dl\vanguard-collective-v1.3.3.zip
+Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.3.3.zip -DestinationPath C:\dl\vanguard-collective-v1.3.3
 ```
 
 Optionally check every expanded file against `MEMBERS.sha256` (one line per member,
@@ -71,8 +71,8 @@ Optionally check every expanded file against `MEMBERS.sha256` (one line per memb
 same number twice:
 
 ```powershell
-Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.3.2 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
-(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.3.2 -Recurse -File -Force).Count
+Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.3.3 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
+(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.3.3 -Recurse -File -Force).Count
 ```
 
 **B. A clone at the tag.** Clone outside the project folder and check out the release tag:
@@ -80,10 +80,10 @@ Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; 
 ```powershell
 git clone https://github.com/tekweaver-solutions/vanguard-collective-releases.git C:\src\vanguard-collective
 cd C:\src\vanguard-collective
-git checkout v1.3.2
+git checkout v1.3.3
 ```
 
-The installer accepts a clone only when HEAD is exactly the commit tag `v1.3.2` names and
+The installer accepts a clone only when HEAD is exactly the commit tag `v1.3.3` names and
 `git status --porcelain` prints nothing. Anything else -- a branch whose tip is not the tagged commit, commits on top of the tag, a
 local change, an untracked file -- is refused before anything is written, with exit 1 and a last
 line beginning `install.ps1: REFUSED:`. A local change or an untracked file is listed first: up to
@@ -93,7 +93,7 @@ local changes (git status --porcelain is not empty) -- install from a clean clon
 tag. Nothing was written.` Every other refusal of the source is that one `REFUSED:` line alone.
 Clone again, or put the clone back at the tag with nothing changed.
 
-Below, `<release>` is `C:\dl\vanguard-collective-v1.3.2` (A) or `C:\src\vanguard-collective` (B).
+Below, `<release>` is `C:\dl\vanguard-collective-v1.3.3` (A) or `C:\src\vanguard-collective` (B).
 
 ## 3. Install
 
@@ -108,7 +108,7 @@ Then install. From the ZIP, name it so `framework.lock` records its sha256; from
 `-ReleaseZip` out (the installer refuses it with a clone):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.2\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.3.2.zip
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.3\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.3.3.zip
 powershell -NoProfile -ExecutionPolicy Bypass -File C:\src\vanguard-collective\install.ps1 -Target C:\work\my-project
 ```
 
@@ -254,26 +254,30 @@ CHECKS instrument=WP-5 result=passed checks=<n> passed=<n> failed=0 skipped=0 li
 
 On a freshly installed project some named skips are expected, because what they need does not
 exist there.
-A full reading of a fresh install of this release -- a new git project with a bare origin, the install from the ZIP
+A full reading of a fresh install of 1.3.3 -- a new git project with a bare origin, the install from the ZIP
 with the Python set, `mission init`, `mission smoke` (MET), `mission register`, the smoke mission built, the container
-engine up -- failed nothing, and read:
+engine up -- failed nothing, and read as below. WP-1 to WP-6 were read on a fresh install of an earlier build of 1.3.3,
+whose installed files differ from this release's only in `tests\lam\instrument-WP-7.ps1` and the verify spec
+(`docs\framework\mission-verify-spec.md`), neither of which those six run or read; WP-7 was read on a fresh install of
+this release's ZIP. WP-7's members are F-0, U-1 to U-53, V-1 to V-20 and L-1 to L-16.
 
-| instrument | passed | skipped (by name) |
-|---|---|---|
-| WP-1 | 42 of 43 | H-12 |
-| WP-2 | 75 of 78 | R-16, R-B, R-57 |
-| WP-3 | 69 of 77 | C-1k, C-1v, C-1w, C-1bd, C-1be, C-2c, C-2d, C-3e |
-| WP-4 | 67 of 70 | T-42, T-53, T-54 |
-| WP-5 | 10 of 10 | none |
-| WP-6 | 13 of 13 | none |
-| WP-7 | 25 of 89 | V-1 to V-20, L-1 to L-16, F-0, U-4, U-5, U-10, U-13 to U-16, U-20, U-21, U-24 to U-29, U-32, U-35, U-38, U-41, U-43, U-45, U-47 to U-52 |
+| instrument | passed | skipped (by name) | read on |
+|---|---|---|---|
+| WP-1 | 42 of 43 | H-12 | the earlier build |
+| WP-2 | 75 of 78 | R-16, R-B, R-57 | the earlier build |
+| WP-3 | 69 of 77 | C-1k, C-1v, C-1w, C-1bd, C-1be, C-2c, C-2d, C-3e | the earlier build |
+| WP-4 | 67 of 70 | T-42, T-53, T-54 | the earlier build |
+| WP-5 | 10 of 10 | none | the earlier build |
+| WP-6 | 13 of 13 | none | the earlier build |
+| WP-7 | 26 of 90 | V-1 to V-20, L-1 to L-16, F-0, U-4, U-5, U-10, U-13 to U-16, U-20, U-21, U-24 to U-29, U-32, U-35, U-38, U-41, U-43, U-45, U-47 to U-52 | this release's ZIP |
 
-With the container engine down -- read at 1.3.1, on a fresh install of 1.3.1, and not taken again for 1.3.2, since no
-file 1.3.2 changed reads the engine -- WP-3 read 69 of 77 with 8 named skips -- **C-1aw** skipped in
+With the container engine down -- read at 1.3.1, on a fresh install of 1.3.1, and not taken again for 1.3.2 or 1.3.3,
+since no file either changed reads the engine -- WP-3 read 69 of 77 with 8 named skips -- **C-1aw** skipped in
 place of C-1bd, which it then measured -- and WP-5, WP-6 and WP-7's F-0 and U-1 to U-52 as with the engine up (10 of
-10, 13 of 13, and 25 passed with 28 skipped). Without the Python set (WP-5, WP-6 and WP-7's F-0 and U-1 to U-52 read),
-WP-5 and WP-6 read the same, and WP-7 skips eleven members more -- the members that need the Python set: U-19, U-22,
-U-30, U-31, U-33, U-34, U-39, U-40, U-42, U-44 and U-46. The skips, by reason:
+10, 13 of 13, and 25 passed with 28 skipped). Without the Python set -- read at 1.3.2, on a fresh install of 1.3.2, and
+not taken again for 1.3.3, since `install.ps1` and every file it runs are 1.3.2's; WP-5, WP-6 and WP-7's F-0 and U-1 to
+U-52 read -- WP-5 and WP-6 read the same, and WP-7 skips eleven members more -- the members that need the Python set:
+U-19, U-22, U-30, U-31, U-33, U-34, U-39, U-40, U-42, U-44 and U-46. The skips, by reason:
 
 - **WP-1 H-12; WP-2 R-16, R-B; WP-3 C-1v, C-1w, C-2d** -- the project acceptance record they
   measure against (`docs/framework/LAM-ACCEPT.md`) is not in the checkout; no release after 0.2.0

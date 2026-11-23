@@ -91,10 +91,13 @@ function Register-MissionCheckout {
 
     # host-id: minted ONCE. CreateNew is the race guard -- of two first runs one creates and the other reads.
     $hp = Join-Path $vh 'host-id'
+    # UI-3 (1.3.3) UC-21: what this call wrote is returned, so the caller says it -- host_id_made, telemetry_made
+    $hostMade = $false
     if (-not (Test-Path -LiteralPath $hp -PathType Leaf)) {
         try {
             $fs = [System.IO.File]::Open($hp, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
             try { $b = $utf8.GetBytes([guid]::NewGuid().ToString('D').ToLowerInvariant() + "`n"); $fs.Write($b, 0, $b.Length) } finally { $fs.Dispose() }
+            $hostMade = $true
         } catch [System.IO.IOException] { if (-not (Test-Path -LiteralPath $hp -PathType Leaf)) { throw } }
     }
     $hostId = ([System.IO.File]::ReadAllText($hp)).Trim()
@@ -133,8 +136,10 @@ function Register-MissionCheckout {
     }
 
     $tdir = Join-Path $rootFull '.mission-runtime\telemetry'
-    if (-not (Test-Path -LiteralPath $tdir -PathType Container)) { New-Item -ItemType Directory -Path $tdir -Force | Out-Null }
-    return [pscustomobject]@{ host_id = $hostId; checkout_path = $rootFull; mission_id = $missionId; row_added = $added; registry = $reg; telemetry_dir = $tdir }
+    $tdirMade = $false
+    if (-not (Test-Path -LiteralPath $tdir -PathType Container)) { New-Item -ItemType Directory -Path $tdir -Force | Out-Null; $tdirMade = $true }
+    return [pscustomobject]@{ host_id = $hostId; checkout_path = $rootFull; mission_id = $missionId; row_added = $added; registry = $reg; telemetry_dir = $tdir
+                              host_id_path = $hp; host_id_made = $hostMade; telemetry_made = $tdirMade }
 }
 
 function Register-MissionWorktree {

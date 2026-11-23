@@ -1,4 +1,4 @@
-# Installing Vanguard Collective 1.3.2
+# Installing Vanguard Collective 1.3.3
 
 From the release ZIP -- or a clone of the public repository at the release tag (section 5) -- to a
 project folder that holds the framework and an empty mission whose goal reads MET. Every command runs
@@ -24,7 +24,7 @@ https://github.com/tekweaver-solutions/vanguard-collective-releases/releases. Ea
 archive under its versioned name, `vanguard-collective-v<VERSION>.zip` (`<VERSION>` is the release's version, the text
 of its `VERSION` file); the same archive under the fixed name `vanguard-collective.zip`, so
 https://github.com/tekweaver-solutions/vanguard-collective-releases/releases/latest/download/vanguard-collective.zip
-always fetches the latest release's; `SHA256SUMS`; and `MEMBERS.sha256`. Put `vanguard-collective-v1.3.2.zip`,
+always fetches the latest release's; `SHA256SUMS`; and `MEMBERS.sha256`. Put `vanguard-collective-v1.3.3.zip`,
 `SHA256SUMS` and `MEMBERS.sha256` in `C:\dl` -- from the Releases page, or with the GitHub CLI, which fetches every
 asset of the release its tag names:
 
@@ -35,7 +35,7 @@ gh release download v<VERSION> --repo tekweaver-solutions/vanguard-collective-re
 ## 2. Check the hash
 
 ```powershell
-(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.3.2.zip).Hash.ToLower()
+(Get-FileHash -Algorithm SHA256 C:\dl\vanguard-collective-v1.3.3.zip).Hash.ToLower()
 ```
 
 ```powershell
@@ -57,17 +57,17 @@ check the folder against it file for file -- the first command prints nothing wh
 matches, and the second prints the same number twice, so no file is missing and none was added:
 
 ```powershell
-Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.3.2 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
+Get-Content C:\dl\MEMBERS.sha256 | ForEach-Object { $h, $p = $_ -split '  ', 2; if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path C:\dl\vanguard-collective-v1.3.3 $p)).Hash.ToLower() -ne $h) { "DIFFERS $p" } }
 ```
 
 ```powershell
-(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.3.2 -Recurse -File -Force).Count
+(Get-Content C:\dl\MEMBERS.sha256).Count; (Get-ChildItem -LiteralPath C:\dl\vanguard-collective-v1.3.3 -Recurse -File -Force).Count
 ```
 
 ## 3. Unblock the ZIP -- your step
 
 ```powershell
-Unblock-File C:\dl\vanguard-collective-v1.3.2.zip
+Unblock-File C:\dl\vanguard-collective-v1.3.3.zip
 ```
 
 A file downloaded by a browser carries the Mark of the Web (a `Zone.Identifier` stream); one
@@ -86,21 +86,23 @@ that stream (Internet zone):
 - With **`Unblock-File` on the ZIP first**, no file carries it, whichever way it is expanded.
 - **Installed files never carry it.** `install.ps1` writes every file fresh, so even an install from
   a marked tree (run with `-ExecutionPolicy Bypass`) leaves a project whose scripts run under
-  `RemoteSigned`. A tree Explorer expanded is refused by `RemoteSigned` under PowerShell 7 exactly as
-  under 5.1.
+  `RemoteSigned`. A tree Explorer expanded is refused by `RemoteSigned` under PowerShell 7 (7.6.9, the
+  same measurement) exactly as under 5.1.
 
 `install.ps1` cannot unblock itself -- a refused script never runs -- and stripping streams from your
 download is your act, so this step is yours. If you skip it, the installer still runs under
 `-ExecutionPolicy Bypass` (the form every command on this page uses), under Windows PowerShell 5.1 or
-PowerShell 7, and prints two lines: before the plan, `MARK OF THE WEB: this tree carries a
+PowerShell 7 (installer falsifier case h7, read for 1.3.3 on 7.7.0), and prints two lines: before the plan, `MARK OF THE WEB: this tree carries a
 Zone.Identifier stream on N file(s) (...)` with the fix, counting `install.ps1`, `mission.ps1` and
 every installer-owned file it reads; after the write, `MARK OF THE WEB: N file(s) written; carrying a
 Zone.Identifier stream after the write: 0` -- every written file is read for the stream, and one
 found is removed from it.
 
 **PowerShell 7.** `install.ps1`, `mission.ps1` and `tools\lam\build-smoke-mission.ps1` run under
-`pwsh` (7.6.9 measured) to the same dispositions, counts and exit codes as under Windows PowerShell
-5.1 (installer falsifier case p7). The framework's hooks are run by Windows PowerShell 5.1 by name
+`pwsh` to the same dispositions, counts and exit codes as under Windows PowerShell 5.1 (installer falsifier
+case p7, read for 1.3.3 on 7.7.0) -- but for an upgrade over a project whose `tools\ui\.venv` 1.3.2
+made: from `pwsh` (7.7.0) it writes the same files and exits 4, leaving that set as it stood (the 1.3.3 release notes, section 1), so
+run an upgrade from Windows PowerShell 5.1. The framework's hooks are run by Windows PowerShell 5.1 by name
 (`powershell`), whichever shell you type in, and the smoke builder and WP-7 start their children with
 5.1's own path; Windows ships it.
 The acceptance wrapper (`tools\lam\instrument-acceptance.ps1`) runs under either shell, and its runner
@@ -117,26 +119,26 @@ six script functions of its `Microsoft.PowerShell.Utility` (`Get-FileHash`,
 `New-TemporaryFile`, `New-Guid`, `Format-Hex`, `Import-PowerShellDataFile`, `ConvertFrom-SddlString`) nor
 the three commands of `Microsoft.PowerShell.Security` probed (`Get-Acl`, `Get-ExecutionPolicy`,
 `ConvertTo-SecureString`). PowerShell 7 corrects the path for a `powershell` it starts with `&` and not for
-one it starts with `Start-Process`. The suite launcher (`Invoke-SuiteDefaultRun` in
+one it starts with `Start-Process` (read for 1.3.3 on 7.7.0). The suite launcher (`Invoke-SuiteDefaultRun` in
 `tools\mission-lib.ps1`), `tools\tests\cli\conftest.py`, `tools\lam\commit_ledger.py` and
 `tests\lam\wp7-group-b.py` give such a child no `PSModulePath`, so each edition builds its own (installer
-falsifier case ra9 runs the launcher and the conftest under both shells; ra10 reads the other two in their
+falsifier case ra9 runs the launcher and the conftest under both shells, PowerShell 7 read for 1.3.3 on 7.7.0; ra10 reads the other two in their
 code and lists every other installer-owned file that starts one, with its reason). Two chains stay outside
-the framework's reach and were not measured for 1.3.2: Claude Code's hooks are Claude Code's children, and
+the framework's reach and were not measured for 1.3.3: Claude Code's hooks are Claude Code's children, and
 the git pre-push hook the evidence library installs runs `powershell` below git, so a Claude Code started,
 or a `git push` typed, at a PowerShell 7 prompt would hand that 5.1 child 7's path; the evidence library
 both load hashes files with `Get-FileHash`. Over a host uv
 project whose run writes to stderr (uv's first-run lines and one of the project's own), the suite launcher
-under Windows PowerShell 5.1 returned the exit code and the tally it returned under PowerShell 7, for a
-passing suite and a failing one (case ra15).
+under Windows PowerShell 5.1 returned the exit code and the tally it returned under PowerShell 7 (7.7.0, read
+for 1.3.3), for a passing suite and a failing one (case ra15).
 
 ## 4. Expand
 
 ```powershell
-Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.3.2.zip -DestinationPath C:\dl\vanguard-collective-v1.3.2
+Expand-Archive -LiteralPath C:\dl\vanguard-collective-v1.3.3.zip -DestinationPath C:\dl\vanguard-collective-v1.3.3
 ```
 
-The archive holds 430 files: the 410 files of the commit the release tag names that the release
+The archive holds 434 files: the 414 files of the commit the release tag names that the release
 carries -- every one but the dashboard's private source (`ui/`, but for its build output) and the
 service's tests (`tools/ui/tests/`) --, the 18 files of the dashboard's build output under `ui/dist/`,
 built from that source when the release was made, `THIRD-PARTY-NOTICES` (the licences of the
@@ -145,7 +147,7 @@ the release was built from, and the sha256 of the archive's `provenance/manifest
 file no commit can hold, since it names the commit. `MEMBERS.sha256` lists them all (section 2). The
 archive's `provenance/manifest.jsonl` is the commit's, less the lines of the files the release leaves
 out and with a line for each file of `ui/dist/` and for `THIRD-PARTY-NOTICES`, so it names every file
-the installer takes from the archive. The 386 files the framework installs are among them, `ui/dist/`
+the installer takes from the archive. The 387 files the framework installs are among them, `ui/dist/`
 and `THIRD-PARTY-NOTICES` included, with `install.ps1`, `mission.ps1`, `VERSION`, `LICENSE`,
 `README.md`, this file, `provenance/manifest.jsonl`, the release notes
 `docs/RELEASE-NOTES-v<version>.md`, and every file the framework repository keeps for itself and does
@@ -156,21 +158,21 @@ not install.
 Optionally, first see what it would do (`-WhatIf` decides everything and writes nothing):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.2\install.ps1 -Target C:\work\my-project -WhatIf
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.3\install.ps1 -Target C:\work\my-project -WhatIf
 ```
 
 Then install, naming the ZIP so the lock records its sha256:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.2\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.3.2.zip
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.3\install.ps1 -Target C:\work\my-project -ReleaseZip C:\dl\vanguard-collective-v1.3.3.zip
 ```
 
 Into an empty folder, expect one `install` line per file between the first lines and the last:
 
 ```text
-install.ps1: source C:\dl\vanguard-collective-v1.3.2 (release at <commit>, version 1.3.2)
+install.ps1: source C:\dl\vanguard-collective-v1.3.3 (release at <commit>, version 1.3.3)
 install.ps1: target C:\work\my-project
-install.ps1: manifest sha256 <64 hex>; installer-owned 386 (MOVE 375, TEMPLATE 8, HOST-CONFIG 3); framework.lock absent
+install.ps1: manifest sha256 <64 hex>; installer-owned 387 (MOVE 376, TEMPLATE 8, HOST-CONFIG 3); framework.lock absent
 install.ps1: fresh install: no framework.lock in the target
 install.ps1:   install            .claude/settings.json
 ...
@@ -178,18 +180,18 @@ install.ps1: host registration: host-id <id> in C:\Users\<you>\.vanguard; no reg
 install.ps1: python set: tools\ui\.venv made by py -3.14: <its python.exe> (CPython 3.14.<n>, win-amd64)
 install.ps1:   pip | Successfully installed annotated-doc-0.0.5 ... uvicorn-0.54.0
 install.ps1: python set: 22 pinned package(s) in tools\ui\.venv, installed with --require-hashes
-install.ps1: done: written=386 already-identical=0 kept=0 retired=0 refused=0
-install.ps1: framework.lock written: 387 line(s) for 386 file(s), sha256 <64 hex>
-install.ps1: installed 1.3.2 into C:\work\my-project.
+install.ps1: done: written=387 already-identical=0 kept=0 retired=0 refused=0
+install.ps1: framework.lock written: 388 line(s) for 387 file(s), sha256 <64 hex>
+install.ps1: installed 1.3.3 into C:\work\my-project.
 ```
 
 and exit code 0. Check the folder against its lock at any time:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.2\install.ps1 -Target C:\work\my-project -Verify
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.3\install.ps1 -Target C:\work\my-project -Verify
 ```
 
-which ends `verify: 386 file(s) listed, 0 difference(s); eol lf=373 crlf=1 mixed=0 binary=12.` (one
+which ends `verify: 387 file(s) listed, 0 difference(s); eol lf=374 crlf=1 mixed=0 binary=12.` (one
 framework file has CRLF line endings of its own, and twelve of the dashboard's font files hold a 0x00
 byte, so they are judged binary) and exits 0, or 3 when a file differs. It writes nothing under the installed set or
 the lock. From 1.3.0, where the project is registered (its `.mission-runtime\telemetry` feed and a host registry row:
@@ -264,7 +266,7 @@ detached at it:
 ```powershell
 git clone https://github.com/tekweaver-solutions/vanguard-collective-releases.git C:\src\vanguard-collective
 cd C:\src\vanguard-collective
-git checkout v1.3.2
+git checkout v1.3.3
 ```
 
 The release tags are annotated: each names a tag object, which points to the release's commit. So
@@ -290,14 +292,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\src\vanguard-collective\i
 Its first line names the tag and the commit, and the rest is the output above:
 
 ```text
-install.ps1: source C:\src\vanguard-collective (clone at tag v1.3.2, commit <commit>, version 1.3.2)
+install.ps1: source C:\src\vanguard-collective (clone at tag v1.3.3, commit <commit>, version 1.3.3)
 ```
 
 A clone is accepted only as the release it stands for. A source folder holding `.git` is a clone, never an
 expanded release: before the installer reads its manifest or any file, git (reading `VERSION` from HEAD) must
 confirm it, or the installer REFUSES, exit 1, on one line beginning `install.ps1: REFUSED:`, a clone that is
-- **off the tag** -- HEAD is not the commit the tag `v<version>` names, or no tag has that exact name (`V1.3.2`
-  is not `v1.3.2`): `install.ps1: REFUSED: the source checkout is not at tag v1.3.2 (HEAD <commit>; tag v1.3.2
+- **off the tag** -- HEAD is not the commit the tag `v<version>` names, or no tag has that exact name (`V1.3.3`
+  is not `v1.3.3`): `install.ps1: REFUSED: the source checkout is not at tag v1.3.3 (HEAD <commit>; tag v1.3.3
   absent) -- install from a clone at the release tag, or from the release ZIP. Nothing was written.` (`at <commit>` in place of
   `absent` when the tag names another commit). A branch elsewhere, or the tag with commits on top of it, is not
   the release; a branch whose tip is the tagged commit is accepted (HEAD is then that commit).
@@ -311,7 +313,7 @@ confirm it, or the installer REFUSES, exit 1, on one line beginning `install.ps1
 In every case, clone again, or put the clone back at the tag with nothing changed, and run it again.
 
 The lock records where the framework came from: `source_kind` `clone`, `source_tag` the tag
-(`v1.3.2`) and `source_commit` the commit (40 hex), which is `framework_repo_tip` too unless HEAD tracks a
+(`v1.3.3`) and `source_commit` the commit (40 hex), which is `framework_repo_tip` too unless HEAD tracks a
 `RELEASE`, whose tip is recorded there; `zip_sha256` is null. An install from the ZIP records `source_kind` `release`, `source_tag` and `source_commit` null,
 and the ZIP's sha256 when `-ReleaseZip` names it (null without it). Every file line, and every other header field but the times, is what the ZIP's
 install of the same release writes. `-Verify` works the same for both: it reads the project and its
@@ -339,7 +341,7 @@ writes is always the framework's own bytes, and the release's files are held to
 `provenance/manifest.jsonl` byte for byte before anything is judged.
 
 **The lock.** `framework.lock` is JSON lines, LF, UTF-8 without a byte-order mark: a header, then one
-line per file in path order, 387 lines for the 386. Each file line records `sha256`, the file's sha256
+line per file in path order, 388 lines for the 387. Each file line records `sha256`, the file's sha256
 as it stands after folding (raw, for a binary file); `eol`, what the file showed when it was judged --
 `lf` (no CR LF pair, a file with no line end included), `crlf` (CR LF pairs and no lone LF), `mixed`
 (both) or `binary`; `disposition`; `kind` -- `move`, `template` or `host-config`; and, on the eight
@@ -495,41 +497,46 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\lam\build-smoke-miss
 The acceptance wrapper, `tools\lam\instrument-acceptance.ps1`, then reads the new one. Remove the two `.old`
 folders once nothing needs them.
 
-**From 1.3.0.** Over a project the 1.3.0 release ZIP installed and nobody has edited since, the upgrade prints, between
+**From 1.3.2.** Over a project the 1.3.2 release ZIP installed and nobody has edited since, the upgrade prints, between
 the first lines and the last:
 
 ```text
-install.ps1: upgrade: framework.lock says 1.3.0, and this release is 1.3.2
+install.ps1: upgrade: framework.lock says 1.3.2, and this release is 1.3.3
 ...
-install.ps1: python set: tools\ui\.venv made by py -3.14: <its python.exe> (CPython 3.14.<n>, win-amd64)
-...
+install.ps1: python set: the target's tools\ui\.venv (CPython 3.14.<n>, win-amd64)
+install.ps1:   pip | 22 requirement(s) already satisfied
 install.ps1: python set: 22 pinned package(s) in tools\ui\.venv, installed with --require-hashes
-install.ps1: done: written=31 already-identical=344 kept=11 retired=5 refused=0
-install.ps1: framework.lock written: 387 line(s) for 386 file(s), sha256 <64 hex>
-install.ps1: upgraded 1.3.0 to 1.3.2 in C:\work\my-project.
+install.ps1: done: written=23 already-identical=353 kept=11 retired=5 refused=0
+install.ps1: framework.lock written: 388 line(s) for 387 file(s), sha256 <64 hex>
+install.ps1: upgraded 1.3.2 to 1.3.3 in C:\work\my-project.
 ```
 
--- 25 files upgraded and 6 installed, the 11 templates and host-configuration files kept, and 5 retired. Upgraded:
-`THIRD-PARTY-NOTICES` and `ui/dist/index.html`; the schema text `docs/framework/expanded-schemas.md` and the verify spec `docs/framework/mission-verify-spec.md`, whose
-anchor row names it; the instruments WP-3, WP-4 and WP-7, `tests/lam/wp7-group-b.py` and the
-real-feed reader `tests/lam/wp7-real-feed.py`; 4 tools under `tools/lam/` (the stop evaluator `mission-goal-check.ps1`,
-the snapshot writer `mission-telemetry.ps1`, `seat.py` and the validator-result transcriber); `tools/mission-dispatch.ps1`
-and `tools/mission-lib.ps1`; `tools/tests/cli/conftest.py`; 6 files of the service under `tools/ui/` (`derive.py`,
-`errors.py`, `metrics.py`, `requirements.txt`, `vanguard.cmd` and `views.py`); and 3 hook tests under
-`tools/worker-runner/`. Installed: `tools/ui/.gitignore`, which keeps `tools\ui\.venv` out of `git status`, and 5 of the
-dashboard's built files under `ui/dist/assets/`, under the new names of the 5 retired ones, which are left in place and
-dropped from the lock. In a project left as 1.3.0 installed it no kept file differs from this release's version, so no
-NOTICE is printed. The kept set is `.claude/settings.json` and any other file the installer reports kept: a template or
-host-config file the project edited differs, and gets its own NOTICE line. After the files the upgrade makes
-`tools\ui\.venv` and installs the Python set there; the folder 1.3.0 put the set in is the host's, and is left as it
-stood (section 5). `release.ps1` derives its own line for the release notes from this release's installer-owned set and
-that of the latest earlier release tag its history holds, `v1.3.1` (a private release, never public), and refuses a build
-whose notes do not carry it -- `install.ps1: done: written=25 already-identical=350 kept=11 retired=0 refused=0`
-(upgraded 6, installed 19): it reads 1.3.1's set from the tag's tree, whose manifest names none of the files a release
-generates, so its line counts `ui/dist/` and `THIRD-PARTY-NOTICES` installed and none retired. `-Verify` then says `386 file(s) listed, 0 difference(s)`, and `-WhatIf` first prints the
+-- 17 files upgraded and 6 installed, the 11 templates and host-configuration files kept, and 5 retired. Upgraded:
+`THIRD-PARTY-NOTICES` and `ui/dist/index.html`; 4 framework documents under `docs/framework/` (the schema text
+`expanded-schemas.md`, the feed's schema `mission-event.schema.json`, the verify spec `mission-verify-spec.md` and
+`vanguard-collective-local-modes-v2.3.md`);
+3 acceptance files under `tests/lam/` (the instruments `instrument-WP-2.ps1` and `instrument-WP-7.ps1`, and
+`wp7-group-b.py`); 3 tools under `tools/lam/` (the dispatch runner `mission-dispatch.ps1`, the stop evaluator
+`mission-goal-check.ps1` and the snapshot writer `mission-telemetry.ps1`); and 5 files of the service under `tools/ui/`
+(`cli.py`, `derive.py`, `errors.py`, `metrics.py` and `views.py`). Installed: `tools/lam/goal-verdict-event.ps1`, which
+appends the stop evaluator's `goal_verdict` line to the feed, and 5 of the dashboard's built files under
+`ui/dist/assets/`, under the new names of the 5 retired ones, which are left in place and dropped from the lock. In a
+project left as 1.3.2 installed it no kept file differs from this release's version, so no NOTICE is printed. The kept set is `.claude/settings.json` and any other file the installer reports kept: a template or
+host-config file the project edited differs, and gets its own NOTICE line. The Python set is the one 1.3.2 put in
+`tools\ui\.venv` (`tools\ui\requirements.txt` is unchanged), so pip finds every pinned package already there.
+`release.ps1` derives its own line for the release notes from this release's installer-owned set and that of the latest
+earlier release tag its history holds, `v1.3.2`, and refuses a build whose notes do not carry it --
+`install.ps1: done: written=35 already-identical=341 kept=11 retired=0 refused=0` (upgraded 15, installed 20): it
+reads 1.3.2's set from the tag's tree, whose manifest names none of the files a release generates, so its line counts
+`ui/dist/` and `THIRD-PARTY-NOTICES` installed and none retired. `-Verify` then says `387 file(s) listed, 0 difference(s)`, and `-WhatIf` first prints the
 same counts as `planned:`, followed by what it would do outside the files: the Python set (`planned python set:`), the
-`vanguard` command, the host registration and the mission-event feed's ignore rule. A project whose mission is not yet registered for the feed -- one made before the feed existed -- is named by the upgrade, with `mission.ps1 register -Target <project>`, which adds the project's row to the host registry, makes `.mission-runtime/telemetry/` and the ignore rule `/.mission-runtime/` in its `.gitignore`. Once the project is upgraded, run `mission.ps1 register -Target <project>` once more from the release folder: it writes the first snapshot with 1.3.2's readings (section 7, "A fresh snapshot for the dashboard"). The release notes, "Upgrading from 1.3.0", give the
+`vanguard` command, the host registration and the mission-event feed's ignore rule. A project whose mission is not yet registered for the feed -- one made before the feed existed -- is named by the upgrade, with `mission.ps1 register -Target <project>`, which adds the project's row to the host registry, makes `.mission-runtime/telemetry/` and the ignore rule `/.mission-runtime/` in its `.gitignore`. Once the project is upgraded, run `powershell -NoProfile -ExecutionPolicy Bypass -File .\mission.ps1 register -Target '<the project folder>'` once more from the release folder: it writes the first snapshot with this release's readings (section 7, "A fresh snapshot for the dashboard"). The first stop evaluation after the upgrade -- the Stop hook at a session's end, or the evaluator run by hand -- writes the project's first `goal_verdict` line. The release notes, "Upgrading from 1.3.2", give the
 steps in order.
+
+**From 1.3.0.** A project still on 1.3.0 upgrades the same way, from this release; the counts it prints are not the
+ones above. What 1.3.1 and 1.3.2 changed on that path is in the 1.3.2 release notes, section 3 -- the dashboard's Python
+set moving to `tools\ui\.venv` among it: after the files the upgrade makes `tools\ui\.venv` and installs the Python set
+there; the folder 1.3.0 put the set in is the host's, and is left as it stood (section 5).
 
 **The host registry row.** From 1.3.0 an upgrade (and any run that writes) brings the project's row in the host registry,
 `C:\Users\<you>\.vanguard\projects.yaml`, to the version it installs: the row's `framework_version` is rewritten to the
@@ -572,7 +579,7 @@ not be put back, which the installer then says, naming where it is.
 ## 7. `mission init`
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.2\mission.ps1 init -Target C:\work\my-project
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.3\mission.ps1 init -Target C:\work\my-project
 ```
 
 Expect:
@@ -587,7 +594,7 @@ mission.ps1:   folder   .mission/amendments/
 ...
 mission.ps1:   folder   .mission/validator-results/
 mission.ps1:   .gitignore created: it ignores /.claude/settings.local.json and /.claude/worktrees/ and /.mission-runtime/ (per-checkout files, never committed)
-mission.ps1:   registered on this host: host_id <id>, a row added to C:\Users\<you>\.vanguard\projects.yaml (the mission-event feed folder .mission-runtime/telemetry/ made)
+mission.ps1:   registered on this host: the checkout C:\work\my-project -- host_id <id> (host-id read from C:\Users\<you>\.vanguard\host-id), a row added to C:\Users\<you>\.vanguard\projects.yaml (the mission-event feed folder .mission-runtime/telemetry/ made)
 mission.ps1: initialised an empty mission at C:\work\my-project (id <guid>). Next: mission.ps1 smoke -Target C:\work\my-project
 ```
 
@@ -602,10 +609,23 @@ refuses (exit 2, nothing written) if any of its files is already there.
 `projects.yaml` beside it, and the folder of its mission-event feed, `.mission-runtime\telemetry\`, which
 the hooks and lifecycle commands append to and `vanguard ui` reads. For a mission made before the feed
 existed, `mission.ps1 register -Target <project>` does the same, and says so in the line `init` prints for its own
-registration (`already a row in` where the project has one):
+registration -- which checkout it registered, and what it wrote: `host-id made at` where the host had none yet
+(`read from` otherwise), `a row added to` (`already a row in ..., kept as it is` where the project has one), the
+feed folder `made` (`already there` where it stood) -- then the `.gitignore` line and whether
+a snapshot was written:
 
 ```text
-mission.ps1: registered on this host: host_id <id>, a row added to C:\Users\<you>\.vanguard\projects.yaml (the mission-event feed folder .mission-runtime/telemetry/ made)
+mission.ps1: registered on this host: the checkout C:\work\my-project -- host_id <id> (host-id read from C:\Users\<you>\.vanguard\host-id), a row added to C:\Users\<you>\.vanguard\projects.yaml (the mission-event feed folder .mission-runtime/telemetry/ made)
+mission.ps1:   .gitignore appended 1 rule: /.mission-runtime/ (the runtime plane, never committed)
+mission.ps1:   snapshot: a mission_snapshot line appended to the mission-event feed, .mission-runtime/telemetry/events.jsonl
+```
+
+and, run again over the same project:
+
+```text
+mission.ps1: registered on this host: the checkout C:\work\my-project -- host_id <id> (host-id read from C:\Users\<you>\.vanguard\host-id), already a row in C:\Users\<you>\.vanguard\projects.yaml, kept as it is (the mission-event feed folder .mission-runtime/telemetry/ already there)
+mission.ps1:   .gitignore unchanged: it already ignores /.mission-runtime/
+mission.ps1:   snapshot: no mission_snapshot line appended -- the newest one in the feed already holds the mission's derived state, or the state could not be derived (the cause is then logged to .mission-runtime\evidence\<dispatch>\hook-errors.log, session-unknown from a plain terminal)
 ```
 
 **A fresh snapshot for the dashboard.** `mission.ps1 register -Target <project>` is also the one command that
@@ -616,13 +636,17 @@ has no line `/.mission-runtime/` or `.mission-runtime/` (or creates the file wit
 always has, and prints which. It appends a snapshot to the target checkout's own feed whenever the mission's
 derived state differs from the newest snapshot in that feed -- so target the checkout the screens' snapshot line
 names (`seq <n> of <checkout>` where a mission has several); always, the first time after an upgrade to 1.3.2, whose
-snapshot carries readings a 1.3.1 or 1.3.0 snapshot lacks. It prints nothing about the snapshot: where the mission's
-state cannot be derived (a file it reads that does not parse, say), no line is written, `register` still exits 0,
-and the cause is in `.mission-runtime\evidence\<dispatch>\hook-errors.log` (`session-unknown` when no dispatch
+snapshot carries readings a 1.3.1 or 1.3.0 snapshot lacks. From 1.3.3 it says whether it appended one (its
+`snapshot:` line above); it cannot tell a state that did not change from one that could not be derived: where the
+mission's state cannot be derived (a file it reads that does not parse, say), no line is written, `register` still
+exits 0, and the cause is in `.mission-runtime\evidence\<dispatch>\hook-errors.log` (`session-unknown` when no dispatch
 or session names the run, as from a plain terminal); the screens then still name the
 older snapshot they read. The Project and Stats screens name the snapshot they read,
-how many feed lines came after it, and this command; a reading an older snapshot lacks is shown as not in
-this snapshot, never as an error.
+how many feed lines came after it, and this command -- from 1.3.3 in the form in which this page runs the release's
+scripts,
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\mission.ps1 register -Target '<the project folder>'`, run from
+the release folder, so it runs as pasted where the execution policy refuses a bare script; a reading an older
+snapshot lacks is shown as not in this snapshot, never as an error.
 
 `init` makes the project's root `.gitignore` ignore Claude Code's two per-checkout paths,
 `/.claude/settings.local.json` and `/.claude/worktrees/` -- its local settings and its worktrees,
@@ -646,7 +670,7 @@ anything, its reason on one line ending `Nothing was written.`
 ## 8. `mission smoke` -- the first thing to run
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.2\mission.ps1 smoke -Target C:\work\my-project
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\dl\vanguard-collective-v1.3.3\mission.ps1 smoke -Target C:\work\my-project
 ```
 
 It runs the **installed** evaluator, `C:\work\my-project\tools\lam\mission-goal-check.ps1`, over the

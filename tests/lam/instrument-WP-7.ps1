@@ -210,7 +210,7 @@ function Write-W7TopThrew { param([string]$Region, $E)
 function Write-W7Close {
     foreach ($id in @($Only)) {
         if (-not $script:checkedIds.ContainsKey($id)) {
-            Check -Id $id -Title 'named by -Only, but this instrument has no such member' -Ok $false -Detail "    members: F-0, U-1..U-52, V-1..V-20, L-1..L-16"
+            Check -Id $id -Title 'named by -Only, but this instrument has no such member' -Ok $false -Detail "    members: F-0, U-1..U-53, V-1..V-20, L-1..L-16"
         }
     }
     Write-Host ""
@@ -225,7 +225,7 @@ function Write-W7Close {
 }
 
 Write-Host "=============================================================================="
-Write-Host " LAM WP-7 INSTRUMENT -- ui (the mission-event telemetry feed, U-1..U-17; the service, V-1..V-20; the dashboard, L-1..L-16; the 1.1.0 dashboard patch, U-18..U-30; UI-2 S1, U-31..U-37; UI-2 S1c, U-38 (where it is read: UI-2 S2 B-13); UI-2 S2, U-39..U-52)"
+Write-Host " LAM WP-7 INSTRUMENT -- ui (the mission-event telemetry feed, U-1..U-17; the service, V-1..V-20; the dashboard, L-1..L-16; the 1.1.0 dashboard patch, U-18..U-30; UI-2 S1, U-31..U-37; UI-2 S1c, U-38 (where it is read: UI-2 S2 B-13); UI-2 S2, U-39..U-52; UI-3 (1.3.3), U-53)"
 Write-Host "=============================================================================="
 Write-Host "repo root : $repoRoot"
 Write-Host "HEAD      : $((& git -C $repoRoot rev-parse HEAD 2>$null))"
@@ -936,7 +936,7 @@ if ($lWant.Count -and -not $KeepFixture) { Remove-Item -LiteralPath $lRoot -Recu
 } catch { Write-W7TopThrew 'region 1 of 4, the V and L members' $_ }
 
 $pFree = @('U-19', 'U-20', 'U-22', 'U-23', 'U-24', 'U-26', 'U-27', 'U-28', 'U-29', 'U-30', 'U-31', 'U-32', 'U-33', 'U-34', 'U-35', 'U-36', 'U-37', 'U-38',
-           'U-39', 'U-40', 'U-41', 'U-42', 'U-43', 'U-44', 'U-45', 'U-46', 'U-47', 'U-48', 'U-49')
+           'U-39', 'U-40', 'U-41', 'U-42', 'U-43', 'U-44', 'U-45', 'U-46', 'U-47', 'U-48', 'U-49', 'U-53')
 try {   # TOP-LEVEL REGION 2 of 4: the P members (Write-W7TopThrew)
 # =================================================================================================
 # THE 1.1.0 DASHBOARD PATCH (RELEASE-4 S1, group P; s1-falsifiers.md and its amendment 1) -- the members that need no U
@@ -1341,27 +1341,39 @@ if (Want 'U-28') { try {
     } } catch { Write-W7Threw 'U-28' $_ } }
 
 # U-29 -- F-P7b (register row 505 (f)): `mission.ps1 register` prints its registration in the words INSTALL.md gives it --
-# the same line `mission init` prints for its own registration -- matched exactly, the id and the registry path aside
+# the same line `mission init` prints for its own registration -- matched exactly, the id, the home and the folder aside.
+# UI-3 (1.3.3) UC-21, register row 582: INSTALL.md gives two lines -- a mission made before the feed existed, registered on a
+# host that already has its host-id (a row added, the feed folder made), and the same command run again (the row kept, the
+# folder already there) -- and 1.3.2's line, which said "made" of a folder that stood, is matched by neither.
 if (Want 'U-29') { try {
-    $t29 = 'F-P7b (row 505 f): mission.ps1 register prints the registration line INSTALL.md gives it, exactly (init''s own form)'
+    $t29 = 'F-P7b (row 505 f; UI-3 UC-21, row 582): mission.ps1 register prints the registration lines INSTALL.md gives it, exactly (init''s own form) -- the first registration and the same command again, never "made" of a folder that stood'
     if (-not (Test-Path -LiteralPath $pMission -PathType Leaf)) { Check -Id 'U-29' -Title $t29 -Ok $false -Skipped -Detail "    SKIPPED BY NAME: mission.ps1 is not in this checkout (an installed framework; the release tree keeps it)" } else {
     $d = ''
     $inst = [System.IO.File]::ReadAllLines((Join-Path $repoRoot 'INSTALL.md'))
     $doc = @($inst | Where-Object { $_ -match '^mission\.ps1: registered on this host: ' })
     $p29 = Join-Path $pRoot 'u29'
     New-Item -ItemType Directory -Path $p29 -Force | Out-Null; $null = Invoke-W7Git $p29 @('init', '-q')
-    $null = Invoke-W7 -File $pMission -Argv @('init', '-Target', $p29) -Env @{ VANGUARD_HOME = (Join-Path $pRoot 'u29h1') }
-    $hReg = Join-Path $pRoot 'u29h2'   # a home the checkout has no row in yet: register adds one
+    $h29 = Join-Path $pRoot 'u29h1'
+    $null = Invoke-W7 -File $pMission -Argv @('init', '-Target', $p29) -Env @{ VANGUARD_HOME = $h29 }
+    # a mission made before the feed existed: its feed folder taken away; a home the checkout has no row in yet, on a host
+    # whose host-id is already made (the first home's, copied)
+    Remove-Item -LiteralPath (Join-Path $p29 '.mission-runtime\telemetry') -Recurse -Force
+    $hReg = Join-Path $pRoot 'u29h2'
+    New-Item -ItemType Directory -Path $hReg -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $h29 'host-id') -Destination (Join-Path $hReg 'host-id')
     $r29 = Invoke-W7 -File $pMission -Argv @('register', '-Target', $p29) -Env @{ VANGUARD_HOME = $hReg }
-    $got = @($r29.out | Where-Object { $_ -match '^mission\.ps1: registered on this host: ' })
+    $r29b = Invoke-W7 -File $pMission -Argv @('register', '-Target', $p29) -Env @{ VANGUARD_HOME = $hReg }
     $okLine = $false
-    if ($doc.Count -eq 1 -and $got.Count -eq 1) {
-        $rx = '^' + [regex]::Escape($doc[0]).Replace([regex]::Escape('<id>'), '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}').Replace([regex]::Escape('C:\Users\<you>\.vanguard\projects.yaml'), [regex]::Escape((Join-Path $hReg 'projects.yaml'))) + '$'
-        $okLine = $got[0] -cmatch $rx
+    $rxOf = { param([string]$Doc)
+        '^' + [regex]::Escape($Doc).Replace([regex]::Escape('<id>'), '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}').Replace([regex]::Escape('C:\Users\<you>\.vanguard\'), [regex]::Escape($hReg + '\')).Replace([regex]::Escape('C:\work\my-project'), [regex]::Escape([System.IO.Path]::GetFullPath($p29).TrimEnd('\'))) + '$'
     }
-    $d += "    INSTALL.md gives register the line: $(if ($doc.Count -eq 1) { $doc[0] } else { "($($doc.Count) such lines)" })`n"
+    $got = @($r29.out | Where-Object { $_ -match '^mission\.ps1: registered on this host: ' })
+    $gotB = @($r29b.out | Where-Object { $_ -match '^mission\.ps1: registered on this host: ' })
+    if ($doc.Count -eq 2 -and $got.Count -eq 1 -and $gotB.Count -eq 1) { $okLine = ($got[0] -cmatch (& $rxOf $doc[0])) -and ($gotB[0] -cmatch (& $rxOf $doc[1])) }
+    $d += "    INSTALL.md gives register the lines ($($doc.Count), expect 2): $($doc -join ' // ')`n"
     $d += "    mission.ps1 register (exit $($r29.code)) printed: $(if ($got.Count) { $got[0] } else { '(no registration line) ' + ((@($r29.out) | Select-Object -First 2) -join ' | ') })`n"
-    Check -Id 'U-29' -Title $t29 -Ok ($r29.code -eq 0 -and $okLine) -Detail ($d + "    the exact text, the host id and the registry path aside: $okLine`n")
+    $d += "    and again (exit $($r29b.code)): $(if ($gotB.Count) { $gotB[0] } else { '(no registration line) ' + ((@($r29b.out) | Select-Object -First 2) -join ' | ') })`n"
+    Check -Id 'U-29' -Title $t29 -Ok ($r29.code -eq 0 -and $r29b.code -eq 0 -and $okLine) -Detail ($d + "    the exact text, the host id, the home and the folder aside: $okLine`n")
     } } catch { Write-W7Threw 'U-29' $_ } }
 
 # U-30 -- F-P7c (register row 505 (g)): `vanguard ui --help` says what --host is in the 1.1.0 release notes' own words
@@ -1755,7 +1767,7 @@ $gTitles = [ordered]@{
     'U-43' = @('B-5: Stats shows the per-mission validator rounds strip with the refuted ids on expand, the Project view the latest round; a broken strip fails it', 43)
     'U-44' = @('B-6: the HALT card''s open, answered, mean / median time to resolve and oldest open over three composed HALTs; the smoke mission reads 0 / 0 / no data; an answered stamp moved an hour moves the mean by the derived amount', $null)
     'U-45' = @('B-7: the HALT card on Stats reads the API''s figures, no data where nothing is measured; a broken card fails it', 45)
-    'U-46' = @('B-8: elapsed per milestone from the first-seen rule -- M-1 over the smoke mission''s history, as git dates it, with its dispatch count; a cut feed reads it running; a closing stamp edited moves it', $null)
+    'U-46' = @('B-8 as UI-3 replaced its rule (UC-13 with UC-31/UC-42, UC-14, UC-16; times feed-only): M-1 over the smoke replay, derived from the feed, served alike and equal to git''s dating; its dispatches the dispatch_opened lines within its window, over the bare replay and over one carrying the dispatches'' lines; a cut feed reads it running; a closing stamp edited moves it', $null)
     'U-47' = @('B-9: the milestone list carries elapsed and the dispatch count, Stats the elapsed strip; a broken strip fails it', 47)
     'U-48' = @('B-10 (row 498): the verify card lists each divergence (path, kind, sha8s) of a three-kind record and reads 0 over a clean one; one kind dropped from the mapping reads 2', 48)
     'U-49' = @('B-11: the per-mission Stats face reads every card; a feed with no session, verify, dispatch or round line reads no data on them; a broken card selector fails it', 49)
@@ -1783,6 +1795,104 @@ foreach ($gId in $gTitles.Keys) {
         else { Check -Id $gId -Title $gT -Ok $ok -Detail $d }
     } catch { Write-W7Threw $gId $_ }
 }
+
+# =================================================================================================
+# U-53 -- UI-3 (1.3.3) UC-25, register rows 568 and 569: A CLOSED MILESTONE'S ASSERTION WHOSE WORKING COPY IS REMOVED AFTER A
+# 1.3.3 PLACEMENT READS GREEN ON "archive copy". Fixture-free: a mission root of its own under this run's folder -- M-1 closed
+# (its spec status done) holding A-1, M-2 the current one. The runner's own placement and filing functions are lifted from
+# tools\lam\mission-dispatch.ps1 by the parser (as WP-2 R-54 row (3) lifts the placement) and called as the runner calls them
+# after a placement -- the runner is READ for that call, inside its `placed` branch, with the arguments given here. The
+# complete line is composed as the ceremony composes it (result_sha256 the placed copy's); then the working copy is removed,
+# as the next round's preparation removes it, and the snapshot writer (tools\lam\mission-telemetry.ps1, Windows PowerShell
+# 5.1) derives the state. A planted copy of the same steps with the filing left out must read "record alone" -- what a
+# 1.3.2 placement leaves. RED on v1.3.2 (this file run inside a clean extract of the tag): the runner defines no filing
+# function, so the assertion reads "record alone". The writer is driven by this member's own driver, written under the
+# run's folder -- the steps of tools\ui\tests\_snap.ps1, which the release does not carry (tools/ui/tests is not
+# installed) -- so the member reads UC-25 in an installed project as in this repository: the writer it reads is
+# tools\lam\mission-telemetry.ps1 of the checkout under test, installed in both.
+# =================================================================================================
+if (Want 'U-53') { try {
+    $t53 = 'UC-25 (rows 568, 569): a closed milestone''s assertion whose working copy is removed after a 1.3.3 placement reads green on "archive copy" -- the runner files the copy, nothing by hand; a placement without the filing reads "record alone"'
+    $d = ''
+    $u53Runner = Join-Path $repoRoot 'tools\lam\mission-dispatch.ps1'
+    $u53Ast = [System.Management.Automation.Language.Parser]::ParseFile($u53Runner, [ref]$null, [ref]$null)
+    $u53Fns = @{}
+    foreach ($n in @('Invoke-LamResultPlacement', 'Invoke-LamResultArchiveFiling')) {
+        $u53Fns[$n] = @($u53Ast.FindAll({ param($x) ($x -is [System.Management.Automation.Language.FunctionDefinitionAst]) -and ($x.Name -ceq $n) }.GetNewClosure(), $true))
+    }
+    # the runner READ for the call: inside the branch it takes on a placement, the filing function with the mission root, the
+    # placed copy and the dispatch
+    $u53Call = @($u53Ast.FindAll({ param($x) ($x -is [System.Management.Automation.Language.IfStatementAst]) -and
+        (@($x.Clauses | Where-Object { $_.Item1.Extent.Text -ceq '$placement.outcome -ceq ''placed''' -and $_.Item2.Extent.Text -match 'Invoke-LamResultArchiveFiling\s+-MissionRoot\s+\$MissionRoot\s+-Placed\s+\$placement\.destination\s+-Dispatch\s+\$Dispatch' }).Count -gt 0) }, $true))
+    $d += "    the runner defines Invoke-LamResultPlacement $($u53Fns['Invoke-LamResultPlacement'].Count) time(s), Invoke-LamResultArchiveFiling $($u53Fns['Invoke-LamResultArchiveFiling'].Count) time(s); calls the filing in its placed branch: $($u53Call.Count) time(s) (expect 1, 1, 1)`n"
+    if ($u53Fns['Invoke-LamResultPlacement'].Count -ne 1) { throw "the runner defines $($u53Fns['Invoke-LamResultPlacement'].Count) function(s) named Invoke-LamResultPlacement" }
+    $u53Doc = "verdict: PASS`nid: D-V-A-1`nvalidates: A-1`nchecks:`n  - one`n"
+    $u53Lines = { param([string]$Disp, [string]$Sha, [int]$Bytes)
+        $sp = [ordered]@{ event = 'spawn'; seq = 1; kind = 'validator'; role = 'qa-validator'; dispatch_id = $Disp }
+        $cp = [ordered]@{ event = 'complete'; seq = 1; kind = 'validator'; role = 'qa-validator'; dispatch_id = $Disp; validates = 'A-1'; round = 1; verdict = 'PASS'
+                          result_path = 'tests/lam/validator-A-1.result.yaml'; result_bytes = $Bytes; result_sha256 = $Sha }
+        return (($sp | ConvertTo-Json -Compress) + "`n" + ($cp | ConvertTo-Json -Compress) + "`n")
+    }
+    # the snapshot driver: as every verb derives the state, inside the writer's scope under the strict mode the hooks'
+    # library sets; the writer's own canonical JSON printed, nothing written
+    $u53Snap = @'
+#Requires -Version 5.1
+param([Parameter(Mandatory = $true)][string]$Lib, [Parameter(Mandatory = $true)][string]$Root)
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+Set-StrictMode -Version Latest
+. $Lib
+$s = Get-MissionSnapshotState -Root $Root
+[Console]::Out.Write((ConvertTo-MissionCanonicalJson $s))
+'@
+    $u53SnapPath = Join-Path $pRoot 'u53-snap.ps1'
+    Write-W7File $u53SnapPath $u53Snap
+    $u53Read = { param([string]$Name, [bool]$File)
+        $base = Join-Path $pRoot ('u53-' + $Name)
+        $m = Join-Path $base 'm'
+        $wt = Join-Path $base 'wt'
+        Write-W7File (Join-Path $m '.mission\mission.yaml') "id: m-w7-u53-$Name`nname: u53`nstate: Executing`ncurrent_milestone: M-2`ncurrent_spec_version: 1`n"
+        Write-W7File (Join-Path $m '.mission\spec\current.txt') 'v001'
+        Write-W7File (Join-Path $m '.mission\spec\v001.yaml') ("version: 1`nfeatures:`n  - id: F-1`n    title: f-1`nmilestones:`n  - id: M-1`n    title: m-1`n    status: done`n" +
+            "    contract_assertion_ids: [A-1]`n  - id: M-2`n    title: m-2`n    status: pending`n    contract_assertion_ids: []`n")
+        Write-W7File (Join-Path $m '.mission\contract\assertions\A-1.yaml') "id: A-1`nfeature_id: F-1`nmilestone_id: M-1`n"
+        Write-W7File (Join-Path $wt 'tests\lam\validator-A-1.result.yaml') $u53Doc
+        # the runner's placement, then (1.3.3) its filing, as the runner calls them
+        $disp = "D-U53-$($Name.ToUpper())"
+        $o = & {
+            param($PlaceText, $FileText, $Src, $Dst, $Root, $DoFile, $Disp)
+            . ([scriptblock]::Create($PlaceText))
+            $pl = Invoke-LamResultPlacement -Source $Src -Destination $Dst
+            $fl = $null
+            if ($DoFile -and $FileText) {
+                . ([scriptblock]::Create($FileText))
+                $fl = Invoke-LamResultArchiveFiling -MissionRoot $Root -Placed $pl.destination -Dispatch $Disp
+            }
+            return [pscustomobject]@{ placement = $pl; filing = $fl }
+        } $u53Fns['Invoke-LamResultPlacement'][0].Extent.Text $(if ($u53Fns['Invoke-LamResultArchiveFiling'].Count -eq 1) { $u53Fns['Invoke-LamResultArchiveFiling'][0].Extent.Text } else { $null }) `
+            (Join-Path $wt 'tests\lam\validator-A-1.result.yaml') (Join-Path $m 'tests\lam\validator-A-1.result.yaml') $m $File $disp
+        # the ceremony's complete line, binding the placed copy's bytes; then the working copy removed
+        Write-W7File (Join-Path $m '.mission-runtime\lam\spawn-ledger.jsonl') (& $u53Lines $disp $o.placement.copy_sha256 ([int]$o.placement.bytes))
+        Remove-Item -LiteralPath (Join-Path $m 'tests\lam\validator-A-1.result.yaml') -Force
+        $snap = Invoke-W7Native -Exe $psExe -Argv @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $u53SnapPath,
+                                                     '-Lib', (Join-Path $repoRoot 'tools\lam\mission-telemetry.ps1'), '-Root', $m)
+        $s = $null; try { $s = (@($snap.out) -join "`n") | ConvertFrom-Json } catch { $s = $null }
+        $ad = if ($s) { $s.assertion_detail.'A-1' } else { $null }
+        return [pscustomobject]@{ placement = $o.placement.outcome; filing = $(if ($o.filing) { "$($o.filing.outcome) $($o.filing.rel)" } else { '(no filing)' })
+                                  status = $(if ($s) { $s.assertions.'A-1' } else { "(no snapshot: exit $($snap.code) $((@($snap.out) | Select-Object -Last 2) -join ' | '))" })
+                                  evidence = $(if ($ad) { $ad.evidence } else { $null }); path = $(if ($ad) { $ad.evidence_path } else { $null }); reason = $(if ($ad) { $ad.reason } else { $null })
+                                  wcGone = -not (Test-Path -LiteralPath (Join-Path $m 'tests\lam\validator-A-1.result.yaml')) }
+    }
+    $g = & $u53Read 'a' $true
+    $wantPath = '.mission-runtime/lam/validators/D-U53-A/validator-A-1.result.yaml'
+    $okG = ($u53Fns['Invoke-LamResultArchiveFiling'].Count -eq 1) -and ($u53Call.Count -eq 1) -and ($g.placement -ceq 'placed') -and $g.wcGone -and
+           ($g.status -ceq 'green') -and ($g.evidence -ceq 'archive copy') -and ($g.path -ceq $wantPath)
+    $d += "    after a 1.3.3 placement (placement $($g.placement), filing $($g.filing)), the working copy removed ($($g.wcGone)): A-1 $($g.status), evidence '$($g.evidence)' at $($g.path) (expect green, 'archive copy' at $wantPath) -> $okG`n"
+    $p = & $u53Read 'p' $false
+    $okP = ($p.placement -ceq 'placed') -and $p.wcGone -and ($p.status -ceq 'green') -and ($p.evidence -ceq 'record alone')
+    $d += "    planted (the same steps, the filing left out -- a 1.3.2 placement): A-1 $($p.status), evidence '$($p.evidence)' (expect green, 'record alone') -> $okP`n"
+    Check -Id 'U-53' -Title $t53 -Ok ($okG -and $okP) -Detail $d
+} catch { Write-W7Threw 'U-53' $_ } }
 
 } catch { Write-W7TopThrew 'region 2 of 4, the P members' $_ }
 finally { if ($pAny -and -not $KeepFixture) { $script:pRootToRemove = $pRoot } }
@@ -3109,14 +3219,17 @@ Invoke-MissionTelemetry -Root $Root -Snapshot -Verb 'w7-u17-concurrent'
     $d += "    every mission_snapshot of every stream: $nSnap, without the map or with an entry not {$($msKeys -join ', ')}: $($shapeBad.Count)$(if ($shapeBad.Count) { ' -- ' + (($shapeBad | Select-Object -First 3) -join '; ') }) -> $shapeOk`n"
     # SS14 NAMES THE FIELD; THE SCHEMA FILE IS THE PINNED ONE (the S0 contract's file, sha256 pinned by s2-amendment-1.md's
     # batch, then amended, additively, by RELEASE-4 S1 F-P1b -- the milestone status enum, schema 1.1 -- and by UI-2 S1 A-2,
-    # register row 500 -- the kind subagent_stop, schema 1.2; the pin moves with each amendment, 5df0c32e... at 1.1)
+    # register row 500 -- the kind subagent_stop, schema 1.2; the pin moves with each amendment, 5df0c32e... at 1.1; 9c58a976...
+    # at 1.3.2, the S0 file as RELEASE-4 S1 F-P1b and UI-2 S1 A-2 amended it, its LM2-ADR-045 citation qualified at UI-2 S1c
+    # row 523; and UI-3 amendment 3, UC-37 (1.3.3): the kind goal_verdict and its payload, additive since framework 1.3.3, the
+    # feed's schema_version unchanged (ruling (ab)) -- ed6a5f36..., the file as commit d6141a2 left it)
     $row14 = @([System.IO.File]::ReadAllLines((Join-Path $repoRoot 'docs\framework\expanded-schemas.md')) | Where-Object { $_.StartsWith('| `mission_snapshot` |') })
     $docOk = ($row14.Count -eq 1) -and ($row14[0].Contains('`milestones`')) -and (@($msKeys | Where-Object { -not $row14[0].Contains('`' + $_ + '`') }).Count -eq 0)
     # read on the lock's fold-crlf-text basis (RELEASE-4 S1 F-P3, standing 147): an LF and a CRLF checkout of the same tree
     # read alike, a changed byte does not
     $schemaSha = Get-W7FoldSha $schemaPath
-    $schemaOk = ($schemaSha -ceq '9c58a976290c925e5df4897eb7ce1022385a392a636376b4085a562aedc38805')
-    $d += "    expanded-schemas.md SS14 mission_snapshot row names milestones and its six fields: $docOk; mission-event.schema.json sha256 on the fold-crlf-text basis $schemaSha (expect 9c58a976..., the S0 file as RELEASE-4 S1 F-P1b and UI-2 S1 A-2 amended it, its LM2-ADR-045 citation qualified at UI-2 S1c row 523) -> $schemaOk`n"
+    $schemaOk = ($schemaSha -ceq 'ed6a5f364ab64afc6bc3a296bcb9d555568ec6cb3cd724c75ffac3821998acf4')
+    $d += "    expanded-schemas.md SS14 mission_snapshot row names milestones and its six fields: $docOk; mission-event.schema.json sha256 on the fold-crlf-text basis $schemaSha (expect ed6a5f36..., the 1.3.2 file (9c58a976...) with UI-3 amendment 3's UC-37 kind goal_verdict, additive since 1.3.3) -> $schemaOk`n"
     Check -Id 'U-17' -Title 'every mission_snapshot carries milestones (title, status, assertion totals, observed times) from the one writer; a milestone change moves snapshot_sha256, an unchanged state emits none; SS14 names it, the schema file unchanged' `
           -Ok ($chgOk -and ($nSame -eq 0) -and $concOk -and $derOk -and $xOk -and $shapeOk -and $docOk -and $schemaOk) -Detail $d
 } catch { Write-W7Threw 'U-17' $_ } }

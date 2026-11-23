@@ -65,7 +65,20 @@ def ui(
         print("vanguard ui: stopped (%s)" % signal.Signals(server.stopped_by).name, flush=True)
 
 
+def _never_raise_on_output():
+    """UI-3 (1.3.3) UC-18, register row 577: a stream whose encoding cannot hold a character -- stdout or stderr piped or
+    redirected under code page 1252, say, with a home folder whose name holds one outside it -- writes that character as an
+    escape (\\u03a9) instead of raising UnicodeEncodeError and ending the service before it serves. The stream keeps its
+    encoding; a console, which Python writes in UTF-16, is not affected."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main():
+    _never_raise_on_output()
     app(prog_name="vanguard")
 
 

@@ -672,7 +672,7 @@ release ships them):
 ```
 3849bd6d  105431  tools/framework/hooks/lib/evidence-common.ps1
 f4b3ac5d  30300  docs/framework/evidence-manifest.schema.json
-20c1c5c6  95336  docs/framework/expanded-schemas.md
+1d4d1f7b  97235  docs/framework/expanded-schemas.md
 d2f84056  48528  docs/framework/vanguard-collective-local-modes-v2.2.md
 b99c02a7  35571  docs/framework/evidence-write-path-threat-notes.md
 03322c44  74992  tools/framework/tests/test-a1-negative.ps1
